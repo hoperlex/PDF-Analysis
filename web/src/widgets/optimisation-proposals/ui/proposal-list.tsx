@@ -25,7 +25,7 @@ import {
 } from '@/entities/optimisation-proposal';
 import { ProposalDecisionForm } from '@/features/decide-optimisation-proposal';
 
-import { PROPOSAL_LAYOUTS, PROPOSAL_LAYOUT_LABELS } from '../model/layout';
+import { DEFAULT_PROPOSAL_LAYOUT, PROPOSAL_LAYOUT_LINKS } from '../model/layout';
 import type { ProposalLayout } from '../model/layout';
 import styles from './optimisation-proposals.module.css';
 import { ProposalCard, ProposalHistoryView, namedPage } from './proposal-card';
@@ -72,23 +72,18 @@ export interface LayoutSwitchProps {
 }
 
 /**
- * `UI-B-06`: «Карточки» and «Таблица», the two ways the same page of proposals is drawn. The choice is the screen's address
- * (`?layout=`), written by the container; this draws the two buttons from state already in hand.
+ * `UI-B-06`, `UIP-S09-01`: the other way of drawing the same page of proposals, as one link. The table is the page's own; from it the
+ * link says «Показать карточками», and from the cards it says «Показать таблицей», so the reader who opened the cards can come back.
+ * The choice is the screen's address (`?layout=cards`; the table is the absent parameter), written by the container; this draws the
+ * link from state already in hand.
  */
 export function LayoutSwitch({ selected, onSelect }: LayoutSwitchProps) {
+  const other: ProposalLayout = selected === 'table' ? 'cards' : 'table';
   return (
-    <nav className={styles.filters} aria-label="Раскладка предложений" data-proposal-layout={selected}>
-      {PROPOSAL_LAYOUTS.map((layout) => (
-        <button
-          key={layout}
-          type="button"
-          className={selected === layout ? 'am-button' : 'am-button am-button--quiet'}
-          aria-pressed={selected === layout}
-          onClick={() => onSelect(layout)}
-        >
-          {PROPOSAL_LAYOUT_LABELS[layout]}
-        </button>
-      ))}
+    <nav className={styles.layoutSwitch} aria-label="Раскладка предложений" data-proposal-layout={selected}>
+      <button type="button" className={styles.layoutLink} data-proposal-layout-link={other} onClick={() => onSelect(other)}>
+        {PROPOSAL_LAYOUT_LINKS[other]}
+      </button>
     </nav>
   );
 }
@@ -208,9 +203,9 @@ export interface ProposalListViewProps {
   readonly actions?: ReactNode;
   /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
   readonly summary?: ReactNode;
-  /** `UI-B-06`: how the page is drawn; «Карточки» when absent. */
+  /** `UI-B-06`: how the page is drawn; the table when absent (`UIP-S09-01`). */
   readonly layout?: ProposalLayout | undefined;
-  /** `UI-B-06`: the reader chose a layout. Absent, the strip offers no switch. */
+  /** `UI-B-06`: the reader chose a layout. Absent, the strip offers no link to the other one. */
   readonly onLayout?: ((layout: ProposalLayout) => void) | undefined;
 }
 
@@ -225,7 +220,7 @@ export function ProposalListView({
   sheet,
   actions,
   summary,
-  layout = 'cards',
+  layout = DEFAULT_PROPOSAL_LAYOUT,
   onLayout,
 }: ProposalListViewProps) {
   const pass = page.optimisation_pass;

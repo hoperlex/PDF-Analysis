@@ -21,7 +21,6 @@ import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '@/shared/api';
-import { PROPOSAL_PAGE_LIMIT } from '@/entities/optimisation-proposal';
 import { OptimisationProposals, readProposalDecision, writeProposalDecision } from '@/widgets/optimisation-proposals';
 
 import { mountLive } from '../analysis-settings/live-render';
@@ -30,6 +29,7 @@ import { RoutedReviewAddress, currentSearch, resetRoutedAddress, writtenAddresse
 import { newClient } from '../screens/harness';
 import {
   AR_DOCUMENT_UID,
+  FIRST_PAGE_LIMIT,
   PASS_ID,
   PROPOSALS_PROJECT_UID,
   arVersion,
@@ -83,9 +83,9 @@ describe('the container follows the address', () => {
     client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, staleTime: Infinity } });
     client.setQueryData(queryKeys.projects.documents(PROPOSALS_PROJECT_UID, undefined, 50), { items: [arVersion()], page: { next_cursor: null } as never });
     client.setQueryData(queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, AR_DOCUMENT_UID), { items: [pass()] });
-    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, null, 0, PROPOSAL_PAGE_LIMIT), proposalPage());
-    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'reject', 0, PROPOSAL_PAGE_LIMIT), rejected());
-    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'accept', 0, PROPOSAL_PAGE_LIMIT), proposalPage({ decision: 'accept', items: [], total: 0 }));
+    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, null, 0, FIRST_PAGE_LIMIT), proposalPage());
+    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'reject', 0, FIRST_PAGE_LIMIT), rejected());
+    client.setQueryData(queryKeys.optimisation.proposals(PASS_ID, 'accept', 0, FIRST_PAGE_LIMIT), proposalPage({ decision: 'accept', items: [], total: 0 }));
     return client;
   }
 

@@ -5,6 +5,10 @@
  * specification row with the two positions in the middle, the verdict with its form and history at the right. What this file
  * holds is that the grid names exist for every child, that the verdict group really holds the decision line, the controls
  * and the history together (a form outside it would fall into the middle column), and that a narrow screen stacks them.
+ *
+ * `UIP-S09-01`: the same module draws the table, which is the tab's default. The last block holds what its CSS says of a decided row (an
+ * accepted row on the frame's «ok» green, a rejected row struck through but for its decision cell and its state word, colour from tokens
+ * only, no word cut mid-letter, the row's height and padding the global table's) and that the markup carries the names that CSS selects.
  */
 
 import { readFileSync } from 'node:fs';
@@ -12,7 +16,7 @@ import { join } from 'node:path';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { ProposalCard } from '@/widgets/optimisation-proposals';
+import { ProposalCard, ProposalTable } from '@/widgets/optimisation-proposals';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { parseRules } from '../styles/contrast';
@@ -110,5 +114,84 @@ describe('the strip over the proposals (UI-B-05)', () => {
     const markup = loaded();
     expect(markup).toMatch(/<details[^>]*data-pass-summary=""[^>]*><summary>Сведения о проходе<\/summary>/);
     expect(markup).toContain('не смешиваются со счётчиками замечаний');
+  });
+});
+
+describe('the table’s rows by verdict (`UIP-S09-01`)', () => {
+  const selectors = (rule: { readonly selector: string }): string[] => rule.selector.split(',').map((part) => part.trim());
+  const declared = (selector: string, property: string): string | undefined =>
+    rules.find((rule) => selectors(rule).includes(selector))?.declarations.get(property);
+  const ROW = ".proposalTable tbody tr[data-decision='";
+  const tableRules = rules.filter((rule) => selectors(rule).some((part) => part.startsWith('.proposalTable')));
+
+  it('draws an accepted row on the frame’s «ok» green, from the token', () => {
+    expect(declared(`${ROW}accept'] > td`, 'background')).toBe('var(--am-ok-light)');
+  });
+
+  it('strikes a rejected row through, but for the decision cell and the state word, and keeps its number struck', () => {
+    expect(declared(`${ROW}reject'] > td`, 'text-decoration')).toBe('line-through');
+    expect(declared(`${ROW}reject'] > td.judgement`, 'text-decoration')).toBe('none');
+    expect(declared(`${ROW}reject'] > td.numberCell`, 'text-decoration')).toBe('none');
+    expect(declared(`${ROW}reject'] > td.numberCell > strong`, 'text-decoration')).toBe('line-through');
+  });
+
+  it('draws only the verdicts that carry a colour or a line: a row waiting or sent back is plain', () => {
+    const verdicts = new Set(tableRules.flatMap((rule) => selectors(rule)).flatMap((part) => [...part.matchAll(/data-decision='([a-z]+)'/g)].map((match) => match[1])));
+    expect([...verdicts].sort()).toEqual(['accept', 'reject']);
+  });
+
+  it('takes every colour from a token', () => {
+    for (const rule of [...tableRules, ...rules.filter((entry) => selectors(entry).includes('.layoutLink'))]) {
+      for (const property of ['color', 'background', 'background-color', 'box-shadow', 'border-color', 'text-decoration-color']) {
+        const value = rule.declarations.get(property);
+        if (value === undefined) continue;
+        expect(value, `${rule.selector} { ${property} }`).not.toMatch(/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i);
+      }
+    }
+  });
+
+  it('never cuts a word mid-letter, and leaves the row’s height and padding to the global table', () => {
+    for (const rule of tableRules) {
+      expect(rule.declarations.get('overflow-wrap'), `${rule.selector} overflow-wrap`).not.toBe('anywhere');
+      expect(rule.declarations.get('word-break'), `${rule.selector} word-break`).toBeUndefined();
+      for (const property of ['height', 'min-height', 'padding', 'padding-block', 'padding-inline', 'border', 'border-collapse']) {
+        expect(rule.declarations.has(property), `${rule.selector} { ${property} }`).toBe(false);
+      }
+    }
+  });
+
+  it('relies on the global table for what it does not say: a row of one step, a word kept whole', () => {
+    const globals = parseRules(readFileSync(join(WEB_ROOT, 'src/app/globals.css'), 'utf8'), 'global');
+    const own = (selector: string, property: string) =>
+      globals.find((rule) => selectors(rule).includes(selector))?.declarations.get(property);
+    expect(own('tbody tr', 'height')).toBe('var(--am-row-step)');
+    expect(own('tbody td', 'overflow-wrap')).toBe('break-word');
+    expect(own('tbody td', 'word-break')).toBe('normal');
+  });
+
+  const rowWith = (verdict: 'accept' | 'reject' | 'pending') =>
+    renderScreen(
+      newClient(),
+      createElement(ProposalTable, {
+        items: [proposal({ current_verdict: verdict, current_decision: verdict === 'pending' ? null : decision({ verdict }) })],
+        canDecide: true,
+        controlsFor: () => createElement('div', { 'data-test-controls': '' }),
+      }),
+    );
+
+  it('carries the names that CSS selects: the verdict on the row, the number cell and the decision cell', () => {
+    for (const verdict of ['accept', 'reject'] as const) {
+      const markup = rowWith(verdict);
+      expect(markup).toContain(`data-decision="${verdict}"`);
+      expect(markup).toMatch(/<td class="[^"]*numberCell[^"]*"><strong>1<\/strong><span class="[^"]*state[^"]*">/);
+      // The decision cell is the last one, and it holds the controls: the line is not drawn over a button.
+      expect(markup).toMatch(/<td class="[^"]*judgement[^"]*">[\s\S]*data-test-controls[\s\S]*<\/td><\/tr>/);
+    }
+  });
+
+  it('says the verdict in words as well as in colour and line', () => {
+    expect(rowWith('accept')).toMatch(/<span class="[^"]*state[^"]*">принято<\/span>/);
+    expect(rowWith('reject')).toMatch(/<span class="[^"]*state[^"]*">отклонено<\/span>/);
+    expect(rowWith('reject')).toContain('Решение: <strong>отклонено</strong>');
   });
 });

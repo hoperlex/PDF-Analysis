@@ -59,6 +59,18 @@ describe('the loaded section for an expert', () => {
     expect(markup).toContain('не смешиваются со счётчиками замечаний');
   });
 
+  it('opens on the table, with the link to the cards (`UIP-S09-01`)', () => {
+    expect(markup).toContain('data-proposal-table');
+    expect(markup).not.toContain('<article');
+    expect(markup).toContain('data-proposal-layout="table"');
+    expect(markup).toContain('Показать карточками');
+    // The rows stand by verdict, and each says its own number and state: the first pass of the seed holds one waiting and one for revision.
+    const rows = [...markup.matchAll(/<tr data-proposal="[^"]+" data-proposal-ordinal="(\d+)" data-decision="([^"]+)">/g)].map(
+      (row) => `${row[1]}:${row[2]}`,
+    );
+    expect(rows).toEqual(['2:pending', '1:revise']);
+  });
+
   it('shows the provenance, both exact prices and the saving where it is stated', () => {
     expect(markup).toContain('страница 2, лист 10, строки 3–4, позиция 1');
     expect(markup).toContain('25 000 руб.');

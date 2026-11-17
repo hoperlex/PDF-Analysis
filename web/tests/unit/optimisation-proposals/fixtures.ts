@@ -35,6 +35,7 @@ import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-d
 import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
 import { StartOptimisationPassView } from '@/features/start-optimisation-pass';
 import {
+  DEFAULT_PROPOSAL_LAYOUT,
   ExportProposalsView,
   OptimisationProposals,
   PassList,
@@ -43,6 +44,7 @@ import {
   ProposalHistoryView,
   ProposalListView,
   ProposalSetChooser,
+  pageLimitOf,
 } from '@/widgets/optimisation-proposals';
 import type { SheetDocument } from '@/widgets/optimisation-proposals';
 
@@ -246,13 +248,16 @@ export function tapeProposal(overrides: Partial<OptimisationProposal> = {}): Opt
   });
 }
 
+/** The page the section asks for before the reader chooses a layout: the default layout's own (`UIP-S09-01`: the table's fifty). */
+export const FIRST_PAGE_LIMIT = pageLimitOf(DEFAULT_PROPOSAL_LAYOUT, PROPOSAL_PAGE_LIMIT);
+
 export function proposalPage(overrides: Partial<OptimisationProposalPage> = {}): OptimisationProposalPage {
   return {
     optimisation_pass: pass(),
     decision: null,
     items: [proposal(), tapeProposal()],
     offset: 0,
-    limit: PROPOSAL_PAGE_LIMIT,
+    limit: FIRST_PAGE_LIMIT,
     total: 2,
     next_offset: null,
     ...overrides,
@@ -262,7 +267,7 @@ export function proposalPage(overrides: Partial<OptimisationProposalPage> = {}):
 const KEYS = {
   documents: queryKeys.projects.documents(PROPOSALS_PROJECT_UID, undefined, 50),
   passes: queryKeys.optimisation.passes(PROPOSALS_PROJECT_UID, AR_DOCUMENT_UID),
-  proposals: queryKeys.optimisation.proposals(PASS_ID, null, 0, PROPOSAL_PAGE_LIMIT),
+  proposals: queryKeys.optimisation.proposals(PASS_ID, null, 0, FIRST_PAGE_LIMIT),
 };
 
 const noMore = { next_cursor: null } as never;
@@ -293,7 +298,7 @@ export function seedOlderPassProposals(client: QueryClient): void {
     decision_counts: { pending: 0, accept: 1, reject: 0, revise: 0 },
   });
   client.setQueryData(
-    queryKeys.optimisation.proposals(OLDER_PASS_ID, null, 0, PROPOSAL_PAGE_LIMIT),
+    queryKeys.optimisation.proposals(OLDER_PASS_ID, null, 0, FIRST_PAGE_LIMIT),
     proposalPage({ optimisation_pass: older, items: [proposal({ optimisation_pass_id: OLDER_PASS_ID })], total: 1 }),
   );
 }
