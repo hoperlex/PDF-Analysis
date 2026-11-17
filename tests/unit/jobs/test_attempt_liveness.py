@@ -426,6 +426,7 @@ class _Repository:
         self.reclaimed = threading.Event()
         self.current = True
         self.state_after_loss: str | None = "lost"
+        self.recovered: int | None = None  # what the reclaim answers; the real one answers how many Attempts it recovered
 
     def __call__(self) -> _Repository:  # lease.JobRepository() -> this recorder
         return self
@@ -438,10 +439,11 @@ class _Repository:
         return self.state_after_loss
 
     def reclaim_expired(self, _session: object, *, force_attempt_id: str | None = None,
-                        fail_reason: str | None = None) -> None:
+                        fail_reason: str | None = None) -> int | None:
         self.reclaims.append(force_attempt_id)
         self.failures.append(fail_reason)
         self.reclaimed.set()
+        return self.recovered
 
 
 class _Ticks:
@@ -697,6 +699,19 @@ def test_an_attempt_that_ended_itself_is_not_revoked(
     assert recovery == [] and ticks.graces == []
     repository.state_after_loss = "failed"
     thread, ticks = heartbeat_thread(limit=2000, clock=clock)
+    thread._run()
+    assert recovery == [] and ticks.graces == []
+
+
+def test_a_fence_that_finds_the_attempt_already_ended_is_not_a_lost_slot(
+    repository: _Repository, clock: _Clock, recovery: list[RevokedAttempt],
+) -> None:
+    """A stall verdict that lands after ``finish_execution`` released the lease (post-terminal work of the same thread that signals
+    nothing): the reclaim finds nothing to fence and the Attempt is ``succeeded``; nothing was taken away, so no count is started."""
+    repository.recovered = 0
+    repository.state_after_loss = "succeeded"
+    thread, ticks = heartbeat_thread(limit=2000, clock=clock)
+    thread.context.progress(now=START)
     thread._run()
     assert recovery == [] and ticks.graces == []
 

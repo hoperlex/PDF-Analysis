@@ -354,6 +354,8 @@ class LeaseHeartbeat:
                     if reason is not None:
                         revoked = self._fence(session, reason)
                         session.commit()
+                        if revoked is None:
+                            return  # the Attempt had already ended itself: there was nothing to fence
                     elif not JobRepository().heartbeat(session, self._authority):
                         revoked = self._why_not_current(session)
                         session.commit()
@@ -368,18 +370,23 @@ class LeaseHeartbeat:
         if revoked is not None:
             self._await_return(revoked)
 
-    def _fence(self, session: Session, reason: str) -> str:
+    def _fence(self, session: Session, reason: str) -> str | None:
         """Fence the Attempt for ``reason``. The watchdog and the ceiling end it as before (re-queued by the reclaim unless a
-        provider effect is ambiguous or the budget is spent); a stall ends the run, ``attempt_stalled``, and re-queues nothing."""
+        provider effect is ambiguous or the budget is spent); a stall ends the run, ``attempt_stalled``, and re-queues nothing.
+
+        Returns why the authority is gone, or ``None`` when the reclaim found nothing to fence because the Attempt had already ended
+        itself (``finish_execution`` released the lease and the work thread is on its way out): no lost slot is to be feared then."""
         stalled = reason in (FENCE_STALLED, FENCE_CALL_OVERRAN)
         _log.warning(
             "attempt %s of run %s is fenced (%s, live=%s, in_call=%s)",
             self._authority.attempt_id, self._authority.run_id, reason, self.context.live, self.context.in_call,
         )
-        JobRepository().reclaim_expired(
+        recovered = JobRepository().reclaim_expired(
             session, force_attempt_id=self._authority.attempt_id,
             **({"fail_reason": INTERRUPTED_ATTEMPT_STALLED} if stalled else {}),
         )
+        if recovered == 0 and self._why_not_current(session) is None:
+            return None
         return f"fenced:{reason}"
 
     def _why_not_current(self, session: Session) -> str | None:
