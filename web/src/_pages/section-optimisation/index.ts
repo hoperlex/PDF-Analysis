@@ -4,6 +4,7 @@ export type { SectionOptimisationAddress } from './model/address';
 export {
   DEFAULT_SECTION_OPTIMISATION_ADDRESS,
   objectDecided,
+  readDocumentParam,
   readSectionOptimisationAddress,
   sectionOptimisationSearch,
   shownProject,
@@ -16,3 +17,5 @@ export type { SectionFilterBarProps } from './ui/section-filter-bar';
 export { SectionFilterBar } from './ui/section-filter-bar';
 export type { SectionHeaderProps } from './ui/section-header';
 export { SECTION_ABOUT_TEXT, SectionHeader, sectionBackTarget, sectionLeadLine } from './ui/section-header';
+export type { DocumentFilterOption, DocumentFilterProps } from './ui/document-filter';
+export { DocumentFilter, documentFilterOptions, documentOptionLabel, withSelectedDocument } from './ui/document-filter';

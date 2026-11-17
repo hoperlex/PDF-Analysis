@@ -1,6 +1,6 @@
 /**
  * What «Оптимизация разделов» asks the server for (`W63-SECTION-FORM7-01`): the section in the
- * path, the page in the query, and a project or a search only when the expert chose one — an
+ * path, the page in the query, and a project, a document (`UIP-S11-06`) or a search only when the expert chose one — an
  * empty filter is not sent, because an absent filter and an empty one are different requests.
  */
 
@@ -14,7 +14,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 import { getSectionSpecification } from '@/shared/api';
 import { SECTION_ROW_LIMIT, sectionSpecificationQueryOptions } from '@/entities/section-specification';
 
-import { SECTION_PROJECT_A, sectionAnswer } from './fixtures';
+import { SECTION_DOCUMENT_A, SECTION_PROJECT_A, sectionAnswer } from './fixtures';
 
 const read = vi.mocked(getSectionSpecification);
 
@@ -54,5 +54,17 @@ describe('getSectionSpecification as the screen sends it', () => {
       path: { section_code: 'AR' },
       query: { offset: 0, limit: SECTION_ROW_LIMIT, project_uid: SECTION_PROJECT_A },
     });
+  });
+
+  it('sends a chosen document with the project and the section, and none when none is chosen', async () => {
+    await sectionSpecificationQueryOptions({
+      sectionCode: 'AR', projectUid: SECTION_PROJECT_A as never, documentUid: SECTION_DOCUMENT_A as never, query: '', offset: 0,
+    }).queryFn();
+    expect(read.mock.calls[0]?.[0]).toEqual({
+      path: { section_code: 'AR' },
+      query: { offset: 0, limit: SECTION_ROW_LIMIT, project_uid: SECTION_PROJECT_A, document_uid: SECTION_DOCUMENT_A },
+    });
+    await sectionSpecificationQueryOptions({ sectionCode: 'AR', projectUid: null, documentUid: null, query: '', offset: 0 }).queryFn();
+    expect(read.mock.calls[1]?.[0]).toEqual({ path: { section_code: 'AR' }, query: { offset: 0, limit: SECTION_ROW_LIMIT } });
   });
 });

@@ -251,6 +251,44 @@ describe('the tab as a screen', () => {
   });
 });
 
+describe('narrowed to one document (`UIP-S11-06`)', () => {
+  it('says an empty page is the document’s, not the section’s, and keeps the other words as they were', () => {
+    const empty = acceptedPage({ items: [], total: 0 });
+    const said = text(renderToStaticMarkup(createElement(SectionAcceptedList, { page: empty, hasPrevious: false, onPrevious: noop, onNext: noop, documentFiltered: true })));
+    expect(said).toContain('По этому документу нет принятых экспертом оптимизаций.');
+    expect(said).toContain('Принятое по документу появится здесь после решения эксперта на вкладке «Оптимизация» этого документа.');
+    expect(said).not.toContain('Нет принятых экспертом оптимизаций.');
+    expect(said).not.toContain('проект');
+    // Not narrowed, the empty page says what it always said.
+    expect(text(list({ page: empty }))).toContain('Нет принятых экспертом оптимизаций.');
+  });
+
+  it('reads one page under the document with the section and project, and keys it apart from the section’s', () => {
+    const client = newClient();
+    renderScreen(
+      client,
+      createElement(SectionAcceptedOptimisations, { sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B as ProjectUid, documentUid: ACCEPTED_DOCUMENT as never }),
+    );
+    const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
+    expect(keys).toContainEqual(acceptedKey({ sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B, documentUid: ACCEPTED_DOCUMENT }));
+    expect(keys).not.toContainEqual(acceptedKey({ sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B }));
+    expect(acceptedProposalsQueryOptions({ sectionCode: 'KJ', documentUid: ACCEPTED_DOCUMENT as never }).queryKey).toEqual([
+      'optimisation', 'accepted', { document_uid: ACCEPTED_DOCUMENT, section_code: 'KJ', limit: ACCEPTED_PAGE_LIMIT },
+    ]);
+  });
+
+  it('draws the rows of the document as they are: each stays the row of its own document', () => {
+    const client = newClient();
+    client.setQueryData(acceptedKey({ sectionCode: 'AR', documentUid: ACCEPTED_DOCUMENT }), acceptedPage());
+    const markup = renderScreen(
+      client,
+      createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: null, documentUid: ACCEPTED_DOCUMENT as never }),
+    );
+    expect(markup).toContain('data-accepted-count="2"');
+    expect(markup).toContain(`/documents/${ACCEPTED_DOCUMENT}`);
+  });
+});
+
 describe('the read', () => {
   it('keys one page under its filters, with the page size', () => {
     expect(acceptedProposalsQueryOptions({ sectionCode: 'AR' }).queryKey).toEqual([

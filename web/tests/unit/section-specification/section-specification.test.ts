@@ -366,6 +366,41 @@ describe('what stands where in the tab (`UIP-S11-03`)', () => {
   });
 });
 
+describe('narrowed to one document (`UIP-S11-06`): the empty states name the document, not the project', () => {
+  const none = { projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0 };
+  const filtered = (answer: SectionSpecification): string =>
+    renderToStaticMarkup(createElement(SectionSpecificationAnswer, { answer, onPage: () => undefined, onSelectProject: null, documentFiltered: true }));
+
+  it('says a document with no confirmed current version has no rows here, and not that the section has no sets', () => {
+    const said = text(filtered(sectionAnswer(none)));
+    expect(said).toContain('У выбранного документа нет подтверждённой версии в этом разделе');
+    expect(said).not.toContain('В разделе нет подтверждённых комплектов');
+    expect(said).not.toContain('выбранного объекта');
+    // Not narrowed to a document, the old sentences stand.
+    expect(text(render(sectionAnswer(none)))).toContain('В разделе нет подтверждённых комплектов');
+    expect(text(render(sectionAnswer({ ...none, project_filter: SECTION_PROJECT_A as never })))).toContain('У выбранного объекта нет комплектов');
+  });
+
+  it('says a document with no rows has none, and a search that finds none found none', () => {
+    const answer = sectionAnswer();
+    const empty = { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] };
+    expect(text(filtered(sectionAnswer({ rows: empty, row_count: 0 })))).toContain('Строк спецификации в документе нет');
+    expect(text(render(sectionAnswer({ rows: empty, row_count: 0 })))).toContain('Строк спецификации в разделе нет');
+    expect(text(filtered(sectionAnswer({ query: 'ёлочка', rows: empty })))).toContain('По запросу строк не найдено');
+    expect(answer.rows).not.toBeNull();
+  });
+
+  it('reads the document with the section and the project, and starts again from the first page for another', () => {
+    const client = newClient();
+    const markup = renderScreen(client, createElement(SectionSpecificationSection, { documentUid: SECTION_DOCUMENT_B as never }));
+    expect(markup).toContain('data-section-specification');
+    expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([sectionKey({ documentUid: SECTION_DOCUMENT_B })]);
+    expect(sectionSpecificationQueryOptions({ sectionCode: 'AR', projectUid: null, documentUid: SECTION_DOCUMENT_B as never, query: '', offset: 0 }).queryKey).toEqual([
+      'optimisation', 'section-specification', 'AR', { projectUid: null, documentUid: SECTION_DOCUMENT_B, q: null, offset: 0, limit: SECTION_ROW_LIMIT },
+    ]);
+  });
+});
+
 describe('the section picker and the container', () => {
   it('lists the fifteen sections in the owner’s order, АР first, in the header of the page (`UIP-S11-01`)', () => {
     const markup = renderToStaticMarkup(
@@ -429,13 +464,13 @@ describe('the section picker and the container', () => {
 
   it('keys one page under the section, project filter and search', () => {
     expect(sectionSpecificationQueryOptions({ sectionCode: 'AR', projectUid: null, query: '  ', offset: 0 }).queryKey).toEqual(
-      ['optimisation', 'section-specification', 'AR', { projectUid: null, q: null, offset: 0, limit: SECTION_ROW_LIMIT }],
+      ['optimisation', 'section-specification', 'AR', { projectUid: null, documentUid: null, q: null, offset: 0, limit: SECTION_ROW_LIMIT }],
     );
     expect(sectionSpecificationQueryOptions({ sectionCode: 'KJ', projectUid: SECTION_PROJECT_A as never, query: ' щит ', offset: 50 }).queryKey).toEqual(
-      ['optimisation', 'section-specification', 'KJ', { projectUid: SECTION_PROJECT_A, q: 'щит', offset: 50, limit: SECTION_ROW_LIMIT }],
+      ['optimisation', 'section-specification', 'KJ', { projectUid: SECTION_PROJECT_A, documentUid: null, q: 'щит', offset: 50, limit: SECTION_ROW_LIMIT }],
     );
     expect(queryKeys.optimisation.sectionSpecification('AR')).toEqual(
-      ['optimisation', 'section-specification', 'AR', { projectUid: null, q: null, offset: 0, limit: null }],
+      ['optimisation', 'section-specification', 'AR', { projectUid: null, documentUid: null, q: null, offset: 0, limit: null }],
     );
   });
 });

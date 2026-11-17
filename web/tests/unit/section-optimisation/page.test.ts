@@ -13,13 +13,17 @@ import type { ProjectUid } from '@/shared/api';
 import {
   SECTION_ABOUT_TEXT,
   SectionOptimisationPage,
+  documentFilterOptions,
+  documentOptionLabel,
   readSectionOptimisationAddress,
   sectionBackTarget,
   sectionLeadLine,
+  withSelectedDocument,
 } from '@/_pages/section-optimisation';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { ACCEPTED_PROJECT_B, acceptedKey, specificationKey } from './fixtures';
+import { SECTION_DOCUMENT_A, SECTION_DOCUMENT_B, SECTION_PROJECT_B, sectionAnswer } from '../section-specification/fixtures';
+import { ACCEPTED_PROJECT_B, acceptedKey, acceptedPage, specificationKey } from './fixtures';
 
 function selected(markup: string, value: string): boolean {
   const options = markup.match(/<option[^>]*>/g) ?? [];
@@ -30,7 +34,7 @@ function text(markup: string): string {
   return markup.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 }
 
-function page(query: { section?: string; project?: string; tab?: string }, client = newClient()): { markup: string; client: ReturnType<typeof newClient> } {
+function page(query: { section?: string; project?: string; tab?: string; document?: string }, client = newClient()): { markup: string; client: ReturnType<typeof newClient> } {
   const markup = renderScreen(
     client,
     createElement(SectionOptimisationPage, { initial: readSectionOptimisationAddress(query) }),
@@ -174,5 +178,148 @@ describe('the tabs', () => {
     const said = text(page({}).markup);
     expect(said).toContain('Спецификация');
     expect(said).toContain('Принято');
+  });
+});
+
+describe('the filter «Документ» in the row of the tabs (`UIP-S11-06`)', () => {
+  const answer = sectionAnswer();
+  const seeded = (query: { section?: string; project?: string; tab?: string; document?: string } = {}, answerFor = answer) => {
+    const client = newClient();
+    client.setQueryData(specificationKey('AR', (query.project ?? null) as string | null), answerFor);
+    return page(query, client);
+  };
+  const filter = (markup: string): string => {
+    const from = markup.indexOf('data-section-document-filter');
+    return from === -1 ? '' : markup.slice(from, markup.indexOf('</form>', from));
+  };
+
+  it('stands in the row of the tabs, after them and before the panel, once, and offers every document of the scope', () => {
+    const { markup } = seeded();
+    const at = markup.indexOf('data-section-document-filter');
+    expect(at).toBeGreaterThan(markup.indexOf('role="tablist"'));
+    expect(at).toBeLessThan(markup.indexOf('role="tabpanel"'));
+    expect((markup.match(/data-section-document-filter/g) ?? []).length).toBe(1);
+    const html = filter(markup);
+    expect(html).toContain('data-section-document-filter="5"');
+    expect(html).toContain('<label for="section-specification-document">Документ</label>');
+    expect(html).toMatch(/<option value="" selected="">Все документы раздела<\/option>|<option value="">Все документы раздела<\/option>/);
+    // «АР-1 · v2»: the document's title and the version of its current one, and the identity is the value.
+    expect(html).toContain(`<option value="${SECTION_DOCUMENT_A}">Архитектурные решения · v2</option>`);
+    expect(html).toContain(`<option value="${SECTION_DOCUMENT_B}">Архитектурные решения · v1</option>`);
+    expect(documentOptionLabel('АР-1', 2)).toBe('АР-1 · v2');
+  });
+
+  it('groups the documents under their object while the list holds more than one, so the same title is told apart', () => {
+    const html = filter(seeded().markup);
+    expect((html.match(/<optgroup/g) ?? []).length).toBe(2);
+    expect(html).toContain('<optgroup label="Школа на пятьсот мест">');
+    expect(html).toContain('<optgroup label="Детский сад">');
+    expect(html.indexOf(`value="${SECTION_DOCUMENT_B}"`)).toBeGreaterThan(html.indexOf('<optgroup label="Детский сад">'));
+    // Narrowed to one object the list is that object's, and needs no group.
+    const only = sectionAnswer({ project_filter: ACCEPTED_PROJECT_B as never, projects: answer.projects.slice(1) });
+    const narrowed = filter(seeded({ project: ACCEPTED_PROJECT_B }, only).markup);
+    expect(narrowed).toContain('data-section-document-filter="1"');
+    expect(narrowed).not.toContain('<optgroup');
+  });
+
+  it('is not drawn where the scope lists no document and none is chosen: nothing to choose, no element', () => {
+    expect(page({}).markup).not.toContain('data-section-document-filter');
+    const none = sectionAnswer({ projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0 });
+    expect(seeded({}, none).markup).not.toContain('data-section-document-filter');
+  });
+
+  it('has no list of projects beside it: the label is «Документ», the first option «Все документы раздела»', () => {
+    const markup = seeded().markup;
+    expect(markup).not.toContain('Все объекты раздела');
+    expect(text(filter(markup))).toContain('Документ Все документы раздела');
+    expect(text(filter(markup))).not.toContain('Проект');
+  });
+
+  it('reads the document of the address into both tabs: their reads carry it, and the document is the one selected', () => {
+    const { markup, client } = page({ section: 'AR', project: ACCEPTED_PROJECT_B, document: SECTION_DOCUMENT_B });
+    expect(selected(markup, SECTION_DOCUMENT_B)).toBe(true);
+    expect(keys(client)).toContainEqual(specificationKey('AR', ACCEPTED_PROJECT_B, SECTION_DOCUMENT_B));
+    expect(keys(client)).toContainEqual(acceptedKey({ sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_B, documentUid: SECTION_DOCUMENT_B }));
+    // The list is read apart, unnarrowed, so a reader who chose one can choose another.
+    expect(keys(client)).toContainEqual(specificationKey('AR', ACCEPTED_PROJECT_B));
+    expect(keys(client).filter((key) => (key as string[])[1] === 'accepted')).toHaveLength(1);
+  });
+
+  it('with no document chosen asks nothing more: the list is the tabs’ own first read', () => {
+    const { client } = page({ section: 'AR', project: ACCEPTED_PROJECT_B });
+    expect(keys(client).filter((key) => (key as string[])[1] === 'section-specification')).toHaveLength(1);
+    expect(keys(client).filter((key) => (key as string[])[1] === 'accepted')).toEqual([
+      acceptedKey({ sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_B }),
+    ]);
+  });
+
+  it('offers a chosen document before the list is in hand — by its identity, or named by the narrowed answer — and never drops it', () => {
+    const byIdentity = filter(page({ document: SECTION_DOCUMENT_B }).markup);
+    expect(byIdentity).toContain('data-section-document-filter="1"');
+    expect(byIdentity).toContain(`<option value="${SECTION_DOCUMENT_B}" selected="">${SECTION_DOCUMENT_B}</option>`);
+    const client = newClient();
+    client.setQueryData(specificationKey('AR', null, SECTION_DOCUMENT_B), sectionAnswer({ projects: answer.projects.slice(1) }));
+    const named = filter(page({ document: SECTION_DOCUMENT_B }, client).markup);
+    expect(named).toContain(`<option value="${SECTION_DOCUMENT_B}" selected="">Архитектурные решения · v1</option>`);
+  });
+
+  it('narrows the numbers on the tabs with it: they are the server’s figures for the document', () => {
+    const client = newClient();
+    client.setQueryData(specificationKey('AR', null, SECTION_DOCUMENT_B), { ...answer, row_count: 2 });
+    client.setQueryData(acceptedKey({ sectionCode: 'AR', documentUid: SECTION_DOCUMENT_B }), acceptedPage({ total: 1 }));
+    const markup = page({ document: SECTION_DOCUMENT_B }, client).markup;
+    const tabs = Object.fromEntries(
+      [...markup.matchAll(/<button[^>]*data-section-optimisation-tab="(\w+)"[^>]*>([^<]*)<\/button>/g)].map((match) => [match[1], match[2]]),
+    );
+    expect(tabs).toEqual({ specification: 'Форма 7 · Спецификация 2', accepted: 'Принято 1' });
+  });
+
+  it('opens on the accepted tab narrowed the same way', () => {
+    const { markup, client } = page({ section: 'AR', tab: 'accepted', document: SECTION_DOCUMENT_A });
+    expect(markup).toContain('data-section-optimisation-panel="accepted"');
+    expect(selected(markup, SECTION_DOCUMENT_A)).toBe(true);
+    expect(keys(client)).toContainEqual(acceptedKey({ sectionCode: 'AR', documentUid: SECTION_DOCUMENT_A }));
+  });
+
+  it('says it set aside a document it cannot read, and opens on every document', () => {
+    const { markup } = page({ document: 'doc_nope' });
+    expect(markup).toContain('data-address-ignored="document"');
+    expect(text(markup)).toContain('Из адреса не прочитано: документ.');
+    expect(markup).not.toContain('data-section-document-filter');
+  });
+
+  it('keeps the rows of one document the rows of that document: the filter is a read, not a merge', () => {
+    // The groups are the document's own, whatever the filter asked for.
+    const one = sectionAnswer({ projects: answer.projects.slice(1), rows: { ...answer.rows!, items: answer.rows!.items.slice(4), total: 2 } });
+    const client = newClient();
+    client.setQueryData(specificationKey('AR', SECTION_PROJECT_B, SECTION_DOCUMENT_B), one);
+    const { markup } = page({ project: SECTION_PROJECT_B, document: SECTION_DOCUMENT_B }, client);
+    expect(markup).toContain(`data-section-group-row="${SECTION_DOCUMENT_B}"`);
+    expect(markup).not.toContain(`data-section-group-row="${SECTION_DOCUMENT_A}"`);
+    expect(markup).toContain(`data-section-row-project="${SECTION_PROJECT_B}"`);
+  });
+
+  describe('the list, from the answer', () => {
+    it('lists the sources of an answer of this section, project by project, and nothing of another section’s answer', () => {
+      expect(documentFilterOptions(answer, 'AR').map((option) => [option.documentUid, option.objectName])).toEqual([
+        [SECTION_DOCUMENT_A, 'Школа на пятьсот мест'],
+        [expect.stringMatching(/^doc_/), 'Школа на пятьсот мест'],
+        [expect.stringMatching(/^doc_/), 'Школа на пятьсот мест'],
+        [expect.stringMatching(/^doc_/), 'Школа на пятьсот мест'],
+        [SECTION_DOCUMENT_B, 'Детский сад'],
+      ]);
+      expect(documentFilterOptions(answer, 'KJ')).toEqual([]);
+      expect(documentFilterOptions(undefined, 'AR')).toEqual([]);
+    });
+
+    it('adds the chosen document only when the list lacks it, and names it where it can', () => {
+      const all = documentFilterOptions(answer, 'AR');
+      expect(withSelectedDocument(all, null, [])).toBe(all);
+      expect(withSelectedDocument(all, SECTION_DOCUMENT_A as never, [])).toBe(all);
+      const stray = 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z';
+      expect(withSelectedDocument(all, stray as never, [])).toEqual([...all, { documentUid: stray, label: stray, objectName: '' }]);
+      const named = [{ documentUid: stray as never, label: 'КЖ-3 · v1', objectName: 'Детский сад' }];
+      expect(withSelectedDocument(all, stray as never, named).at(-1)).toEqual(named[0]);
+    });
   });
 });

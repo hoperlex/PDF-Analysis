@@ -73,6 +73,11 @@ export interface SectionSpecificationAnswerProps {
    * the amount — to the same grouped table. The choice is the reader's (`UI-B-23`).
    */
   readonly columns?: SectionSpecificationColumns | undefined;
+  /**
+   * `UIP-S11-06`: the answer was asked for one document, which the answer does not echo as it echoes the project. The empty states
+   * then name the document and not the project.
+   */
+  readonly documentFiltered?: boolean | undefined;
 }
 
 export type SectionSpecificationColumns = 'form7' | 'priced';
@@ -544,7 +549,12 @@ function GroupBody({
   );
 }
 
-function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerProps, 'answer' | 'onPage'> & { readonly columns: SectionSpecificationColumns }) {
+function RowsTable({
+  answer, onPage, columns, documentFiltered,
+}: Pick<SectionSpecificationAnswerProps, 'answer' | 'onPage'> & {
+  readonly columns: SectionSpecificationColumns;
+  readonly documentFiltered: boolean;
+}) {
   // The documents the reader folded; held by identity so a fold survives another page, and forgotten with the section (the
   // container keys this table by it). Expanded by default, as the original.
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
@@ -554,13 +564,13 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
   if (rows.total === 0) {
     return (
       <EmptyState
-        title={searched ? 'По запросу строк не найдено' : 'Строк спецификации в разделе нет'}
+        title={searched ? 'По запросу строк не найдено' : documentFiltered ? 'Строк спецификации в документе нет' : 'Строк спецификации в разделе нет'}
         detail={
           searched
             ? 'Поиск идёт по позиции, наименованию, названию группы, единице измерения и примечанию строк. Итоги объектов от поиска не зависят.'
             : answer.row_count > 0
               ? 'Строки есть, но не на этой странице.'
-              : 'Таблиц спецификации с графами «Наименование» и «Кол.» в сохранённом тексте текущих версий раздела не найдено или текст ещё не прочитан — состояние каждого комплекта указано выше.'
+              : 'Таблиц спецификации с графами «Наименование» и «Кол.» в сохранённом тексте текущих версий раздела не найдено или текст ещё не прочитан — состояние каждого комплекта указано ниже, в «Источниках и итогах».'
         }
       />
     );
@@ -645,7 +655,9 @@ function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerP
   );
 }
 
-export function SectionSpecificationAnswer({ answer, onPage, onSelectProject, columns = 'form7' }: SectionSpecificationAnswerProps) {
+export function SectionSpecificationAnswer({
+  answer, onPage, onSelectProject, columns = 'form7', documentFiltered = false,
+}: SectionSpecificationAnswerProps) {
   const tooLarge = answer.state === 'section_too_large';
   return (
     <div data-section-state={answer.state} data-section-code={answer.section_code}>
@@ -658,16 +670,23 @@ export function SectionSpecificationAnswer({ answer, onPage, onSelectProject, co
         </div>
       ) : null}
       {answer.projects.length === 0 && !tooLarge ? (
-        <EmptyState
-          title="В разделе нет подтверждённых комплектов"
-          detail={
-            answer.project_filter === null
-              ? 'В сводку входят комплекты, текущую версию которых эксперт подтвердил для этого раздела на экране версии. Таких комплектов пока нет.'
-              : 'У выбранного объекта нет комплектов, текущая версия которых подтверждена для этого раздела.'
-          }
-        />
+        documentFiltered ? (
+          <EmptyState
+            title="У выбранного документа нет подтверждённой версии в этом разделе"
+            detail="Текущую версию документа эксперт ещё не подтвердил для этого раздела на экране версии, поэтому его строк в сводке нет."
+          />
+        ) : (
+          <EmptyState
+            title="В разделе нет подтверждённых комплектов"
+            detail={
+              answer.project_filter === null
+                ? 'В сводку входят комплекты, текущую версию которых эксперт подтвердил для этого раздела на экране версии. Таких комплектов пока нет.'
+                : 'У выбранного объекта нет комплектов, текущая версия которых подтверждена для этого раздела.'
+            }
+          />
+        )
       ) : null}
-      <RowsTable key={answer.section_code} answer={answer} onPage={onPage} columns={columns} />
+      <RowsTable key={answer.section_code} answer={answer} onPage={onPage} columns={columns} documentFiltered={documentFiltered} />
       {answer.projects.length === 0 ? null : (
         // `UIP-S11-03`: the summary by object under one disclosure. A read a bound stopped has no table, and what it offers instead —
         // narrowing to one object — is in the summary, so that one stands open.

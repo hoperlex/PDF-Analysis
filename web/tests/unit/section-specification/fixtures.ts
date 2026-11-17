@@ -176,9 +176,10 @@ export const sectionAnswer = (over: Partial<SectionSpecification> = {}): Section
   ...over,
 });
 export const SECTION_NO_ROWS = { rows: null, row_count: 0 } as const;
-export const sectionKey = (filter: { projectUid?: string | null; q?: string | null } = {}) =>
+export const sectionKey = (filter: { projectUid?: string | null; documentUid?: string | null; q?: string | null } = {}) =>
   queryKeys.optimisation.sectionSpecification('AR', {
-    projectUid: (filter.projectUid ?? null) as never, q: filter.q ?? null, offset: 0, limit: SECTION_ROW_LIMIT,
+    projectUid: (filter.projectUid ?? null) as never, documentUid: (filter.documentUid ?? null) as never,
+    q: filter.q ?? null, offset: 0, limit: SECTION_ROW_LIMIT,
   });
 
 /** The same answer one page into a longer list: the pager has a page before and after it. */

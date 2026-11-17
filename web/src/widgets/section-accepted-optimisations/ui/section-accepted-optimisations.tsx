@@ -17,14 +17,17 @@
  * and «Решение». The original's «Эффект» with a type and its «Ограничения» are not here: the proposal has one type and the server
  * states no restriction, so there is nothing to put in them. The long paragraph that opened the tab is gone.
  *
- * **Filters.** The section and the project are the page's, chosen in the row of the tabs (`UI-B-24`) and shared with the
- * specification tab; this widget reads them as props and starts from its first page whenever either changes.
+ * **Filters.** The section, the project and the document (`UIP-S11-06`) are the page's — the section in its header, the object in
+ * the top strip, the document in the row of the tabs — and shared with the specification tab; this widget reads them as props and
+ * starts from its first page whenever one changes. A document nothing was accepted in is an empty page, said of the document.
  */
 
 import Link from 'next/link';
 import { useState } from 'react';
 
-import type { AcceptedOptimisationProposal, AcceptedOptimisationProposalPage, ProjectSection, ProjectUid } from '@/shared/api';
+import type {
+  AcceptedOptimisationProposal, AcceptedOptimisationProposalPage, DocumentUid, ProjectSection, ProjectUid,
+} from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { formatInstant, routes } from '@/shared/lib';
 import type { TableColumn } from '@/shared/ui';
@@ -150,16 +153,22 @@ export interface SectionAcceptedListProps {
   readonly hasPrevious: boolean;
   readonly onPrevious: () => void;
   readonly onNext: (cursor: string) => void;
+  /** `UIP-S11-06`: the list is narrowed to one document, so an empty page names the document. */
+  readonly documentFiltered?: boolean | undefined;
 }
 
 /** The answer: the count, the rows, the pager — or the empty page said in words. Rendered by the static harness. */
-export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext }: SectionAcceptedListProps) {
+export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext, documentFiltered = false }: SectionAcceptedListProps) {
   const next = page.page.next_cursor;
   if (page.items.length === 0 && !hasPrevious) {
     return (
       <EmptyState
-        title="Нет принятых экспертом оптимизаций."
-        detail="Непроверенные, отклонённые и возвращённые на доработку предложения сюда намеренно не включаются. Принятое появится здесь после решения эксперта на вкладке «Оптимизация» комплекта."
+        title={documentFiltered ? 'По этому документу нет принятых экспертом оптимизаций.' : 'Нет принятых экспертом оптимизаций.'}
+        detail={
+          documentFiltered
+            ? 'Непроверенные, отклонённые и возвращённые на доработку предложения сюда намеренно не включаются. Принятое по документу появится здесь после решения эксперта на вкладке «Оптимизация» этого документа.'
+            : 'Непроверенные, отклонённые и возвращённые на доработку предложения сюда намеренно не включаются. Принятое появится здесь после решения эксперта на вкладке «Оптимизация» комплекта.'
+        }
       />
     );
   }
@@ -182,19 +191,21 @@ export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext }: S
 export interface SectionAcceptedOptimisationsProps {
   readonly sectionCode: ProjectSection;
   readonly projectUid: ProjectUid | null;
+  /** `UIP-S11-06`: one document of the scope; every document when absent. */
+  readonly documentUid?: DocumentUid | null | undefined;
 }
 
-export function SectionAcceptedOptimisations({ sectionCode, projectUid }: SectionAcceptedOptimisationsProps) {
+export function SectionAcceptedOptimisations({ sectionCode, projectUid, documentUid = null }: SectionAcceptedOptimisationsProps) {
   const [cursors, setCursors] = useState<readonly string[]>([]);
-  // A cursor belongs to the section and project it was issued under: another choice starts from the first page.
-  const scope = `${sectionCode}|${projectUid ?? ''}`;
+  // A cursor belongs to the section, project and document it was issued under: another choice starts from the first page.
+  const scope = `${sectionCode}|${projectUid ?? ''}|${documentUid ?? ''}`;
   const [seenScope, setSeenScope] = useState(scope);
   if (seenScope !== scope) {
     setSeenScope(scope);
     setCursors([]);
   }
   const cursor = cursors.at(-1);
-  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid, ...(cursor === undefined ? {} : { cursor }) });
+  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid, documentUid, ...(cursor === undefined ? {} : { cursor }) });
   const failure = accepted.error === null ? null : failureMessage(accepted.error);
   const page = accepted.data;
 
@@ -217,6 +228,7 @@ export function SectionAcceptedOptimisations({ sectionCode, projectUid }: Sectio
           hasPrevious={cursors.length > 0}
           onPrevious={() => setCursors((held) => held.slice(0, -1))}
           onNext={(next) => setCursors((held) => [...held, next])}
+          documentFiltered={documentUid !== null}
         />
       ) : null}
     </section>

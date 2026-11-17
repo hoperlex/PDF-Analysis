@@ -29,28 +29,35 @@
  * opening it. The two reads are the tabs' own first reads -- the same query keys, so an open tab and its number are one
  * request -- and the number of a tab whose read has not answered, was refused or was stopped at a bound is left off.
  *
- * **The row of the tabs** holds the tabs only. The «Форма 7» tab shows the form's nine graphs with the rows grouped under a row per
+ * **The row of the tabs** holds the tabs and, at its end, the filter «Документ» (`UIP-S11-06`): «Все документы раздела» and the
+ * documents the scope lists, «АР-1 · v2». The choice narrows both tabs and the numbers on them, goes into the address
+ * (`?document=<document_uid>`) and is forgotten when the section or the object changes — a document names nothing in another
+ * object or section. The documents are the sources of the scope's unnarrowed read, which is the tabs' own first read while no document
+ * is chosen. The «Форма 7» tab shows the form's nine graphs with the rows grouped under a row per
  * project that folds («+» and «−» unfold and fold them all), as the original draws it (`UI-B-23`).
  *
  * Not `/optimisation`, which is the optimisation of one project and stays registered, outside
  * the menu, until it becomes a tab of the project screen.
  */
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
-import type { ProjectSection, ProjectUid } from '@/shared/api';
+import type { DocumentUid, ProjectSection, ProjectUid } from '@/shared/api';
 import { useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
 import { useAddressProject, useCurrentProject } from '@/entities/project';
 import { useSectionSpecification } from '@/entities/section-specification';
 import { SectionAcceptedOptimisations } from '@/widgets/section-accepted-optimisations';
 import { SectionSpecificationSection } from '@/widgets/section-specification';
 
-import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, objectDecided, sectionOptimisationSearch, shownProject } from '../model/address';
+import {
+  DEFAULT_SECTION_OPTIMISATION_ADDRESS, objectDecided, readDocumentParam, sectionOptimisationSearch, shownProject,
+} from '../model/address';
 import type { SectionOptimisationAddress } from '../model/address';
 import { SECTION_OPTIMISATION_TABS, sectionOptimisationTabText } from '../model/tabs';
 import type { SectionOptimisationTab, SectionOptimisationTabCounts } from '../model/tabs';
+import { DocumentFilter, documentFilterOptions, withSelectedDocument } from './document-filter';
 import { SectionHeader } from './section-header';
 import styles from './section-optimisation-page.module.css';
 
@@ -63,6 +70,7 @@ const IGNORED_TEXT = {
   section: 'раздел',
   project: 'объект',
   tab: 'вкладка',
+  document: 'документ',
 } as const;
 
 /** This screen's registry address: it stands in for the address where no router is mounted, so the class (`optional`) is known. */
@@ -79,6 +87,13 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   const buttons = useRef<Partial<Record<SectionOptimisationTab, HTMLButtonElement | null>>>({});
   const [tab, setTab] = useState<SectionOptimisationTab>(initial.tab);
   const [sectionCode, setSectionCode] = useState<ProjectSection>(initial.sectionCode);
+  // The document of the scope (`UIP-S11-06`): the address the route read, or, where a router is mounted, the live one — the route
+  // passes the parameters it knows, and `?document=` is read here whatever it passed. Held by identity, never by its title.
+  const addressParams = useSearchParams();
+  const [addressedDocument] = useState(() =>
+    readDocumentParam(addressParams === null ? (initial.documentUid ?? null) : addressParams.get('document')),
+  );
+  const [documentUid, setDocumentUid] = useState<DocumentUid | null>(addressedDocument.documentUid);
 
   // The object is the top strip's (`UIP-S11-01`): the live address, and where it says nothing the account's last object, through
   // `useCurrentProject`, so a choice in the strip changes the scope of both tabs with no reload. Where no router is mounted the
@@ -94,10 +109,19 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   // «Все объекты» was chosen, in the address, and the address says it as `?project=all`; an address that says nothing says nothing.
   const allProjects = projectUid === null && (routed ? live.source === 'all' : initial.allProjects === true);
 
+  // A document names nothing in another section or another object: it is forgotten when either changes. The object that arrives late
+  // from the account (`pending` to the last object) is no change — nobody had chosen a document under another object.
+  const scopeKey = live.pending ? null : `${sectionCode}|${projectUid ?? ''}`;
+  const [seenScope, setSeenScope] = useState<string | null>(scopeKey);
+  if (scopeKey !== null && seenScope !== scopeKey) {
+    setSeenScope(scopeKey);
+    if (seenScope !== null) setDocumentUid(null);
+  }
+
   // The tabs' numbers. `row_count` counts every row in scope apart from the text search, and only a `ready` answer has
   // one worth showing: a section the server stopped at a bound (`section_too_large`) lists no rows.
-  const specification = useSectionSpecification({ sectionCode, projectUid, query: '', offset: 0 });
-  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid });
+  const specification = useSectionSpecification({ sectionCode, projectUid, documentUid, query: '', offset: 0 });
+  const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid, documentUid });
   const counts: SectionOptimisationTabCounts = {
     specification:
       specification.data !== undefined && specification.data.section_code === sectionCode && specification.data.state === 'ready'
@@ -106,11 +130,21 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
     accepted: accepted.data?.total ?? null,
   };
 
+  // The documents of the scope: the unnarrowed read, which is the tabs' own first read (one request) while no document is chosen, and a
+  // read of its own once one is. The chosen document is always offered, named by the narrowed answer when the list lacks it.
+  const scopeRead = useSectionSpecification({ sectionCode, projectUid, documentUid: null, query: '', offset: 0 });
+  const documentOptions = withSelectedDocument(
+    documentFilterOptions(scopeRead.data, sectionCode),
+    documentUid,
+    documentFilterOptions(specification.data, sectionCode),
+  );
+
   function keep(next: {
     readonly tab: SectionOptimisationTab;
     readonly sectionCode: ProjectSection;
     readonly projectUid: ProjectUid | null;
     readonly allProjects: boolean;
+    readonly documentUid: DocumentUid | null;
   }) {
     // A reload or a pasted link opens the same view: the address follows every choice, without a new history entry.
     rewriteAddress(sectionOptimisationSearch(next));
@@ -123,19 +157,25 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   const seenObject = useRef<string | null>(objectKey);
   useEffect(() => {
     if (objectKey === null) return;
-    if (seenObject.current !== null && seenObject.current !== objectKey) keep({ tab, sectionCode, projectUid, allProjects });
+    if (seenObject.current !== null && seenObject.current !== objectKey) keep({ tab, sectionCode, projectUid, allProjects, documentUid });
     seenObject.current = objectKey;
     // Only a change of the object writes the address here; the rest is written by the choices themselves.
   }, [objectKey]);
 
   function chooseTab(next: SectionOptimisationTab) {
     setTab(next);
-    keep({ tab: next, sectionCode, projectUid, allProjects });
+    keep({ tab: next, sectionCode, projectUid, allProjects, documentUid });
   }
 
   function chooseSection(next: ProjectSection) {
     setSectionCode(next);
-    keep({ tab, sectionCode: next, projectUid, allProjects });
+    setDocumentUid(null);
+    keep({ tab, sectionCode: next, projectUid, allProjects, documentUid: null });
+  }
+
+  function chooseDocument(next: DocumentUid | null) {
+    setDocumentUid(next);
+    keep({ tab, sectionCode, projectUid, allProjects, documentUid: next });
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -157,13 +197,16 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
     buttons.current[next]?.focus();
   };
 
+  // What the address carried that could not be read, by name: the route's own, and the document, which the page reads itself.
+  const ignored = addressedDocument.ignored && !initial.ignored.includes('document') ? [...initial.ignored, 'document' as const] : initial.ignored;
+
   return (
     <section className="am-page" data-screen="section-optimisation">
       <SectionHeader sectionCode={sectionCode} projectUid={projectUid} onSection={chooseSection} />
       <div className="am-page__body">
-        {initial.ignored.length === 0 ? null : (
-          <p className={styles.notice} data-address-ignored={initial.ignored.join(' ')}>
-            Из адреса не прочитано: {initial.ignored.map((name) => IGNORED_TEXT[name]).join(', ')}. Экран открыт с выбором по умолчанию.
+        {ignored.length === 0 ? null : (
+          <p className={styles.notice} data-address-ignored={ignored.join(' ')}>
+            Из адреса не прочитано: {ignored.map((name) => IGNORED_TEXT[name]).join(', ')}. Экран открыт с выбором по умолчанию.
           </p>
         )}
         {rememberFailure === null ? null : (
@@ -197,6 +240,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
                 </button>
               ))}
             </div>
+            <DocumentFilter options={documentOptions} value={documentUid} onChange={chooseDocument} />
           </div>
           <div
             role="tabpanel"
@@ -210,10 +254,11 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
               <SectionSpecificationSection
                 sectionCode={sectionCode}
                 projectUid={projectUid}
+                documentUid={documentUid}
                 onSelectProject={chooseObject}
               />
             ) : (
-              <SectionAcceptedOptimisations sectionCode={sectionCode} projectUid={projectUid} />
+              <SectionAcceptedOptimisations sectionCode={sectionCode} projectUid={projectUid} documentUid={documentUid} />
             )}
           </div>
         </div>

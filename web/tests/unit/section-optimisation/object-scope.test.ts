@@ -28,13 +28,20 @@ vi.mock('@/shared/api', async (importOriginal) => {
   };
 });
 
+// The live tree has no CSS object model: the section's dot sets a custom property on its `style`, which the hand-written node of
+// `live-render.ts` cannot take. The dot is a mark of colour and says nothing of the object, so it stands out of this mount.
+vi.mock('@/entities/project', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, SectionDot: () => null };
+});
+
 import { SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { getMe, getSectionSpecification, listAcceptedOptimisationProposals, setMyLastProject } from '@/shared/api';
 import type { Account } from '@/shared/api';
 
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
-import { sectionAnswer } from '../section-specification/fixtures';
+import { SECTION_DOCUMENT_A, sectionAnswer } from '../section-specification/fixtures';
 import { ACCEPTED_PROJECT_A, ACCEPTED_PROJECT_B, acceptedPage } from './fixtures';
 
 const A = ACCEPTED_PROJECT_A;
@@ -67,6 +74,11 @@ interface Reads {
   readonly accepted: readonly (string | null)[];
 }
 
+/** The document each request carried, in order; `null` for a request that named none. */
+function documentsRead(calls: readonly (readonly unknown[])[]): readonly (string | null)[] {
+  return calls.map((call) => ((call[0] as { query?: { document_uid?: string } }).query?.document_uid ?? null));
+}
+
 /** The project each request carried, in order; `null` for a request that named none. */
 function reads(): Reads {
   const of = (calls: readonly (readonly unknown[])[]) =>
@@ -89,7 +101,12 @@ describe('the object of the screen is the top strip’s (`UIP-S11-01`)', () => {
     me.mockReset();
     me.mockImplementation((async () => ({ data: account(null), status: 200, correlationId: 'cid-me' })) as unknown as typeof getMe);
     specification.mockReset();
-    specification.mockImplementation((async () => ({ data: oneProject(), status: 200, correlationId: 'cid-spec' })) as unknown as typeof getSectionSpecification);
+    // The answer echoes the section it was asked for, as the server's does: an answer of another section lists no document of this one.
+    specification.mockImplementation((async (input: { path: { section_code: string } }) => ({
+      data: { ...oneProject(), section_code: input.path.section_code },
+      status: 200,
+      correlationId: 'cid-spec',
+    })) as unknown as typeof getSectionSpecification);
     acceptedList.mockReset();
     acceptedList.mockImplementation((async () => ({ data: acceptedPage(), status: 200, correlationId: 'cid-acc' })) as unknown as typeof listAcceptedOptimisationProposals);
     remember.mockReset();
@@ -206,5 +223,55 @@ describe('the object of the screen is the top strip’s (`UIP-S11-01`)', () => {
     expect(target.startsWith('/section-optimisation?')).toBe(true);
     expect(new URLSearchParams(target.split('?')[1]).get('project')).toMatch(/^prj_/);
     expect(remember).toHaveBeenCalledTimes(1);
+  });
+
+  it('narrows both tabs to the document chosen in the row of the tabs, writes it to the address, and forgets it when the object changes', async () => {
+    const client = freshClient();
+    live = await mountLive(page(client, `project=${A}`));
+    await settled(live);
+    (globalThis as unknown as { window: Record<string, unknown> }).window.history = { replaceState };
+    expect(documentsRead(specification.mock.calls)).toEqual([null]);
+
+    expect(await live.change('Документ', SECTION_DOCUMENT_A)).toBe(true);
+    await settled(live);
+    // Both tabs' reads carry the document, for the same object and section; the list of documents stays the unnarrowed read.
+    expect(documentsRead(specification.mock.calls).at(-1)).toBe(SECTION_DOCUMENT_A);
+    expect(reads().specification.at(-1)).toBe(A);
+    expect(documentsRead(acceptedList.mock.calls)).toEqual([null, SECTION_DOCUMENT_A]);
+    expect(sectionsRead().at(-1)).toBe('KJ');
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', `?section=KJ&project=${A}&document=${SECTION_DOCUMENT_A}`);
+
+    // The object moves in the top strip: the document is forgotten, both tabs ask again for the whole object, the address says so.
+    const before = specification.mock.calls.length;
+    await live.update(page(client, `project=${B}&document=${SECTION_DOCUMENT_A}`));
+    await settled(live);
+    expect(specification.mock.calls.length).toBeGreaterThan(before);
+    expect(documentsRead(specification.mock.calls).at(-1)).toBeNull();
+    expect(reads().specification.at(-1)).toBe(B);
+    expect(documentsRead(acceptedList.mock.calls).at(-1)).toBeNull();
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', `?section=KJ&project=${B}`);
+  });
+
+  it('forgets the document when the section changes too, and «Все документы раздела» lifts it', async () => {
+    const client = freshClient();
+    live = await mountLive(page(client, `project=${A}`));
+    await settled(live);
+    (globalThis as unknown as { window: Record<string, unknown> }).window.history = { replaceState };
+    await live.change('Документ', SECTION_DOCUMENT_A);
+    await settled(live);
+    expect(documentsRead(specification.mock.calls).at(-1)).toBe(SECTION_DOCUMENT_A);
+    await live.change('Раздел', 'AR');
+    await settled(live);
+    expect(sectionsRead().at(-1)).toBe('AR');
+    expect(documentsRead(specification.mock.calls).at(-1)).toBeNull();
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', `?section=AR&project=${A}`);
+    // And choosing «Все документы раздела» (the empty value) lifts a document that was chosen.
+    await live.change('Документ', SECTION_DOCUMENT_A);
+    await settled(live);
+    expect(documentsRead(specification.mock.calls).at(-1)).toBe(SECTION_DOCUMENT_A);
+    await live.change('Документ', '');
+    await settled(live);
+    expect(documentsRead(specification.mock.calls).at(-1)).toBeNull();
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', `?section=AR&project=${A}`);
   });
 });

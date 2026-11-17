@@ -21,8 +21,8 @@ export interface SectionFilterBarProps {
 export function SectionFilterBar({ sectionCode, onSection }: SectionFilterBarProps) {
   return (
     <form className={styles.filterBar} aria-label="Раздел" onSubmit={(event) => event.preventDefault()} data-section-filter-bar="">
-      <label className={styles.filterField}>
-        <span>Раздел</span>
+      <div className={styles.filterField}>
+        <label htmlFor="section-specification-section">Раздел</label>
         {/* The literal id is what the PC-01 journey's write half addresses (`section-form7-without-members`), and its
             conformance test finds the handle by this text in web/src; `SECTION_SELECT_ID` names the same value. */}
         <select
@@ -37,7 +37,7 @@ export function SectionFilterBar({ sectionCode, onSection }: SectionFilterBarPro
             </option>
           ))}
         </select>
-      </label>
+      </div>
     </form>
   );
 }

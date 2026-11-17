@@ -19,7 +19,7 @@
 
 import { useState } from 'react';
 
-import type { ProjectSection as ContractProjectSection, ProjectUid } from '@/shared/api';
+import type { DocumentUid, ProjectSection as ContractProjectSection, ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import { ANALYSED_SECTION_CODE } from '@/entities/project';
@@ -41,6 +41,11 @@ export interface SectionSpecificationSectionProps {
   readonly sectionCode?: ContractProjectSection | undefined;
   /** The project the rows are narrowed to; every project of the section when absent. */
   readonly projectUid?: ProjectUid | null | undefined;
+  /**
+   * `UIP-S11-06`: the one document of the scope the rows are narrowed to; every document when absent. A filter and not a merge:
+   * the rows of the document stay the rows of their own document and version.
+   */
+  readonly documentUid?: DocumentUid | null | undefined;
   /** Narrow the section to one project (the button of a project's panel). */
   readonly onSelectProject?: ((projectUid: ProjectUid) => void) | undefined;
 }
@@ -48,20 +53,21 @@ export interface SectionSpecificationSectionProps {
 export function SectionSpecificationSection({
   sectionCode = ANALYSED_SECTION_CODE,
   projectUid = null,
+  documentUid = null,
   onSelectProject,
 }: SectionSpecificationSectionProps) {
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [columns, setColumns] = useState<SectionSpecificationColumns>('form7');
-  // A page of rows belongs to the section and project it was read under; another one starts from the first page.
-  const scope = `${sectionCode}|${projectUid ?? ''}`;
+  // A page of rows belongs to the section, project and document it was read under; another one starts from the first page.
+  const scope = `${sectionCode}|${projectUid ?? ''}|${documentUid ?? ''}`;
   const [seenScope, setSeenScope] = useState(scope);
   if (seenScope !== scope) {
     setSeenScope(scope);
     setOffset(0);
   }
-  const specification = useSectionSpecification({ sectionCode, projectUid, query, offset });
+  const specification = useSectionSpecification({ sectionCode, projectUid, documentUid, query, offset });
   const answer = specification.data;
   const failure = specification.error === null ? null : failureMessage(specification.error);
 
@@ -129,6 +135,7 @@ export function SectionSpecificationSection({
         <SectionSpecificationAnswer
           answer={answer}
           columns={columns}
+          documentFiltered={documentUid !== null}
           onPage={specification.isPlaceholderData ? null : setOffset}
           onSelectProject={onSelectProject === undefined ? null : (uid) => onSelectProject(uid as ProjectUid)}
         />
