@@ -114,6 +114,7 @@ from auditmanager.jobs.public import (
     install_slot_recovery,
     sweep_stale_temporaries,
 )
+from auditmanager.runs import RunRepository
 from auditmanager.workers.registry import HEARTBEAT_SECONDS, WorkerRegistry
 
 _log = logging.getLogger(__name__)
@@ -127,6 +128,14 @@ GROUP_WAIT_SECONDS: Final[float] = 5.0
 #: the database and the hint's own test excludes the Run. The hold is a convenience in front of that durable reason, never a
 #: substitute for it, and it is local to this process.
 GROUP_REFUSAL_HOLD_SECONDS: Final[float] = GROUP_WAIT_SECONDS
+
+#: `RUN-RESTART-01`. How often the dispatch loop looks for a restart run that published but whose decision carry is not complete: the carry is
+#: idempotent and runs right after the run's terminal transaction, so this pass finds only what that step lost (a crash, a failure).
+RESTART_CARRY_SECONDS: Final[float] = 60.0
+#: `RUN-RESTART-01`. How many passes try one restart run's carry before this process stops trying it: a run whose carry keeps failing on an item (it writes
+#: no marker, so every pass would find it again) is logged at error on each failure and, at the cap, once more as given up -- until the process restarts or
+#: the run's carry completes elsewhere. The carry is idempotent and the run is published either way; nothing waits on it.
+RESTART_CARRY_ATTEMPTS: Final[int] = 5
 
 #: The stated fallback when no notification arrives (R-105).
 POLL_SECONDS: Final[float] = 5.0
@@ -352,6 +361,8 @@ class WorkerService:
         #: by run id, until when (a ``monotonic`` instant). They are kept out of the hint -- offered as ``submitted`` -- so
         #: the dispatch loop falls through to the next Run and to the comparison claim instead of offering the same Run again.
         self._group_refused: dict[str, float] = {}
+        #: `RUN-RESTART-01`: the passes that tried each restart run's decision carry and did not complete it, by run id (:data:`RESTART_CARRY_ATTEMPTS`).
+        self._carry_attempts: dict[str, int] = {}
         self._pool = ThreadPoolExecutor(max_workers=slots, thread_name_prefix="auditmanager-worker-run")
         self._threads: list[threading.Thread] = []
         self.wakeup = JobWakeup(engine, poll_seconds=poll_seconds)
@@ -474,6 +485,7 @@ class WorkerService:
         next_poll = 0.0
         next_reclaim = 0.0
         next_waits = 0.0
+        next_carries = 0.0
         woken = False
         try:
             while not self._stopped.is_set():
@@ -481,6 +493,9 @@ class WorkerService:
                 if now >= next_reclaim:
                     self._reclaim()
                     next_reclaim = monotonic() + self._reclaim_seconds
+                if now >= next_carries:
+                    self._sweep_restart_carries()
+                    next_carries = monotonic() + RESTART_CARRY_SECONDS
                 if now >= next_waits:
                     self._refresh_group_waits()
                     self._expire_comparison_waits()
@@ -557,6 +572,44 @@ class WorkerService:
             self._comparison.reclaim()
         except Exception:
             _log.exception("worker %s comparison lease reclaim pass failed", self._worker_id)
+
+    def _sweep_restart_carries(self) -> None:
+        """`RUN-RESTART-01` (`R-155b`): finish the decision carry of every restart run that published and whose carry is not complete.
+
+        The executor carries right after the run's terminal transaction and treats a failure as the sweeper's; this is the sweeper. Housekeeping,
+        so the one place a failure is logged and the loop carries on; ``carry_restart_decisions`` is idempotent, so a pass that finds nothing new
+        writes nothing. A build without the ``decisions`` carry (the lane that owns it has not merged) has nothing to sweep."""
+        try:
+            from auditmanager.decisions.public import carry_restart_decisions, pending_restart_carries
+        except ImportError:
+            return
+        try:
+            with self._sessions() as session:
+                pending = list(pending_restart_carries(session))
+                starters = {run_id: RunRepository().get(session, run_id).started_by_user_uid for run_id in pending}
+                session.commit()
+            attempts = self._carry_attempts
+            for run_id in list(attempts):
+                if run_id not in starters:
+                    del attempts[run_id]  # its carry completed (the marker is written): forget the count
+            for run_id in pending:
+                if attempts.get(run_id, 0) >= RESTART_CARRY_ATTEMPTS:
+                    continue
+                try:
+                    report = carry_restart_decisions(self._sessions, run_id=run_id, actor_user_uid=str(starters[run_id]))
+                except Exception:
+                    attempts[run_id] = attempts.get(run_id, 0) + 1
+                    _log.exception("worker %s: the decision carry of restart run %s failed (attempt %d of %d)",
+                                   self._worker_id, run_id, attempts[run_id], RESTART_CARRY_ATTEMPTS)
+                    if attempts[run_id] == RESTART_CARRY_ATTEMPTS:
+                        _log.error("worker %s: the decision carry of restart run %s is given up by this process after %d attempts; "
+                                   "the run is published and its decisions are not all carried", self._worker_id, run_id, RESTART_CARRY_ATTEMPTS)
+                    continue
+                as_fields = getattr(report, "as_fields", None)
+                _log.info("worker %s: the decision carry of restart run %s: %s", self._worker_id, run_id,
+                          as_fields() if callable(as_fields) else report)
+        except Exception:
+            _log.exception("worker %s restart carry pass failed; retried", self._worker_id)
 
     def _refresh_group_waits(self) -> None:
         """Keep the wait of every Run admitted on a group true, and end the ones nobody can serve (decision 15).

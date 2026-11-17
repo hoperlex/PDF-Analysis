@@ -163,13 +163,13 @@ def test_restart_point_is_a_declared_safe_key_of_analysis_input_invalid_and_of_n
     assert "restart_point" not in ErrorCode.CONFLICT.safe_detail_keys | ErrorCode.STATE_TRANSITION_NOT_ALLOWED.safe_detail_keys
 
 
-def test_the_shipped_adapter_is_a_sealed_stub_until_the_command_is_wired() -> None:
-    """The L0 stub: `503 dependency_unavailable`, the class `run_restart`, nothing read or written (no session is ever opened)."""
-    adapter = ExecutionAdapter(None, runs=None)  # type: ignore[arg-type]
-    answer = _post(_client(adapter), {"restart_point": "review"})
-    assert answer.status_code == 503, answer.text
-    body = json.loads(answer.content)
-    assert (body["error_code"], body["details"]) == ("dependency_unavailable", {"dependency": "run_restart"})
+def test_the_shipped_adapter_no_longer_answers_the_sealed_stub() -> None:
+    """`RUN-RESTART-01` L1: the L0 stub (`503 dependency_unavailable`, the class `run_restart`) is gone from the adapter; ``restart_run`` is the command, and a
+    deployment that has no cost preflight refuses it as the other starts do (``analysis_cost_preflight``), never with the stub's class."""
+    import inspect
+
+    source = inspect.getsource(ExecutionAdapter.restart_run)
+    assert "run_restart" not in source and "restart_run(" in source
 
 
 # -- the estimate and the readiness -------------------------------------------------------------

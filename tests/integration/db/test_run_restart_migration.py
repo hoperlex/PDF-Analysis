@@ -362,6 +362,29 @@ def test_a_tombstone_by_a_restart_is_refused_until_the_new_run_has_published_and
     assert _count(at_head, "audit_run_deletion") == 1
 
 
+def test_a_restart_that_ends_partial_replaces_its_source_as_one_that_published_does_and_a_failed_or_cancelled_one_never_does(at_head: Engine) -> None:
+    """`R-155g`, owner's «при публикации нового»: a restart that ends ``partial`` has published findings too, so the guard admits ``published`` **or**
+    ``partial`` -- and refuses every other state of the restart run, the failed and the cancelled included, whatever its source."""
+    world = World(at_head)
+    ended: dict[str, tuple[str, str, str]] = {}
+    with at_head.begin() as connection:
+        for state in ("partial", "published", "failed", "cancelled", "running"):
+            source = world.ended_source(connection, "failed")
+            run, command = world.restart(connection, source, state=state)
+            ended[state] = (source, run, command)
+    for state in ("failed", "cancelled", "running"):
+        source, _run, command = ended[state]
+        _refused(at_head, lambda c, source=source, command=command: world.tombstone(c, source, command), "AM001")
+    assert _count(at_head, "audit_run_deletion") == 0
+    for state in ("partial", "published"):
+        source, run, command = ended[state]
+        with at_head.begin() as connection:
+            world.tombstone(connection, source, command)
+        with at_head.connect() as connection:
+            assert _replaced_by(connection, source) == [run]
+    assert _count(at_head, "audit_run_deletion") == 2
+
+
 def _source_of(engine: Engine, run: str) -> str:
     with engine.connect() as connection:
         return str(connection.execute(text("SELECT started_from_run_id FROM audit_run WHERE run_id = :r"), {"r": run}).scalar_one())

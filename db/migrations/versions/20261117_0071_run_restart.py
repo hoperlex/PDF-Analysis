@@ -51,9 +51,11 @@ cannot be moved after the fact. The column is not added to the general list on p
 and nothing about a run that is no restart depends on its command.
 
 ``trg_audit_run_deletion_by_restart`` makes the rule of ``R-155g`` a fact of the database too: a tombstone that names a restart's command is
-refused unless that run is ``published`` **and** names the tombstoned run as its source -- the tombstone is written in the transaction that
-publishes the new run, after its state moved, and never before, never for another run, never by a restart that failed. A tombstone of any other
-command (``deleteRun``) is unaffected.
+refused unless that run is ``published`` **or** ``partial`` **and** names the tombstoned run as its source -- the tombstone is written in the
+transaction that publishes the new run, after its state moved, and never before, never for another run, never by a restart that ``failed`` or was
+``cancelled``. ``partial`` is admitted because the owner ruled the source is deleted «при публикации нового» (``R-155g``) and a ``partial`` run
+has published findings too (the gate publishes the grounded ones; only a procedure of the extended review fell short): a restart that ends
+``partial`` replaces its source, as one that ends ``published`` does. A tombstone of any other command (``deleteRun``) is unaffected.
 
 What it does not change
 -----------------------
@@ -132,12 +134,12 @@ _DELETION_BY_RESTART = f"""
                 USING ERRCODE = 'AM001',
                       HINT = 'A restart tombstones its own source and no other run.';
         END IF;
-        IF v_state <> 'published' THEN
+        IF v_state NOT IN ('published', 'partial') THEN
             RAISE EXCEPTION
                 'state_transition_not_allowed: restart run % is % and has not published, so it does not replace run %',
                 v_run, v_state, NEW.run_id
                 USING ERRCODE = 'AM001',
-                      HINT = 'The source is tombstoned in the transaction that publishes the new run (R-155g), after its state moved.';
+                      HINT = 'The source is tombstoned in the transaction that publishes the new run (R-155g: published or partial), after its state moved.';
         END IF;
         RETURN NEW;
     END

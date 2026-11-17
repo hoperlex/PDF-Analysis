@@ -1,9 +1,9 @@
 """``restartRun`` (contract 1.59.0, `RUN-RESTART-01`) over the served seam, through the adapter the application ships.
 
-The command is lane L1's. What is asserted here is what holds **before** it exists and must keep holding after: the operation is behind the seam's
-registers (an expert reaches it, an account that is neither expert nor administrator does not), a body that is not the contract's is refused before the
-port, and the shipped adapter answers the sealed stub -- ``503 dependency_unavailable`` with the class ``run_restart`` -- and writes nothing, not even the
-idempotency key. The stub's test goes with the stub: when L1 replaces it, the 503 assertion is the one to move; the others stay.
+The command is lane L1's and is wired (``runs.commands.restart_run``; its behaviour is ``tests/integration/runs/test_restart_command.py``). What is
+asserted here is the seam: the operation is behind the seam's registers (an expert reaches it, an account that is neither expert nor administrator does not),
+a body that is not the contract's is refused before the port, and the shipped adapter reaches the command -- an unknown run is ``404 not_found`` for each of
+the eight chips and writes nothing, not even the idempotency key. (The L0 stub answered ``503 dependency_unavailable`` here until L1 replaced it.)
 """
 
 from __future__ import annotations
@@ -25,10 +25,25 @@ RUN = "run_01M2545JSD15ETSNNV904X991K"
 POINTS = ("preparation", "text", "blocks", "cross_check", "merge", "norms", "review", "correction")
 
 
+class _Runs:
+    """The run adapter's configuration seam the command reads (nothing of it is reached for an unknown run)."""
+
+    section_profiles = None
+    cost_preflight = None
+    require_cost_consent = False
+    stage_plans = None
+
+    def current_configuration(self) -> tuple[str, str, str]:
+        return "analysis-profile", "prompt-bundle", "recorded"
+
+    def submit_existing(self, run_id: str) -> None:  # pragma: no cover - an unknown run is refused before a run exists
+        raise AssertionError(run_id)
+
+
 @pytest.fixture
 def restart_surface(shipped_router: Surface, session_factory: sessionmaker[Session]) -> Surface:
     router = Router(credentials=shipped_router.router.credentials)
-    build_execution_routes(router, ExecutionAdapter(session_factory, runs=None))  # type: ignore[arg-type]
+    build_execution_routes(router, ExecutionAdapter(session_factory, runs=_Runs()))  # type: ignore[arg-type]
     return Surface(router)
 
 
@@ -42,14 +57,13 @@ def _error(answer: Answer) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("point", POINTS)
-def test_an_expert_reaches_the_sealed_stub_for_each_chip_and_it_writes_nothing(
+def test_an_expert_reaches_the_command_for_each_chip_and_an_unknown_run_writes_nothing(
     restart_surface: Surface, session: Session, point: str,
 ) -> None:
     before = session.execute(text("SELECT count(*) FROM command_record")).scalar_one()
     answer = _restart(restart_surface, {"restart_point": point})
-    assert answer.status == 503, answer.body
-    body = _error(answer)
-    assert (body["error_code"], body["details"]) == ("dependency_unavailable", {"dependency": "run_restart"})
+    assert answer.status == 404, answer.body
+    assert _error(answer)["error_code"] == "not_found"
     assert session.execute(text("SELECT count(*) FROM command_record")).scalar_one() == before, "a refused restart leaves no command record"
     assert session.execute(text("SELECT count(*) FROM audit_run WHERE restart_point IS NOT NULL")).scalar_one() == 0
 

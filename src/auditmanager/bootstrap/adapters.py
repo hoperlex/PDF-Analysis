@@ -208,6 +208,14 @@ def _carried_from_view(origin: Any) -> DecisionCarriedFromView | None:
     """`UI-A-73`: the wire view of a carried decision's origin; ``None`` for a decision made directly."""
     if origin is None:
         return None
+    # `RUN-RESTART-01` (contract 1.59.0): the one mapping lives with the schema (``decision_carried_from_view``), which also answers the run that allocated
+    # the source finding and the mode of the carry (``restart``); this reader never restates it. A tree that has not got it yet (the decisions lane
+    # merges separately) maps the four fields it always did.
+    from auditmanager.api.schemas import decisions as schemas
+
+    mapper = getattr(schemas, "decision_carried_from_view", None)
+    if mapper is not None:
+        return mapper(origin)
     return DecisionCarriedFromView(
         decision_id=origin.decision_id, finding_uid=origin.finding_uid,
         version_uid=origin.version_uid, version_ordinal=origin.version_ordinal,
@@ -471,9 +479,28 @@ class ExecutionAdapter(_SessionHolder):
 
     def restart_run(self, *, run_id: str, restart_point: str, user_uid: str, idempotency_key: str,
                     cost_consent: dict[str, Any] | None = None) -> RunStatusView:
-        """`RUN-RESTART-01` L0 stub (contract 1.59.0): the operation is sealed and refuses with ``503 dependency_unavailable`` until lane L1
-        replaces this body with the command (``runs.commands.restart_run``, then ``self._runs.submit_existing``). Nothing is read or written."""
-        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_restart")
+        """`RUN-RESTART-01` (`R-155a`..`R-155i`): a NEW run that replaces the ended run ``run_id`` from the chip ``restart_point``.
+
+        Every setting is the source's, never today's (`R-155f`); the new run is queued in the same transaction and handed to the carrier afterwards,
+        exactly as a re-audit is. The source is tombstoned and its decisions carried by the executor, when the new run publishes -- never here."""
+        from auditmanager.runs.commands import restart_run
+
+        _profile, _bundle, mode = self._runs.current_configuration()
+
+        def write(session: Session) -> tuple[str, bool, RunStatusView]:
+            result = restart_run(
+                session, source_run_id=run_id, restart_point=restart_point,
+                roles=self._roles(session, user_uid), user_uid=user_uid, idempotency_key=idempotency_key,
+                provider_mode=mode, section_profiles=self._runs.section_profiles,
+                # A restart is of a run that froze a stage plan, so it never starts without the consent that binds its models: the preflight is
+                # always handed over (a deployment without one refuses with ``analysis_cost_preflight``, as the other starts do).
+                cost_preflight=self._runs.cost_preflight, cost_consent=cost_consent, cost_actor_uid=user_uid,
+                stage_plans=getattr(self._runs, "stage_plans", None))
+            return result.run_id, result.replayed, _run_status_view(session, result.run_id)
+        new_id, replayed, view = self._write(write)
+        if not replayed:
+            self._runs.submit_existing(new_id)
+        return view
 
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
@@ -1378,11 +1405,21 @@ class RunAdapter(_SessionHolder):
                           restart_point: str | None = None) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-        if restart_point is not None:
-            # `RUN-RESTART-01` L0 stub: the price of a restart is lane L1's (it replaces this refusal with the estimate); until then it
-            # is refused, never priced as a whole run in its place.
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_restart")
         def estimate(session):
+            if restart_point is not None:
+                # `RUN-RESTART-01`: the price of the chips a restart of ``start_from_run_id`` computes. The source and the chip go together, a
+                # restart takes no stage start, and it names nothing that chooses a route: the new run takes the source's settings.
+                if start_from_run_id is None:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="restart_point", constraint="restart_source_required")
+                if start_stage_id is not None:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="restart_point", constraint="restart_excludes_start_stage")
+                if (reaudit_of_run_id is not None or executor_connection_id is not None or preset_id is not None
+                        or relaxed_limits or executor_group_id is not None):
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="start_from_run_id", constraint="server_selected_route")
+                value = self._cost_preflight.estimate_restart(session, run_id=start_from_run_id, restart_point=restart_point)
+                if value.as_dict()["version_uid"] != version_uid:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
+                return value
             if start_from_run_id is not None or start_stage_id is not None:
                 # `R-151i`: the price of the stages a run started from a stage of an earlier run computes. Both fields or
                 # neither, and nothing that chooses a route: the new run follows today's, as a re-audit does.
@@ -1717,6 +1754,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     from auditmanager.execution.eta import run_estimated_finish
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
+    from auditmanager.runs.restart import replaced_by
     from dataclasses import replace as _replace
 
     from auditmanager.api.schemas.models import StageId as _StageId
@@ -1770,6 +1808,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         # `R-151i`: both or neither (the database holds the pair). ``getattr`` as for the starter above: a stand-in older
         # suites hand this reader has neither.
         started_from_run_id=getattr(run, "started_from_run_id", None), start_stage_id=getattr(run, "start_stage_id", None),
+        # `RUN-RESTART-01`: the chip a restart created the run from (instead of a start stage), and on a run a restart replaced, the run that did.
+        restart_point=getattr(run, "restart_point", None),
+        # Only a run that ended without a published result is ever tombstoned (``deleteRun`` and a restart both refuse another), so no query for the rest.
+        replaced_by_run_id=replaced_by(session, run_id, runs=repository) if run.state in ("partial", "failed", "cancelled") else None,
         # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
         # `run_status_body` renders it only when one was pinned.
         norms_snapshot_id=run.norms_snapshot_id,

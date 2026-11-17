@@ -48,8 +48,7 @@ The API has 303 paths, 332 operations and 826 schemas; migration head `0071`. Th
 
 Compatibility: additive for a reader. A client of 1.58.0 reads every answer of 1.59.0 unchanged (the new properties are optional and present only on a restart,
 on a replaced source, on a restart estimate and on a carried decision; `calls` only loses its lower bound), and every request of 1.58.0 is valid unchanged;
-`ErrorEnvelope.contract_version` and `info.version` are `1.59.0`. Until the lane that owns the command wires it, `restartRun` and the estimate of a restart
-answer `503 dependency_unavailable` with `details.dependency` `run_restart`.
+`ErrorEnvelope.contract_version` and `info.version` are `1.59.0`.
 
 ## Contract `1.58.0` (`UI-PARITY-R3`, historical)
 

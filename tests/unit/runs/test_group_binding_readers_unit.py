@@ -265,6 +265,9 @@ def _view(monkeypatch: pytest.MonkeyPatch, run: Any, *, executor: Any = None) ->
         def cost(self, session: Any, run_id: str) -> None:
             return None
 
+        def is_deleted(self, session: Any, run_id: str) -> bool:  # `RUN-RESTART-01`: an ended run is asked whether a restart replaced it
+            return False
+
     revision = SimpleNamespace(
         group_id=GROUP, group_revision_id=GROUP_REVISION, pin_id=PIN.model_id, gateway_model="claude-sonnet-5",
         billing="not_metered")
