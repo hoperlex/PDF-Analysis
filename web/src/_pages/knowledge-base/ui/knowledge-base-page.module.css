@@ -36,15 +36,15 @@
 }
 
 /*
- * `UIP-S12-03`: the top row -- the group «Эксперт» (a caption over its cards) on the left, «Фильтры ▾» and «Память решений» on the right.
- * The row wraps, and below 780px the groups stack and the actions take the whole width, so nothing runs off a phone.
+ * `UIP-S12-03`: the top row -- the group «Эксперт» (a caption over its cards) on the left, with «Заказчик и проектировщик» beside it
+ * once there is a status to count (`UIP-S12-04`), «Фильтры ▾» and «Память решений» on the right (`margin-left: auto`). The row wraps,
+ * and below 780px the groups stack and the actions take the whole width, so nothing runs off a phone.
  */
 .topRow {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--am-gap-sm) var(--am-gap);
+  gap: var(--am-gap-sm) var(--am-gap-lg);
   margin-bottom: var(--am-gap-sm);
 }
 

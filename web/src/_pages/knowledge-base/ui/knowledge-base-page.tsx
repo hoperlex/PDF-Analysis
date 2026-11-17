@@ -33,6 +33,13 @@
  * the category, in the browser's own disclosure) and «Память решений». The screen opens on «Отклонено», and «Все» is a chosen card
  * (`?verdict=all`, `model/address.ts`). There is no list of verdicts beside the cards: it said the same thing twice.
  *
+ * **The second group, «Заказчик и проектировщик»** (`UIP-S12-04`, `Г12-B`) stands beside the first, and only while the journal holds a
+ * designer's execution status at all (`R-151g`: the expert sets it by hand in «Разбор»; most journals hold none, and then the group
+ * has nothing to say and is not drawn). «Приняли в работу» counts the statuses «Учтено» and «По согласованию», «Исправили замечание»
+ * counts «Внесено»; the numbers are the server's, as the first group's (`useDecisionStatusTotals`, `limit=1`), and a card sets the
+ * `execution_status` filter of the list (`?execution=`). The two groups are one choice: one card is pressed, never two, and the verdict
+ * is not a filter while a card of this group is. «Отклонено» of the designer is in neither card (the owner has not ruled where it goes).
+ *
  * **«Память решений»** (`D-495`, `DECISION-MEMORY-01`) is a button of its own beside «Фильтры ▾», not one of the types: the copy of what
  * an expert saw and decided, kept after the project and the document are gone. The expert and the administrator are offered it; the
  * viewer sees nothing of it, neither the button nor the tab through an address (`useMemoryAccess`: hidden, not disabled). It has its
@@ -54,9 +61,13 @@ import { switchProject, useAddressState } from '@/shared/lib';
 import { LoadingState, PageShell } from '@/shared/ui';
 import type { DecisionVerdictTotals } from '@/entities/expert-decision';
 import {
-  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal,
+  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useDecisionStatusTotals, useDecisionVerdictTotals, useKnowledgeBaseJournal,
   useProposalDecisionJournal,
 } from '@/entities/expert-decision';
+import {
+  ANY_EXECUTION_STATUS_QUERY, EXECUTION_GROUP_LABELS, EXECUTION_GROUP_STATUSES, executionStatusQuery,
+} from '@/entities/finding';
+import type { ExecutionGroup } from '@/entities/finding';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { DecisionMemoryFilters } from '@/widgets/decision-memory';
 import { useMemoryAccess } from '@/entities/decision-memory';
@@ -91,6 +102,20 @@ const EXPERT_CARDS: readonly {
   { choice: 'accepted', label: 'Принято', total: 'accepted', tone: 'ok' },
   { choice: 'pending', label: 'Не решено', total: 'pending', tone: 'pending' },
   { choice: 'all', label: 'Все', total: 'all', tone: 'inert' },
+];
+
+/**
+ * `UIP-S12-04`: the cards of the group «Заказчик и проектировщик». A card sets the designer's statuses the list is read under; its number
+ * is the server's count of those statuses over the journal (`useDecisionStatusTotals`). Both are the accent tone: the statuses are
+ * not the expert's decision, so neither wears the green or the red of a verdict.
+ */
+const CUSTOMER_CARDS: readonly ExecutionGroup[] = ['working', 'fixed'];
+
+/** The sets the numbers are read for, in this order: the two cards, then «any status at all» (the group is drawn above zero). */
+const STATUS_SETS: readonly string[] = [
+  executionStatusQuery(EXECUTION_GROUP_STATUSES.working),
+  executionStatusQuery(EXECUTION_GROUP_STATUSES.fixed),
+  ANY_EXECUTION_STATUS_QUERY,
 ];
 
 const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
@@ -182,7 +207,7 @@ export function KnowledgeBasePage() {
   // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base, or both as one
   // journal («Все», `D-317`). «Замечания» stays the first screen, as it was before «Все».
   const [address, setAddress] = useAddressState(readKbAddress, writeKbAddress);
-  const { view, category, verdict } = address;
+  const { view, category, verdict, execution } = address;
   // `D-495`: «Память решений» is for the expert and the administrator. An address that names it for an account known to hold
   // neither (the viewer) shows the first screen, and is not echoed back; while the account is not known the tab waits for it.
   const memoryAccess = useMemoryAccess();
@@ -192,7 +217,7 @@ export function KnowledgeBasePage() {
    * The cursors of the pages walked past (see `useCursorWalk`). A cursor belongs to the filters it was issued under, so each stack
    * carries them: the decisions on findings walk under the project, the category and the verdict; the other two under the project.
    */
-  const [cursors, setCursors] = useCursorWalk(`${projectUid ?? ''}|${category}|${verdict}`);
+  const [cursors, setCursors] = useCursorWalk(`${projectUid ?? ''}|${category}|${verdict}|${execution}`);
   const [proposalCursors, setProposalCursors] = useCursorWalk(projectUid ?? '');
   const [allCursors, setAllCursors] = useCursorWalk(projectUid ?? '');
   const cursor = cursors.at(-1);
@@ -211,10 +236,13 @@ export function KnowledgeBasePage() {
     },
     kind === 'all',
   );
+  // `UIP-S12-04`: a card of the second group asks for the designer's statuses and the verdict is not a filter then; one of the first
+  // group asks for the verdict. Never both: they are one choice.
+  const statusFilter = execution === 'any' ? undefined : executionStatusQuery(EXECUTION_GROUP_STATUSES[execution]);
   const journal = useDecisionJournal({
     ...(projectUid === null ? {} : { project_uid: projectUid }),
     ...(category === 'all' ? {} : { category }),
-    ...(verdict === 'all' ? {} : { verdict }),
+    ...(statusFilter !== undefined ? { execution_status: statusFilter } : verdict === 'all' ? {} : { verdict }),
     ...(cursor === undefined ? {} : { cursor }),
   }, kind !== 'memory');
   // `D-495`: the memory tab's address state and reads; nothing is requested unless the tab is on screen and the account may read it.
@@ -227,6 +255,16 @@ export function KnowledgeBasePage() {
     },
     kind === 'findings',
   );
+  // `UIP-S12-04`: the numbers of the second group's cards, under the same project and category, read where the group could be drawn.
+  const [workingTotal, fixedTotal, anyStatusTotal] = useDecisionStatusTotals(
+    {
+      ...(projectUid === null ? {} : { project_uid: projectUid }),
+      ...(category === 'all' ? {} : { category }),
+    },
+    STATUS_SETS,
+    kind === 'findings',
+  );
+  const statusTotals: Readonly<Record<ExecutionGroup, number | undefined>> = { working: workingTotal, fixed: fixedTotal };
   const next = journal.data?.page.next_cursor ?? null;
   const total = journal.data?.total;
   const first = journal.data?.items[0];
@@ -240,7 +278,7 @@ export function KnowledgeBasePage() {
   // `UIP-S12-03`: the screen opens on «Отклонено», so a narrowed list is the ordinary one; but a journal that holds no decision at all
   // (the server's count of «Все» under this project is zero) is not «narrowed»: there is nothing to widen to.
   const nothingDecided = category === 'all' && verdictTotals.all === 0;
-  const filtered = (category !== 'all' || verdict !== 'all') && !nothingDecided;
+  const filtered = (category !== 'all' || verdict !== 'all' || execution !== 'any') && !nothingDecided;
   const allProjects = switchProject(searchParams, null, projectUid).toString();
   const narrowing =
     !filtered && projectUid === null
@@ -248,7 +286,7 @@ export function KnowledgeBasePage() {
       : {
           ...(filtered
             ? {
-                onResetFilters: () => choose({ category: 'all', verdict: 'all' }),
+                onResetFilters: () => choose({ category: 'all', verdict: 'all', execution: 'any' }),
               }
             : {}),
           ...(projectUid === null
@@ -279,7 +317,7 @@ export function KnowledgeBasePage() {
             <div className={styles.cards}>
               {EXPERT_CARDS.map(({ choice, label, total: figure, tone }) => {
                 const count = verdictTotals[figure];
-                const pressed = verdict === choice;
+                const pressed = execution === 'any' && verdict === choice;
                 // «Не решено» is drawn only while the journal holds such a decision (or while it is the card that is chosen).
                 if (choice === 'pending' && !pressed && !(count !== undefined && count > 0)) return null;
                 return (
@@ -291,9 +329,33 @@ export function KnowledgeBasePage() {
                     data-kb-verdict={choice}
                     data-kb-verdict-total={count}
                     // A cursor belongs to the filter it was issued under: a new verdict starts at the first page (`useCursorWalk`).
-                    onClick={() => choose({ verdict: choice })}
+                    onClick={() => choose({ verdict: choice, execution: 'any' })}
                   >
                     {label} <span className={`am-badge am-badge--${tone} ${styles.cardCount}`}>{count ?? '—'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {kind !== 'findings' || !(execution !== 'any' || (anyStatusTotal !== undefined && anyStatusTotal > 0)) ? null : (
+          <div className={styles.group} role="group" aria-label="Заказчик и проектировщик" data-kb-group="customer">
+            <span className={styles.groupName}>Заказчик и проектировщик</span>
+            <div className={styles.cards}>
+              {CUSTOMER_CARDS.map((choice) => {
+                const count = statusTotals[choice];
+                return (
+                  <button
+                    key={choice}
+                    type="button"
+                    className="am-button am-button--quiet"
+                    aria-pressed={execution === choice}
+                    data-kb-execution={choice}
+                    data-kb-execution-total={count}
+                    // A cursor belongs to the filter it was issued under: a new set of statuses starts at the first page.
+                    onClick={() => choose({ execution: choice })}
+                  >
+                    {EXECUTION_GROUP_LABELS[choice]} <span className={`am-badge am-badge--active ${styles.cardCount}`}>{count ?? '—'}</span>
                   </button>
                 );
               })}

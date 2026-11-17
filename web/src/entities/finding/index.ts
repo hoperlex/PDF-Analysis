@@ -56,3 +56,11 @@ export {
 
 // `R-151g`: the designer's execution status of an accepted finding.
 export { EXECUTION_STATUS_LABELS, EXECUTION_STATUS_ORDER } from './model/execution-status';
+// `UIP-S12-04`: the cards «Приняли в работу» and «Исправили замечание», and the filter text of the statuses behind them.
+export type { ExecutionGroup } from './model/execution-status';
+export {
+  ANY_EXECUTION_STATUS_QUERY,
+  EXECUTION_GROUP_LABELS,
+  EXECUTION_GROUP_STATUSES,
+  executionStatusQuery,
+} from './model/execution-status';

@@ -22,7 +22,8 @@ export { KNOWLEDGE_BASE_SCREEN } from './model/knowledge-base-screen';
 
 export type { DecisionJournalQuery, DecisionVerdictTotals } from './api/use-decision-journal';
 export {
-  JOURNAL_PAGE_LIMIT, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal, useProposalDecisionJournal,
+  JOURNAL_PAGE_LIMIT, useDecisionJournal, useDecisionStatusTotals, useDecisionVerdictTotals, useKnowledgeBaseJournal,
+  useProposalDecisionJournal,
 } from './api/use-decision-journal';
 
 /** The Russian label for a verdict, so no consumer renders the contract value as prose. */

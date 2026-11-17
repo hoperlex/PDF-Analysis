@@ -171,6 +171,19 @@ describe('where the mark stands', () => {
     expect(cell).toMatch(/^<span[^>]*>Согласовано с заказчиком\.<\/span><span class="[^"]*"><span[^>]*data-carried-from="2"/);
   });
 
+  it('in the table, the mark stands under the designer’s status too: reason, then status, then «↩ Перенесено из V2» (UIP-S12-04)', () => {
+    const row = rowOf(tableOf([record({ carried_from: source(2), execution_status: 'amended' }), DIRECT]), CARRIED_ID);
+    const reason = cellsOf(row)[REASON_CELL] ?? '';
+    expect(reason).toBe(`Согласовано с заказчиком. Внесено ${MARK}`);
+    // The mark of a carried decision is the one mark of the row; the status is a pill and not another «↩».
+    expect(row.match(/↩/g) ?? []).toHaveLength(1);
+  });
+
+  it('in the table, a carried decision with no reason and no status says «Принято», and the mark stands under it', () => {
+    const row = rowOf(tableOf([record({ carried_from: source(2), comment: null }), DIRECT]), CARRIED_ID);
+    expect(cellsOf(row)[REASON_CELL]).toBe(`Принято ${MARK}`);
+  });
+
   it('in the table, a decision made directly has an unchanged reason cell', () => {
     const reason = cellsOf(rowOf(tableOf([CARRIED, DIRECT]), DIRECT_ID))[REASON_CELL] ?? '';
     expect(reason).toBe('Согласовано с заказчиком.');

@@ -149,12 +149,14 @@ describe('the table', () => {
     expect(markup).not.toContain('Без раздела');
   });
 
-  it('says a missing comment and a missing severity as a dash, never as a blank or a zero', () => {
+  it('says a missing severity as a dash, and a missing reason as a dash or a quiet word, never as a blank or a zero', () => {
     const { severity, ...without } = record({ comment: null });
     void severity;
     const [, , , sev, , reason] = cells(table([without]));
     expect(sev).toBe('—');
-    expect(reason).toBe('—');
+    // An accepted decision with no reason says what it is (`UIP-S12-04`); the dash is for a finding nobody has decided.
+    expect(reason).toBe('Принято');
+    expect(cells(table([{ ...without, current_verdict: 'pending', verdict: null, event_type: 'comment' }]))[5]).toBe('—');
   });
 
   it('draws the five severities in five tones: red, amber, accent, green and grey, each with its own word', () => {
@@ -189,6 +191,80 @@ describe('the table', () => {
     const markup = table([{ ...record(), category: 'guessed' } as unknown as DecisionRecord]);
     expect(markup).toContain('data-knowledge-base-fault="closed-vocabulary"');
     expect(markup).not.toContain('<table');
+  });
+});
+
+describe('«Причина решения» says what the decision rests on (UIP-S12-04)', () => {
+  const REASON = 5;
+  const rejected = { current_verdict: 'rejected', verdict: 'rejected', event_type: 'reject' } as const;
+  const reasonOf = (over: Partial<DecisionRecord>): string => cells(table([record(over)]))[REASON] ?? '';
+  const STATUS_WORDS = [
+    ['taken_into_account', 'Учтено'],
+    ['amended', 'Внесено'],
+    ['declined', 'Отклонено'],
+    ['agreed', 'По согласованию'],
+  ] as const;
+
+  it('shows the expert’s reason for any decision that has one, a rejection too', () => {
+    expect(reasonOf({ ...rejected, comment: 'Не согласен: нет обоснования.' })).toBe('Не согласен: нет обоснования.');
+    expect(reasonOf({ comment: 'Согласовано с заказчиком.' })).toBe('Согласовано с заказчиком.');
+  });
+
+  it('puts the designer’s status beside the reason of an accepted finding, in the words of the vocabulary, all four of them', () => {
+    for (const [status, word] of STATUS_WORDS) {
+      expect(reasonOf({ comment: 'Согласовано.', execution_status: status }), status).toBe(`Согласовано. ${word}`);
+    }
+  });
+
+  it('draws the status as a pill with its own name, which is not the verdict and not a second sign', () => {
+    const markup = table([record({ execution_status: 'amended' })]);
+    expect(markup).toMatch(/<span class="am-badge am-badge--inert" title="Статус исполнения проектировщиком" data-execution-status="amended">Внесено<\/span>/);
+    // The sign of the row is still the expert's: one ✓, no second mark for the status.
+    expect(markup.match(/role="img"/g) ?? []).toHaveLength(1);
+    expect(markup).toContain('aria-label="Принято"');
+  });
+
+  it('shows the status alone, with no dash and no «Принято», when the decision has no reason of its own', () => {
+    expect(reasonOf({ comment: null, execution_status: 'taken_into_account' })).toBe('Учтено');
+    expect(reasonOf({ comment: null, execution_status: 'agreed' })).toBe('По согласованию');
+  });
+
+  it('says what the decision is in a quiet word when it has neither a reason nor a status: «Принято» or «Отклонено»', () => {
+    expect(reasonOf({ comment: null })).toBe('Принято');
+    expect(reasonOf({ ...rejected, comment: null })).toBe('Отклонено');
+    const markup = table([record({ comment: null })]);
+    expect(markup).toMatch(/<span class="[^"]*cellMuted[^"]*">Принято<\/span>/);
+  });
+
+  it('does not say the quiet word when there is a reason, and does not repeat the verdict the sign already says', () => {
+    expect(reasonOf({ comment: 'Согласовано.' })).not.toContain('Принято');
+    expect(reasonOf({ ...rejected, comment: 'Нет.' })).not.toContain('Отклонено');
+  });
+
+  it('keeps the status to an accepted finding: a rejected one with a status left on it shows none', () => {
+    expect(reasonOf({ ...rejected, comment: 'Нет.', execution_status: 'amended' })).toBe('Нет.');
+    expect(reasonOf({ ...rejected, comment: null, execution_status: 'amended' })).toBe('Отклонено');
+  });
+
+  it('keeps the dash for a finding nobody has decided: it is neither accepted nor rejected, so it has no word', () => {
+    expect(reasonOf({ current_verdict: 'pending', verdict: null, event_type: 'comment', comment: null })).toBe('—');
+    expect(reasonOf({ current_verdict: 'pending', verdict: null, event_type: 'comment', comment: 'Вопрос.' })).toBe('Вопрос.');
+  });
+
+  it('reads a status from the record: the same finding with and without one is two different cells', () => {
+    expect(reasonOf({ comment: null, execution_status: 'amended' })).not.toBe(reasonOf({ comment: null }));
+  });
+
+  it('says the same in «Все»: a finding’s reason cell is the same cell, and a proposal has its own quiet word', () => {
+    const FINDING = record({ comment: null, execution_status: 'agreed' });
+    const markup = table([], [
+      { kind: 'finding', occurred_at: FINDING.recorded_at, finding: FINDING },
+      { kind: 'finding', occurred_at: FINDING.recorded_at, finding: record({ decision_id: 'dec_01M2545JSD15ETSNNV904X992A', comment: null }) },
+    ]);
+    const rows = [...markup.matchAll(/<tr data-decision-id=[\s\S]*?<\/tr>/g)].map(
+      (row) => [...row[0].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((cell) => (cell[1] ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim())[REASON],
+    );
+    expect(rows).toEqual(['По согласованию', 'Принято']);
   });
 });
 
@@ -249,6 +325,12 @@ describe('a proposal’s verdict in the table', () => {
     expect(draw('accept')).toContain('data-proposal-verdict="accept"');
     expect(draw('reject')).toContain('aria-label="Отклонено"');
     expect(draw('reject')).toContain('data-proposal-verdict="reject"');
+  });
+
+  it('says «Принято» or «Отклонено» quietly for a proposal with no reason, as a finding does', () => {
+    expect(cells(draw('accept'))[5]).toBe('Принято');
+    expect(cells(draw('reject'))[5]).toBe('Отклонено');
+    expect(cells(draw('accept', 'Аналог подходит.'))[5]).toBe('Аналог подходит.');
   });
 
   it('is no sign for «на доработку» and «решение снято», which are not decisions for or against: their words stand under the reason', () => {

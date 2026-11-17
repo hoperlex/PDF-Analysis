@@ -11,6 +11,11 @@
  * decisions the finding holds are its tooltip. The gist and the reason are cut at two lines with the whole text as a tooltip.
  * A decision carried over from an earlier version says so under the reason, not in a cell of its own.
  *
+ * **«Причина решения» says what the decision rests on (`UIP-S12-04`, `Г12-B`).** The expert's reason, wherever there is one, and beside
+ * it, for an accepted finding, the designer's execution status in the words of `EXECUTION_STATUS_LABELS` (`R-151g`: set by hand in
+ * «Разбор»; it is not an expert decision, so it is a pill under the reason and never the verdict). A decision with neither a reason nor
+ * a status says what it is in a quiet word, «Принято» or «Отклонено»; a finding nobody has decided has the dash.
+ *
  * It is the default view of the screen, as the original's is; the rows as events (the widget's other view) stay one press away.
  * It draws what the server sent and derives nothing: the project, the document and the section are the record's own
  * `project_name`, `document_name` and `section` (read by the server when the page is read; no further request), and
@@ -29,11 +34,11 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import type { DecisionRecord, KnowledgeBaseEntry, ProposalDecisionRecord, ProposalVerdict } from '@/shared/api';
+import type { DecisionRecord, FindingExecutionStatus, KnowledgeBaseEntry, ProposalDecisionRecord, ProposalVerdict } from '@/shared/api';
 import { formatInstant, formatInstantUtc, routes } from '@/shared/lib';
-import { CATEGORY_LABELS, CarriedMark, VerdictMark } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, CarriedMark, VERDICT_LABELS, VerdictMark } from '@/entities/expert-decision';
 import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
-import { SeverityBadge } from '@/entities/finding';
+import { EXECUTION_STATUS_LABELS, SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
 import { EVENT_TYPE_LABELS, decisionCountWords, sentenceCase } from '../model/labels';
@@ -83,23 +88,41 @@ function Clamped({ text }: { readonly text: string }) {
 }
 
 /**
- * The reason of a decision, and under it the mark of a decision carried over from an earlier version. A missing reason is a
- * dash, never a blank; a decision made directly draws no mark and no empty wrapper (`D-344`, `D-335`).
+ * The reason of a decision and what stands under it. A missing reason is a quiet word or a dash, never a blank; a decision made
+ * directly draws no mark of a carried one and no empty wrapper (`D-344`, `D-335`).
+ *
+ * - `reason`: the expert's own words, cut at two lines.
+ * - `status`: the designer's execution status of an accepted finding, a pill in the words of the vocabulary under the reason (or alone).
+ * - `word`: what the decision is, quietly: it stands where there is neither a reason nor a status, and — for a proposal's «на доработку»
+ *   and «решение снято», which have no sign — under a reason too (`wordWithReason`).
  */
 function ReasonCell({
   reason,
+  status,
+  word,
+  wordWithReason = false,
   carriedFrom,
-  aside,
 }: {
   readonly reason: string | null | undefined;
+  readonly status?: FindingExecutionStatus | undefined;
+  readonly word?: string | undefined;
+  readonly wordWithReason?: boolean;
   readonly carriedFrom: { readonly version_ordinal: number } | undefined;
-  /** A quiet word under the reason: what a decision with no reason of its own says. */
-  readonly aside?: string | undefined;
 }) {
+  const hasReason = reason !== null && reason !== undefined;
+  const quiet = word !== undefined && (wordWithReason || (!hasReason && status === undefined));
   return (
     <td>
-      {reason !== null && reason !== undefined ? <Clamped text={reason} /> : aside === undefined ? <span className={styles.cellMuted}>—</span> : null}
-      {aside === undefined ? null : <span className={`${styles.cellMuted} ${styles.aside}`}>{aside}</span>}
+      {hasReason ? <Clamped text={reason} /> : null}
+      {status === undefined ? null : (
+        <span className={styles.aside}>
+          <span className="am-badge am-badge--inert" title="Статус исполнения проектировщиком" data-execution-status={status}>
+            {EXECUTION_STATUS_LABELS[status]}
+          </span>
+        </span>
+      )}
+      {quiet ? <span className={`${styles.cellMuted} ${styles.aside}`}>{word}</span> : null}
+      {!hasReason && status === undefined && !quiet ? <span className={styles.cellMuted}>—</span> : null}
       {carriedFrom === undefined ? null : (
         <span className={styles.carried}>
           <CarriedMark carriedFrom={carriedFrom} />
@@ -167,7 +190,12 @@ function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; re
        * `D-344`, `UI-A-73`: a decision the expert carried over from an earlier version's finding says so, «↩ Перенесено из V2»,
        * under the reason, as «Разбор» draws it beside the verdict. `carried_from` is the record's own (the server's structured link).
        */}
-      <ReasonCell reason={record.comment} carriedFrom={record.carried_from} />
+      <ReasonCell
+        reason={record.comment}
+        status={record.current_verdict === 'accepted' ? record.execution_status : undefined}
+        word={record.current_verdict === 'accepted' || record.current_verdict === 'rejected' ? sentenceCase(VERDICT_LABELS[record.current_verdict]) : undefined}
+        carriedFrom={record.carried_from}
+      />
       <DateCell at={record.recorded_at} tooltip={tooltip} eventCount={record.decision_event_count} />
       <td className={styles.cellLink}>
         {/* `ADR-0010`, `UI-B-38`: the link is built from `project_uid`, `run_id` and `finding_uid`; «Разбор» opens on that finding. */}
@@ -206,8 +234,9 @@ function ProposalRow({ record }: { readonly record: ProposalDecisionRecord }) {
        */}
       <ReasonCell
         reason={record.comment}
+        word={sentenceCase(DECISION_EVENT_LABELS[record.verdict])}
+        wordWithReason={record.verdict === 'revise' || record.verdict === 'revoke'}
         carriedFrom={record.carried_from}
-        aside={record.verdict === 'revise' || record.verdict === 'revoke' ? sentenceCase(DECISION_EVENT_LABELS[record.verdict]) : undefined}
       />
       <DateCell at={record.decided_at} tooltip={tooltip} />
       <td className={styles.cellLink}>
