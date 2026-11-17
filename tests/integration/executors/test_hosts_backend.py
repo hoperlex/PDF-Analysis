@@ -677,12 +677,12 @@ def test_a_server_off_line_lists_no_work_though_a_claim_is_left_on_it(sessions: 
 def test_every_call_a_server_runs_is_an_entry_oldest_first(sessions: sessionmaker[Session]) -> None:
     world = World(sessions, "work-4", _report("codex", "api", (GPT_6, "verified")))  # an API key has two slots: two claims at once
     title = "Спецификация оборудования"
-    run = _planned_run(sessions, _plan(("text:main", GPT_6), ("blocks:3", GPT_6), access="api"), title=title)
+    run = _planned_run(sessions, _plan(("text:main", GPT_6), ("norms:main", GPT_6), access="api"), title=title)
     authority = _claim(sessions, run)
     with sessions() as s:
-        bound = [ex.cell_binding_of(s, run, key) for key in ("text:main", "blocks:3")]
+        bound = [ex.cell_binding_of(s, run, key) for key in ("text:main", "norms:main")]
     claimed = []
-    for cell, binding in zip(("text:main", "blocks:3"), bound, strict=True):
+    for cell, binding in zip(("text:main", "norms:main"), bound, strict=True):
         _write_task(sessions, run, authority, binding, cell=cell, access="api", model=GPT_6)
         task = claim_task(sessions, world.principal(), wait_seconds=0, runner_instance_id="agent-instance-0001")
         assert task is not None
@@ -692,5 +692,5 @@ def test_every_call_a_server_runs_is_an_entry_oldest_first(sessions: sessionmake
 
     work = _listed(sessions)[world.host_id]["current_work"]
     assert [(item["stage_key"], item["document_title"], item["document_uid"], item["project_uid"]) for item in work] == [
-        ("text", title, document_uid, project_uid), ("blocks", title, document_uid, project_uid)], "the same document twice, at two stages"
+        ("text", title, document_uid, project_uid), ("norms", title, document_uid, project_uid)], "the same document twice, at two stages"
     assert _instant(work[0]["since"]) <= _instant(work[1]["since"]), "the older call first"
