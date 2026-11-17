@@ -43,7 +43,6 @@ const SECTIONS = readFileSync(join(WEB_ROOT, 'src', 'widgets', 'dashboard', 'ui'
 
 const ONE_TRACK = /^minmax\(0, 1fr\)$/;
 const HOME_TWO = /^minmax\(300px, 0\.85fr\) minmax\(0, 1\.15fr\)$/;
-const VERSION_TWO = /^minmax\(0, 1fr\) minmax\(0, 1\.2fr\)$/;
 
 describe('the readers of a stylesheet can fail (lane WALK-V4)', () => {
   const OLD_HOME =
@@ -103,7 +102,7 @@ describe('«Главная»: the table of sections and the tasks stand in one c
   });
 });
 
-describe('«Версия документа»: classification and runs share a row only where the runs\' table fits (lane WALK-V4)', () => {
+describe('«Версия документа»: classification, runs and facts stand in one column at every width (lane WALK-V4; `UIP-S04-04` took the second column away)', () => {
   it('can fail: the old stylesheet, two tracks from 1280 px, reads as wrong', () => {
     const old =
       '.columns { display: grid; grid-template-columns: minmax(0, 1fr); }\n' +
@@ -112,23 +111,27 @@ describe('«Версия документа»: classification and runs share a r
     expect(columnBreakpoints(old, '.columns')[0]).toBeLessThan(1691);
   });
 
-  it('is one column by default, and two only inside one min-width block', () => {
-    expect(declares(withoutMedia(VERSION), '.columns', 'grid-template-columns', ONE_TRACK)).toBe(true);
-    expect(columnBreakpoints(VERSION, '.columns')).toHaveLength(1);
-    const [breakpoint] = columnBreakpoints(VERSION, '.columns');
-    expect(declaresIn(VERSION, `min-width: ${breakpoint}px`, '.columns', 'grid-template-columns', VERSION_TWO)).toBe(true);
+  it('can fail: a page column with a two-track min-width block reads as two columns', () => {
+    const two =
+      '.stack { display: grid; grid-template-columns: minmax(0, 1fr); }\n' +
+      '@media (min-width: 1280px) { .stack { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); } }';
+    expect(columnBreakpoints(two, '.stack')).toEqual([1280]);
   });
 
-  it('starts the second column where it holds the runs\' table: 714 px of columns and 34 px of panel (measured)', () => {
-    // The page is the viewport less the frame's 303 px; the columns share it less a 16 px gap, 1fr and 1.2fr.
-    const secondColumn = (viewport: number): number => ((viewport - 303 - 16) * 1.2) / 2.2;
+  it('is one column at every width: the page column declares no track list and no min-width block gives it a second track', () => {
+    expect(declares(withoutMedia(VERSION), '.stack', 'display', /^grid$/)).toBe(true);
+    expect(declares(withoutMedia(VERSION), '.stack', 'grid-template-columns', /./)).toBe(false);
+    expect(columnBreakpoints(VERSION, '.stack')).toEqual([]);
+    expect(VERSION).not.toContain('grid-template-columns');
+  });
+
+  it('gives the runs\' table the whole page: 714 px of columns and 34 px of panel fit from 1051 px (303 px frame)', () => {
+    // The page is the viewport less the frame's 303 px, and it is one column now, so the runs' table has all of it.
+    const page = (viewport: number): number => viewport - 303;
     const needed = 714 + 34;
-    expect(Math.round(secondColumn(1680))).toBe(742); // measured 742: the table scrolled by 6 px
-    expect(Math.round(secondColumn(1280))).toBe(524); // measured 524
-    const [breakpoint] = columnBreakpoints(VERSION, '.columns');
-    expect(breakpoint).toBeDefined();
-    expect(secondColumn(breakpoint ?? 0)).toBeGreaterThanOrEqual(needed);
-    expect(Math.round(secondColumn(1760))).toBe(786); // measured: the table's box was 752 px
+    expect(page(1280)).toBe(977);
+    expect(page(1280)).toBeGreaterThanOrEqual(needed);
+    expect(page(needed + 303)).toBe(needed); // the narrowest viewport where the table fits without a scroll
   });
 });
 
