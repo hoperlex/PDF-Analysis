@@ -2989,13 +2989,15 @@ class WorkScheduleDoneDocument(_Object):
 
 
 class WorkScheduleEngineer(_Object):
-    """One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences."""
+    """One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences, and how many decisions the engineer accepted and rejected in it (``accepted_count``, ``rejected_count``: findings and optimisation proposals together, the decisions that stand, taken directly and not carried over from an earlier version, credited to their author and cut by the day in the schedule's time zone; both ``0`` without decisions)."""
 
     user_uid: UserUid
     label: Annotated[str, Field(min_length=1, max_length=254)]
     plan: Annotated[int, Field(ge=0, le=999)]
     plan_is_default: bool
     fact: Annotated[int, Field(ge=0)]
+    accepted_count: Annotated[int, Field(ge=0)]
+    rejected_count: Annotated[int, Field(ge=0)]
     done: list[WorkScheduleDoneDocument]
     absences: list[date]
 

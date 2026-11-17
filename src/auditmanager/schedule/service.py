@@ -6,6 +6,14 @@ happened is the day of the latest verdict on those findings, in the schedule's t
 author of that verdict. It is derived from the current state, as the dashboard's counters are: a new version that is not
 yet checked takes the document out of the facts again.
 
+**The decision counter** (`UIP-S14-01`, rulings `G12-B`, `G4-B`) is how many decisions an engineer accepted and how many they
+rejected in the month, findings and optimisation proposals together. It counts the decisions that stand -- the latest verdict
+of a finding, the latest decision of a proposal, as the dashboard's counters read them -- so a withdrawn decision, and a
+decision someone later changed, are not counted twice or at all; a decision carried over from an earlier version
+(``carried_from_decision_id``) is not counted, it is the same act as its source; the author of the standing decision is credited
+(an event with no account, from before migration 0015, credits nobody), on the day it was recorded in the schedule's time zone.
+An engineer without decisions has two zeros. The percentage is the client's.
+
 **The plan** (`R-151x`, `R-152a`, `R-152b`) is an engineer's number for a month, set by an administrator; without one, the
 stored default (initially 20). It drives «Осталось» and «Выполнение %» and nothing else.
 
@@ -143,6 +151,43 @@ _FACTS = text(
       AND (lv.recorded_at AT TIME ZONE :zone)::date < :stop
     """
 )
+#: The decisions that stand now (`UIP-S14-01`), each credited to its author and counted by verdict: the latest verdict-bearing
+#: event of a finding (a comment carries no verdict, a withdrawal is one) and the latest decision of an optimisation proposal, as
+#: the dashboard's counters read them. Only an ``accept`` or a ``reject`` that an expert took directly counts -- a ``revise``, a
+#: withdrawal and a carried-over decision do not -- and only one recorded in ``[:start, :stop)`` of the schedule's zone. Every
+#: pass and every document version is read: a decision is the expert's act whichever version it was taken on.
+_DECISION_COUNTS = text(
+    """
+    WITH finding_standing AS (
+        SELECT DISTINCT ON (e.finding_uid)
+               e.event_type AS verdict, e.author_user_uid AS author_user_uid, e.recorded_at AS decided_at,
+               e.carried_from_decision_id AS carried_from
+        FROM expert_decision_event e
+        WHERE e.verdict IS NOT NULL
+        ORDER BY e.finding_uid, e.sequence_no DESC
+    ),
+    proposal_standing AS (
+        SELECT DISTINCT ON (d.optimisation_proposal_id)
+               d.verdict AS verdict, d.actor_user_uid AS author_user_uid, d.decided_at AS decided_at,
+               d.carried_from_decision_id AS carried_from
+        FROM optimisation_proposal_decision d
+        ORDER BY d.optimisation_proposal_id, d.seq DESC
+    ),
+    standing AS (
+        SELECT verdict, author_user_uid, decided_at, carried_from FROM finding_standing
+        UNION ALL
+        SELECT verdict, author_user_uid, decided_at, carried_from FROM proposal_standing
+    )
+    SELECT author_user_uid, verdict, count(*) AS n
+    FROM standing
+    WHERE verdict IN ('accept', 'reject')
+      AND carried_from IS NULL
+      AND author_user_uid IS NOT NULL
+      AND (decided_at AT TIME ZONE :zone)::date >= :start
+      AND (decided_at AT TIME ZONE :zone)::date < :stop
+    GROUP BY author_user_uid, verdict
+    """
+)
 _OPEN_ASSIGNMENTS = text(
     """
     SELECT c.assignment_uid, c.current_assignee_user_uid, c.project_uid, p.name AS project_name, c.document_uid,
@@ -212,6 +257,9 @@ class ScheduleEngineer:
     plan_is_default: bool
     done: tuple[DoneDocument, ...]
     absences: tuple[date, ...]
+    #: `UIP-S14-01`: the decisions of the month this engineer took and that still stand, findings and optimisation proposals together.
+    accepted_count: int = 0
+    rejected_count: int = 0
 
     @property
     def fact(self) -> int:
@@ -283,7 +331,7 @@ def _month_bounds(month: date) -> tuple[date, date]:
 
 
 def read_schedule_month(session: Session, *, month: date, viewer_uid: str, viewer_roles: Iterable[str]) -> ScheduleMonth:
-    """One month of «Выполнено»: the calendar, each readable engineer's plan, done documents and absences."""
+    """One month of «Выполнено»: the calendar, each readable engineer's plan, done documents, absences and decision counts."""
     roles = frozenset(viewer_roles)
     engineers = _readable_engineers(session, viewer_uid, roles)
     settings = _settings(session)
@@ -298,12 +346,17 @@ def read_schedule_month(session: Session, *, month: date, viewer_uid: str, viewe
     absences: dict[str, list[date]] = defaultdict(list)
     for row in session.execute(_ABSENCES, {"start": start, "stop": stop}):
         absences[str(row[0])].append(row[1])
+    decided: dict[tuple[str, str], int] = {
+        (str(row[0]), str(row[1])): int(row[2])
+        for row in session.execute(_DECISION_COUNTS, {"start": start, "stop": stop, "zone": settings.time_zone})
+    }
     return ScheduleMonth(
         month=start, settings=settings, days=_days(session, start, stop),
         engineers=tuple(ScheduleEngineer(
             user_uid=uid, plan=plans.get(uid, settings.default_monthly_plan), plan_is_default=uid not in plans,
             done=tuple(sorted(done.get(uid, ()), key=lambda item: (item.day, item.document_uid))),
             absences=tuple(sorted(absences.get(uid, ()))),
+            accepted_count=decided.get((uid, "accept"), 0), rejected_count=decided.get((uid, "reject"), 0),
         ) for uid in engineers),
     )
 

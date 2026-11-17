@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 21860fae666685f8227bba24ab513344119b504a20b740093c7403a4b6a71d9a
+ *   sha256 bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -4169,7 +4169,7 @@ export type GetVersionSectionReviewResult = SectionReview;
 /**
  * Get Work Schedule
  *
- * `UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`) and the absent days. An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.
+ * `UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`), the absent days, and (`UIP-S14-01`) how many decisions the expert accepted and rejected in the month (`accepted_count`, `rejected_count`; findings and optimisation proposals together, the decisions that stand, not those carried over from an earlier version, credited to their author, the month and day cut in the schedule's time zone; `0` and `0` without decisions). An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.
  */
 export type GetWorkScheduleInput = {
   /** Query string parameters. */

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.56.0 (OpenAPI 3.1.0)
- *   sha256 21860fae666685f8227bba24ab513344119b504a20b740093c7403a4b6a71d9a
+ *   sha256 bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.56.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '21860fae666685f8227bba24ab513344119b504a20b740093c7403a4b6a71d9a';
+export const CONTRACT_DIGEST = 'bd1396b36a49546b48c0a465c10424b04b160ee31b2ec34bc98dea40449bec69';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -9682,14 +9682,16 @@ export type WorkScheduleDoneDocument = {
   project_uid: ProjectUid;
 };
 
-/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences. */
+/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences, and how many decisions the engineer accepted and rejected in it (``accepted_count``, ``rejected_count``: findings and optimisation proposals together, the decisions that stand, taken directly and not carried over from an earlier version, credited to their author and cut by the day in the schedule's time zone; both ``0`` without decisions). */
 export type WorkScheduleEngineer = {
   absences: Array<string>;
+  accepted_count: number;
   done: Array<WorkScheduleDoneDocument>;
   fact: number;
   label: string;
   plan: number;
   plan_is_default: boolean;
+  rejected_count: number;
   user_uid: UserUid;
 };
 

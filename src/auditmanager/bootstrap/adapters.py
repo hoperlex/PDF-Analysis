@@ -6045,6 +6045,7 @@ class ScheduleAdapter(_SessionHolder):
             engineers=sorted((models.WorkScheduleEngineer(
                 user_uid=engineer.user_uid, label=labels.of(engineer.user_uid), plan=engineer.plan,
                 plan_is_default=engineer.plan_is_default, fact=engineer.fact,
+                accepted_count=engineer.accepted_count, rejected_count=engineer.rejected_count,
                 done=[models.WorkScheduleDoneDocument(
                     day=item.day, project_uid=item.project_uid, project_name=item.project_name,
                     document_uid=item.document_uid, document_title=item.document_title,
