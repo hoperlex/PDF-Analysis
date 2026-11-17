@@ -11,15 +11,19 @@ Real rows, real triggers, real locks. Each test makes its own hosts and its own 
 * **the lock** -- two concurrent binds on one subscription: the second blocks until the first commits and then finds the pool full; the claim, the cell binding
   and the comparison mirror take one lock (a lock held by the mirror blocks the pool's);
 * **the host token** -- it claims only tasks of its own host that carry the six members, extends, answers with the exact reported model, and a refusal about
-  access starts the cooldown that ends the model's availability until a changed report.
+  access starts the cooldown that ends the model's availability until a changed report;
+* **what a server is doing now** (`UIP-S15-01`) -- the list of servers names, for each call a server runs, the document, its object, the stage and since when
+  (and no model, provider, token or run), the list is empty for a free server and for one off line, and the administrator's details are what they were.
 """
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 import uuid
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -27,6 +31,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.bootstrap.hosts_adapter import ExecutorHostAdapter
 from auditmanager.comparison.spend.repository import ComparisonSpendRepository
 from auditmanager.executors import public as ex
 from auditmanager.executors.agent_package import AgentPackage
@@ -128,11 +133,11 @@ def _plan(*cells: tuple[str, str], access: str = "subscription") -> str:
                                  for key, model in cells]})
 
 
-def _planned_run(sessions: sessionmaker[Session], plan: str) -> str:
+def _planned_run(sessions: sessionmaker[Session], plan: str, *, title: str = "D") -> str:
     ids = {"project": str(ProjectUid.new()), "document": str(DocumentUid.new()), "version": str(VersionUid.new()), "run": str(RunId.new())}
     with sessions() as s:
         s.execute(text("INSERT INTO project (project_uid, name) VALUES (:project, 'hosts')"), ids)
-        s.execute(text("INSERT INTO document (document_uid, project_uid, display_title) VALUES (:document, :project, 'D')"), ids)
+        s.execute(text("INSERT INTO document (document_uid, project_uid, display_title) VALUES (:document, :project, :title)"), {**ids, "title": title})
         s.execute(text("INSERT INTO document_version (version_uid, document_uid, version_ordinal, media_type, byte_size, sha256, page_count) "
                        "VALUES (:version, :document, 1, 'application/pdf', 1, :sha, 1)"), {**ids, "sha": "a" * 64})
         s.execute(text(
@@ -583,3 +588,109 @@ def test_the_one_unit_of_a_pool_blocks_an_archive_until_the_run_ends(sessions: s
         ex.archive_host(s, host_id=world.host_id, roles=ROLES, idempotency_key=_key(), actor_uid=ADMIN)
         s.commit()
 
+
+
+# --- what a server is doing now (`UIP-S15-01`) ----------------------------------------------------------------------------------------
+
+
+def _object_and_document_of(sessions: sessionmaker[Session], run_id: str) -> tuple[str, str]:
+    """``(project_uid, document_uid)`` of the document a run is about: what a link to it is made of."""
+    with sessions() as s:
+        row = s.execute(text(
+            "SELECT d.project_uid, d.document_uid FROM audit_run r JOIN document_version v ON v.version_uid = r.version_uid "
+            "JOIN document d ON d.document_uid = v.document_uid WHERE r.run_id = :r"), {"r": run_id}).one()
+    return str(row[0]), str(row[1])
+
+
+def _listed(sessions: sessionmaker[Session]) -> dict[str, dict[str, Any]]:
+    """The list of servers as the adapter answers it (validated by the contract's models) and the router writes it (``exclude_unset``), by host."""
+    answer = ExecutorHostAdapter(sessions).list_hosts().model_dump(mode="json", exclude_unset=True)
+    return {item["host_id"]: item for item in answer["items"]}
+
+
+def _instant(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def test_the_list_says_what_a_server_is_doing_now_and_nothing_about_how(sessions: sessionmaker[Session]) -> None:
+    mine = World(sessions, "work-1", _report("codex", "subscription", (GPT_SOL, "verified")))
+    idle = World(sessions, "work-2", _report("claude_code", "subscription", (SONNET, "verified")))
+    assert [_listed(sessions)[host]["current_work"] for host in (mine.host_id, idle.host_id)] == [[], []], "nothing runs yet: the field is there, empty"
+
+    title = "Планы этажей, АР-3"
+    run = _planned_run(sessions, _plan(("norms:main", GPT_SOL)), title=title)
+    authority = _claim(sessions, run)
+    with sessions() as s:
+        bound = ex.cell_binding_of(s, run, "norms:main")
+    task_id = _write_task(sessions, run, authority, bound, cell="norms:main")
+    assert _listed(sessions)[mine.host_id]["current_work"] == [], "a task nobody has claimed is waiting, not running"
+
+    assert claim_task(sessions, mine.principal(), wait_seconds=0, runner_instance_id="agent-instance-0001") is not None
+    project_uid, document_uid = _object_and_document_of(sessions, run)
+    since = _scalar(sessions, "SELECT first_claimed_at FROM executor_task WHERE task_id = :t", t=task_id)
+    listed = _listed(sessions)
+    (work,) = listed[mine.host_id]["current_work"]
+    assert set(work) == {"project_uid", "document_uid", "document_title", "stage_key", "since"}, "the document, its object, the stage and since when"
+    assert (work["project_uid"], work["document_uid"], work["document_title"], work["stage_key"]) == (project_uid, document_uid, title, "norms")
+    assert _instant(work["since"]) == since
+    assert listed[idle.host_id]["current_work"] == [], "a free server has an empty list"
+
+    # Г12-B: nothing of how the call is made, and no number of a run or of a task, in the field.
+    written = json.dumps(listed[mine.host_id]["current_work"], ensure_ascii=False)
+    for forbidden in (GPT_SOL, "codex", "claude", run, task_id, mine.token_id, "model", "provider", "token", "run_id", "attempt", "effort"):
+        assert forbidden not in written, forbidden
+    assert mine.facts().work == (), "a reader of availability does not pay for the work"
+
+    # the administrator's details are what they were: the call with its run and model, and a host that carries no ``current_work``
+    details = ExecutorHostAdapter(sessions).get_host_details(host_id=mine.host_id).model_dump(mode="json", exclude_unset=True)
+    assert "current_work" not in details["host"]
+    assert [(item["task_id"], item["run_id"], item["model_id"], item["provider"], item["stage_key"]) for item in details["tasks"]] == [
+        (task_id, run, GPT_SOL, "codex", "norms")]
+    assert "current_work" not in ExecutorHostAdapter(sessions).get_host(host_id=mine.host_id).model_dump(mode="json", exclude_unset=True)
+
+    # the call ends: the server is free again
+    with sessions() as s:
+        fail_task(s, mine.principal(), task_id, reason="timeout: the CLI stopped")
+        s.commit()
+    assert _listed(sessions)[mine.host_id]["current_work"] == []
+
+
+def test_a_server_off_line_lists_no_work_though_a_claim_is_left_on_it(sessions: sessionmaker[Session]) -> None:
+    world = World(sessions, "work-3", _report("codex", "subscription", (GPT_SOL, "verified")))
+    run = _planned_run(sessions, _plan(("text:main", GPT_SOL)), title="Раздел ОВ")
+    authority = _claim(sessions, run)
+    with sessions() as s:
+        bound = ex.cell_binding_of(s, run, "text:main")
+    task_id = _write_task(sessions, run, authority, bound)
+    assert claim_task(sessions, world.principal(), wait_seconds=0, runner_instance_id="agent-instance-0001") is not None
+    assert [item["document_title"] for item in _listed(sessions)[world.host_id]["current_work"]] == ["Раздел ОВ"]
+
+    with sessions() as s:
+        s.execute(text("UPDATE executor_runner_token SET last_seen_at = clock_timestamp() - interval '3 minutes' WHERE token_id = :t"), {"t": world.token_id})
+        s.commit()
+    assert _scalar(sessions, "SELECT state FROM executor_task WHERE task_id = :t", t=task_id) == "claimed", "the claim is still there"
+    listed = _listed(sessions)[world.host_id]
+    assert listed["state"] == "offline" and listed["current_work"] == [], "no contact: nothing is known to run"
+    assert len(ExecutorHostAdapter(sessions).get_host_details(host_id=world.host_id).tasks) == 1, "the administrator's details still show the claim"
+
+
+def test_every_call_a_server_runs_is_an_entry_oldest_first(sessions: sessionmaker[Session]) -> None:
+    world = World(sessions, "work-4", _report("codex", "api", (GPT_6, "verified")))  # an API key has two slots: two claims at once
+    title = "Спецификация оборудования"
+    run = _planned_run(sessions, _plan(("text:main", GPT_6), ("blocks:3", GPT_6), access="api"), title=title)
+    authority = _claim(sessions, run)
+    with sessions() as s:
+        bound = [ex.cell_binding_of(s, run, key) for key in ("text:main", "blocks:3")]
+    claimed = []
+    for cell, binding in zip(("text:main", "blocks:3"), bound, strict=True):
+        _write_task(sessions, run, authority, binding, cell=cell, access="api", model=GPT_6)
+        task = claim_task(sessions, world.principal(), wait_seconds=0, runner_instance_id="agent-instance-0001")
+        assert task is not None
+        claimed.append(task)
+    assert len({task.task_id for task in claimed}) == 2
+    project_uid, document_uid = _object_and_document_of(sessions, run)
+
+    work = _listed(sessions)[world.host_id]["current_work"]
+    assert [(item["stage_key"], item["document_title"], item["document_uid"], item["project_uid"]) for item in work] == [
+        ("text", title, document_uid, project_uid), ("blocks", title, document_uid, project_uid)], "the same document twice, at two stages"
+    assert _instant(work[0]["since"]) <= _instant(work[1]["since"]), "the older call first"

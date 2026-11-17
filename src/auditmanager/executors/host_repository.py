@@ -44,6 +44,7 @@ __all__ = [
     "ActiveTask",
     "HostRecord",
     "HostRepository",
+    "HostWork",
     "POOL_SLOTS",
     "POOL_UNITS",
     "StoredReport",
@@ -140,6 +141,26 @@ class ActiveTask:
     model_id: str
     stage_key: str | None
     since: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class HostWork:
+    """What a host is doing now, as the list of servers says it (`UIP-S15-01`): the document of a call it runs, the object the document
+    belongs to, the stage and since when. It carries no model, no provider and no run: those are the administrator's details
+    (:class:`ActiveTask`)."""
+
+    host_id: str
+    project_uid: str
+    document_uid: str
+    document_title: str
+    stage_key: str | None
+    since: datetime
+
+
+def _stage_of(cell_key: object) -> str | None:
+    """The stage of a call: the part of its cell key before the first colon, as ``ActiveTask`` reads it; none when the call has no cell
+    key or its key names no stage."""
+    return None if cell_key is None else (str(cell_key).split(":", 1)[0] or None)
 
 
 def _host(row: Mapping[str, Any]) -> HostRecord:
@@ -466,8 +487,31 @@ class HostRepository:
         return [ActiveTask(
             task_id=str(row["task_id"]), run_id=str(row["run_id"]), provider=str(row["provider"] or ""),
             model_id=str(row["expected_model"]),
-            stage_key=None if row["cell_key"] is None else str(row["cell_key"]).split(":", 1)[0],
-            since=row["first_claimed_at"]) for row in rows]
+            stage_key=_stage_of(row["cell_key"]), since=row["first_claimed_at"]) for row in rows]
+
+    def work_of(self, session: Session, host_ids: Sequence[str], *, limit: int = 64) -> dict[str, list[HostWork]]:
+        """The calls the named hosts run now, each with the document of its run and that document's object, oldest first, at most
+        ``limit`` for a host. The same calls as :meth:`active_tasks` (a claimed task of a run), joined to the title the document has now:
+        the document is reached through the run's version, never by a name. A host with nothing running is absent from the answer."""
+        if not host_ids:
+            return {}
+        rows = session.execute(text(
+            "SELECT host_id, project_uid, document_uid, display_title, cell_key, first_claimed_at FROM ("
+            "SELECT c.host_id, d.project_uid, d.document_uid, d.display_title, t.payload -> 'host' ->> 'cell_key' AS cell_key, "
+            "t.first_claimed_at, row_number() OVER (PARTITION BY c.host_id ORDER BY t.first_claimed_at, t.task_id) AS place "
+            "FROM executor_task t JOIN executor_connection c ON c.connection_id = t.connection_id "
+            "JOIN audit_run r ON r.run_id = t.run_id "
+            "JOIN document_version v ON v.version_uid = r.version_uid "
+            "JOIN document d ON d.document_uid = v.document_uid "
+            "WHERE c.host_id = ANY(:ids) AND t.state = 'claimed' AND t.run_id IS NOT NULL"
+            ") ranked WHERE place <= :limit ORDER BY host_id, place"
+        ), {"ids": list(host_ids), "limit": limit}).mappings().all()
+        found: dict[str, list[HostWork]] = {}
+        for row in rows:
+            found.setdefault(str(row["host_id"]), []).append(HostWork(
+                host_id=str(row["host_id"]), project_uid=str(row["project_uid"]), document_uid=str(row["document_uid"]),
+                document_title=str(row["display_title"]), stage_key=_stage_of(row["cell_key"]), since=row["first_claimed_at"]))
+        return found
 
 
 #: The statement behind :meth:`HostRepository.lock_pool`, shared in spelling with ``jobs.repository._LOCK_POOL`` and

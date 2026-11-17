@@ -11,6 +11,7 @@ import type {
   ExecutorHost,
   ExecutorHostDetails,
   ExecutorHostList,
+  ExecutorHostWork,
   IssuedExecutorEnrollment,
   ModelCatalogue,
   StageComparisonCell,
@@ -30,15 +31,33 @@ export const RUN = `run_${ULID}A`;
 export const TASK = `ext_${ULID}A`;
 const NOW = '2026-11-09T11:00:00Z';
 
+/** A server as `listExecutorHosts` lists it: it always says what it is doing now (`current_work`, empty when it does nothing). */
 function host(over: Partial<ExecutorHost> & Pick<ExecutorHost, 'host_id' | 'display_name'>): ExecutorHost {
   return {
     created_at: '2026-11-08T09:00:00Z', created_by: USER, enabled: true, models: [], slots_in_use: 0, slots_total: 0,
-    state: 'online', last_seen_at: NOW, agent_version: '0.9.0', ...over,
+    state: 'online', last_seen_at: NOW, agent_version: '0.9.0', current_work: [], ...over,
   };
 }
 
+/** The same server as every other answer has it: only the list carries `current_work`. */
+function withoutWork(item: ExecutorHost): ExecutorHost {
+  const plain: ExecutorHost = { ...item };
+  delete plain.current_work;
+  return plain;
+}
+
+export const PROJECT = `prj_${ULID}A`;
+export const DOCUMENT_A = `doc_${ULID}A`;
+export const DOCUMENT_B = `doc_${ULID}B`;
+
+/** Two calls of «основной»: the same document at two stages, the older first (no model, provider or run: `Г12-B`). */
+export const WORK_ONLINE: readonly ExecutorHostWork[] = [
+  { project_uid: PROJECT, document_uid: DOCUMENT_A, document_title: 'Планы этажей', stage_key: 'blocks', since: '2026-11-09T10:45:00Z' },
+  { project_uid: PROJECT, document_uid: DOCUMENT_A, document_title: 'Планы этажей', stage_key: 'norms', since: '2026-11-09T10:50:00Z' },
+];
+
 export const SERVER_ONLINE = host({
-  host_id: HOST_A, display_name: 'основной', slots_in_use: 2, slots_total: 3,
+  host_id: HOST_A, display_name: 'основной', slots_in_use: 2, slots_total: 3, current_work: [...WORK_ONLINE],
   models: [
     { provider: 'claude_code', access: 'subscription', model_id: 'claude-opus-5-5', state: 'available' },
     { provider: 'claude_code', access: 'subscription', model_id: 'claude-sonnet-5-5', state: 'available' },
@@ -59,7 +78,7 @@ export const HOST_LIST: ExecutorHostList = {
 };
 
 export const HOST_DETAILS: ExecutorHostDetails = {
-  host: SERVER_ONLINE,
+  host: withoutWork(SERVER_ONLINE),
   slots: [
     { provider: 'claude_code', access: 'subscription', in_use: 1, slots: 1 },
     { provider: 'codex', access: 'api', in_use: 1, slots: 2 },
@@ -86,7 +105,7 @@ export const HOST_DETAILS: ExecutorHostDetails = {
 
 /** A server that is switched off and out of contact: every model is unavailable for the two reasons that name it. */
 export const HOST_DETAILS_OFF: ExecutorHostDetails = {
-  host: { ...SERVER_OFFLINE, enabled: false },
+  host: { ...withoutWork(SERVER_OFFLINE), enabled: false },
   slots: [],
   providers: [{
     provider: 'claude_code', access: 'subscription', auth_state: 'valid',
