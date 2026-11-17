@@ -179,7 +179,7 @@ import {
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { StartRunControl, StartRunCostDialogView, StartRunFailureView, runStartReadinessKey } from '@/features/start-run';
 import { StartRunWithReadiness } from '@/widgets/run-list';
-import { StageModelsDialogView } from '@/widgets/run-stages-dialog';
+import { StageModelsDialogView, StageModelsEdit } from '@/widgets/run-stages-dialog';
 import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { StageChanges, StageJournal } from '@/widgets/stage-changes';
@@ -2336,6 +2336,17 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'stage-models-dialog-no-revision',
     make: () => createElement(StageModelsDialogView, { source: { kind: 'legacy' }, layout: { state: 'ready', layout: STAGE_LAYOUT_EMPTY }, onClose: () => undefined, staticOpen: true }),
   },
+  // `UIP-S05-03`: «Изменить» of the window «Модели по этапам» (an administrator's form in the window's place) in the two states a cold cache
+  // selects before the form is drawn: the servers and the catalogue on their way, and a read that failed (the form is not drawn, the reason is named).
+  {
+    name: 'stage-models-edit-cold',
+    make: () => createElement(StageModelsEdit, { onClose: () => undefined }),
+  },
+  {
+    name: 'stage-models-edit-failed',
+    make: () => createElement(StageModelsEdit, { onClose: () => undefined }),
+    seedClient: (client) => seedError(client, stageLayoutKey(), apiError(503, 'dependency_unavailable')),
+  },
   // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» (on `/workers/advanced` since `HOSTS-WEB-01b`), in the states a default cache
   // does not select (the preset select of the start control was removed by `RUN-START-ONE-01a`).
   {
@@ -4082,6 +4093,21 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
           project_filter: PROJECT_UID as never, projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0,
           rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
         }),
+        onPage: null,
+        onSelectProject: null,
+      }),
+  },
+  // `UIP-S11-06`: the filter «Документ» names a document whose current version is confirmed for no part of this section: no project is in the
+  // summary, and the page says why instead of calling it a section with no kits.
+  {
+    name: 'section-specification-empty-document',
+    make: () =>
+      createElement(SectionSpecificationAnswer, {
+        answer: sectionAnswer({
+          projects: [], excluded: [], excluded_count: 0, source_count: 0, row_count: 0,
+          rows: { offset: 0, limit: SECTION_ROW_LIMIT, total: 0, next_offset: null, items: [] },
+        }),
+        documentFiltered: true,
         onPage: null,
         onSelectProject: null,
       }),
