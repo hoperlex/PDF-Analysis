@@ -7,6 +7,8 @@
  * transfer, the gestures) is held by `model.test.ts` and `upload-model.test.ts`. Expectations are literals.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -35,7 +37,9 @@ import {
   touchedPages,
 } from '@/entities/version-series';
 
+import { WEB_ROOT } from '../../guards/lib/repo';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
+import { declares } from '../styles/css-reads';
 
 import {
   DOCUMENT_UID,
@@ -387,6 +391,38 @@ describe('«Сравнение листов»', () => {
     expect(markup).toMatch(/aria-pressed="true"[^>]*>Было</);
     expect(markup).toMatch(/aria-pressed="true"[^>]*>Стало</);
     expect(text(markup)).toContain('Версия №2 · стр. 8');
+  });
+
+  it('(UIP-S17-03) puts «Было» and «Стало» in the line of the version\'s name, and the file it came from under that line', () => {
+    const markup = sheets();
+    const heads = markup.match(/<th scope="col"[^>]*>[\s\S]*?<\/th>/g) ?? [];
+    const versions = heads.filter((head) => head.includes('data-matrix-head-line'));
+    expect(versions.length).toBe(3);
+    for (const head of versions) {
+      const line = /data-matrix-head-line="">([\s\S]*?)<\/div><\/div>/.exec(head)?.[1] ?? '';
+      expect(line).toMatch(/^<div[^>]*>Версия №\d/);
+      expect(line.indexOf('Версия')).toBeLessThan(line.indexOf('>Было<'));
+      expect(line.indexOf('>Было<')).toBeLessThan(line.indexOf('>Стало<'));
+      // the buttons keep their meaning: the hints of the pair «было → стало» and the pressed side
+      expect(line).toContain('title="Сделать эту версию стороной «было» выбранной пары."');
+      expect(line).toContain('title="Сделать эту версию стороной «стало» выбранной пары."');
+      // the file is under the line, not in it
+      expect(line).not.toMatch(/>ЭМ-изм\d\.pdf</);
+      expect(head.slice(head.indexOf(line) + line.length)).toMatch(/>ЭМ-изм\d\.pdf</);
+    }
+    expect(versions.filter((head) => /aria-pressed="true"[^>]*>Было</.test(head)).length).toBe(1);
+    expect(versions.filter((head) => /aria-pressed="true"[^>]*>Стало</.test(head)).length).toBe(1);
+  });
+
+  it('(UIP-S17-03) draws the head of a column in one flex line with compact switches that stay targets of 24 px', () => {
+    const css = readFileSync(join(WEB_ROOT, 'src', 'widgets', 'version-series', 'ui', 'version-series.module.css'), 'utf8');
+    const OLD = '.pick { display: inline-flex; gap: var(--am-gap-xs); margin-top: var(--am-gap-xs); }';
+    expect(declares(OLD, '.colTop', 'display', /^flex$/)).toBe(false);
+    expect(declares(css, '.colTop', 'display', /^flex$/)).toBe(true);
+    expect(declares(css, '.colTop', 'flex-wrap', /^nowrap$/)).toBe(true);
+    expect(declares(css, '.pick .pickToggle', 'min-height', /^var\(--am-target-min\)$/)).toBe(true);
+    // no margin above the switches any more: they stand in the line of the name
+    expect(declares(css, '.pick', 'margin-top', /./)).toBe(false);
   });
 
   it('shows the orphaned edits and the history, not hiding what no longer applies', () => {

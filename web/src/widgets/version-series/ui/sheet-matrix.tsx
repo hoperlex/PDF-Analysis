@@ -3,7 +3,8 @@
 /**
  * The sheet matrix «Лист \ версия» (`frontend/static/js/version-comparison.js:347-430`): the versions as columns in
  * the comparison order, the sheets as rows, «только изменения», the choice of the sides A and B, the row heads with
- * the status of their pair, the cells, and the row «Несвязанные страницы».
+ * the status of their pair, the cells, and the row «Несвязанные страницы». The head of a column is two lines (`UIP-S17-03`): the
+ * name of the version with the compact switches «Было» and «Стало» on one line, the file it came from under them.
  *
  * The matrix is the server's effective matrix (the algorithm, then accepted AI links, then manual edits; a manual
  * edit wins, ADR-0025 decision 3). A row is valid within one revision only, so nothing here keeps a row between
@@ -278,31 +279,33 @@ export function SheetMatrix({
                   scope="col"
                   className={column.version_uid === sides.a ? styles.headA : column.version_uid === sides.b ? styles.headB : styles.head}
                 >
-                  <div className={styles.colLabel} title={titles.get(column.version_uid)}>
-                    Версия {names.get(column.version_uid) ?? '№?'}
-                    <span className={styles.note}> · стр. {column.page_count}</span>
+                  <div className={styles.colTop} data-matrix-head-line="">
+                    <div className={styles.colLabel} title={titles.get(column.version_uid)}>
+                      Версия {names.get(column.version_uid) ?? '№?'}
+                      <span className={styles.note}> · стр. {column.page_count}</span>
+                    </div>
+                    <div className={styles.pick}>
+                      <button
+                        type="button"
+                        className={`am-button am-button--small am-button--quiet ${styles.pickToggle}`}
+                        aria-pressed={column.version_uid === sides.a}
+                        title="Сделать эту версию стороной «было» выбранной пары."
+                        onClick={() => onSide('a', column.version_uid)}
+                      >
+                        Было
+                      </button>
+                      <button
+                        type="button"
+                        className={`am-button am-button--small am-button--quiet ${styles.pickToggle}`}
+                        aria-pressed={column.version_uid === sides.b}
+                        title="Сделать эту версию стороной «стало» выбранной пары."
+                        onClick={() => onSide('b', column.version_uid)}
+                      >
+                        Стало
+                      </button>
+                    </div>
                   </div>
                   {(titles.get(column.version_uid) ?? '') === '' ? null : <div className={styles.colFile}>{titles.get(column.version_uid)}</div>}
-                  <div className={styles.pick}>
-                    <button
-                      type="button"
-                      className="am-button am-button--small am-button--quiet"
-                      aria-pressed={column.version_uid === sides.a}
-                      title="Сделать эту версию стороной «было» выбранной пары."
-                      onClick={() => onSide('a', column.version_uid)}
-                    >
-                      Было
-                    </button>
-                    <button
-                      type="button"
-                      className="am-button am-button--small am-button--quiet"
-                      aria-pressed={column.version_uid === sides.b}
-                      title="Сделать эту версию стороной «стало» выбранной пары."
-                      onClick={() => onSide('b', column.version_uid)}
-                    >
-                      Стало
-                    </button>
-                  </div>
                 </th>
               ))}
             </tr>

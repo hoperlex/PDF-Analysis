@@ -567,13 +567,34 @@
 }
 
 .colLabel {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 600;
+}
+
+/*
+ * `UIP-S17-03`: the head of a column is the name of the version and, at its right on the same line, the two switches «Было» and
+ * «Стало» (the original has two circles there); the file it came from is the second line. The switches are compact, and a target of
+ * 24 px at the least (`--am-target-min`).
+ */
+.colTop {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs);
 }
 
 .pick {
   display: inline-flex;
-  gap: var(--am-gap-xs);
-  margin-top: var(--am-gap-xs);
+  flex: 0 0 auto;
+  gap: var(--am-gap-2xs);
+}
+
+.pick .pickToggle {
+  min-height: var(--am-target-min);
+  padding: 0 var(--am-gap-xs);
+  line-height: 1.2;
 }
 
 .onlyChanged {
