@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { DocumentUid, ProjectUid, StageChainRun, StagePair, StagePairSuggestion } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
@@ -15,6 +16,7 @@ import type { StageDocumentNames } from '@/entities/stage-pair';
 import { RUN_WORDS, StageBatchControls, StageRunControls, useLatestPairRun } from '@/widgets/stage-run-controls';
 
 import { withRowVisibility } from '../model/rows-in-view';
+import { ConfirmAllSuggestions } from './confirm-all-suggestions';
 import { RowInView } from './row-in-view';
 import { StageAssemblyCreator, StageAssemblyEditor } from './stage-assembly-editor';
 import styles from './stage-pair-catalog.module.css';
@@ -72,11 +74,24 @@ function ManageButton({ pairId, inView, open, onToggle }: { readonly pairId: str
 }
 
 /**
- * The catalog of the project's stage pairs (`UI-B-85`, plan §1.2 tab 1): one table as the original's «Проект / раздел, Метод и
- * модель, Дата, Изменения, Требуют проверки, Статус, Открыть», with the documents by their titles. What an expert does with a
- * pair — the completeness of the set, the assembly's members, the start of a run — is the panel «Управление парой» under the table,
- * opened by the row's button (the original's row menu «⋯»); with one pair it is open from the start. A suggestion is displayed as
- * a proposal; only the expert's button creates a pair.
+ * A row of the one table: a confirmed pair, or a suggestion (`UIP-S16-04`). A suggestion decides nothing; it stands in the same
+ * table as a dashed row, marked «предложение», until the expert's «Подтвердить» makes it a pair.
+ */
+type CatalogRow =
+  | { readonly kind: 'pair'; readonly key: string; readonly pair: StagePair }
+  | { readonly kind: 'suggestion'; readonly key: string; readonly hint: StagePairSuggestion };
+
+/** The key of a pair's row: apart from every suggestion's, so that the open pair is marked by its own row only. */
+const pairRowKey = (pairId: string): string => `pair:${pairId}`;
+
+/**
+ * The catalog of the project's stage pairs (`UI-B-85`, `UIP-S16-04`, plan §1.2 tab 1): one table of the documents of stage П and of
+ * stage Р, the status, «Открыть» and «Управление», with the documents by their titles and the original's columns «Метод и модель,
+ * Дата, Изменения, Требуют проверки». The possible pairs are rows of the same table after the confirmed ones, dashed and marked
+ * «предложение», each with «Подтвердить»; there is no block of them under the table. Over the table stand the counters and the
+ * buttons of the batch (`UIP-S16-03`). What an expert does with a pair — the completeness of the set, the assembly's members, the
+ * start of a run — is the panel «Управление парой» under the table, opened by the row's button (the original's row menu «⋯»); with
+ * one pair it is open from the start. A suggestion is displayed as a proposal; only the expert's button creates a pair.
  */
 export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }: StagePairCatalogProps) {
   const [pairPages, setPairPages] = useState<string[]>([]);
@@ -87,7 +102,8 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
   const names = documents.data;
   const confirm = useConfirmStagePair();
   const completeness = useSetStagePairCompleteness();
-  const [selected, setSelected] = useState<StagePairSuggestion | null>(null);
+  // The list «Подтвердить все предложения» was opened over: the suggestions of that moment, not the ones read again under it.
+  const [confirmAllOver, setConfirmAllOver] = useState<readonly StagePairSuggestion[] | null>(null);
   const [batchSelection, setBatchSelection] = useState<Record<string, StagePair>>({});
   const [batchId, setBatchId] = useState<string | undefined>();
   // `undefined`: not chosen yet (a single pair opens by itself); `null`: the reader closed the panel.
@@ -107,47 +123,84 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
   const selectable = items.filter((pair) => pair.state === 'confirmed');
   const nameOfPair = (pair: StagePair): string => `${documentCaption(names, pair.left_document_uid)} → ${pair.right_document_uid === undefined ? 'сборка Р' : documentCaption(names, pair.right_document_uid)}`;
 
-  const columns: TableColumn<StagePair>[] = [
+  const suggestionItems = suggestions.data?.items ?? [];
+  const rows: CatalogRow[] = [
+    ...items.map((pair): CatalogRow => ({ kind: 'pair', key: pairRowKey(pair.pair_id), pair })),
+    ...suggestionItems.map((hint): CatalogRow => ({ kind: 'suggestion', key: `suggestion:${hint.left_document_uid}|${hint.right_document_uid}`, hint })),
+  ];
+  // `UIP-S16-03`: the matched and the possible pairs are those of the page read; the documents without a pair are the server's count of the whole object.
+  const counters = pairs.data === undefined || suggestions.data === undefined ? null : (
+    <p className={styles.counters} data-pair-counters="">
+      Сопоставлено: {selectable.length}{pairs.data.page.next_cursor === null ? '' : ' на этой странице'} · Возможных: {suggestionItems.length}{suggestions.data.page.next_cursor === null ? '' : ' на этой странице'} · Только П: {pairs.data.unpaired_p_count} · Только Р: {pairs.data.unpaired_r_count}
+    </p>
+  );
+
+  /** A cell that only a confirmed pair has: a suggestion has no run, and a cell it has no data for is not drawn. */
+  const ofPair = (render: (pair: StagePair) => ReactNode) => (row: CatalogRow) => row.kind === 'pair' ? render(row.pair) : null;
+
+  const columns: TableColumn<CatalogRow>[] = [
     ...(mayAct ? [{
       key: 'select', header: 'В очередь',
-      cell: (pair: StagePair) => pair.state === 'confirmed'
+      cell: ofPair((pair) => pair.state === 'confirmed'
         ? <input type="checkbox" aria-label={`Выбрать для очереди: ${nameOfPair(pair)}`} checked={batchSelection[pair.pair_id] !== undefined}
             onChange={(event) => setBatchSelection((prior) => {
               const next = { ...prior };
               if (event.target.checked) next[pair.pair_id] = pair; else delete next[pair.pair_id];
               return next;
             })} />
-        : null,
+        : null),
     }] : []),
     {
-      key: 'pair', header: 'Проект / раздел',
-      cell: (pair) => <RowInView pairId={pair.pair_id} onVisibility={setRowInView} className={styles.documents}>
-        <span>П: <DocumentLink projectUid={projectUid} uid={pair.left_document_uid} names={names} /></span>
-        <span>Р: {pair.right_document_uid === undefined
-          ? <span title={pair.assembly_id}>сборка документов</span>
-          : <DocumentLink projectUid={projectUid} uid={pair.right_document_uid} names={names} />}</span>
-      </RowInView>,
+      key: 'pair', header: 'Документ / раздел',
+      cell: (row) => row.kind === 'pair'
+        ? <RowInView pairId={row.pair.pair_id} onVisibility={setRowInView} className={styles.documents}>
+            <span>П: <DocumentLink projectUid={projectUid} uid={row.pair.left_document_uid} names={names} /></span>
+            <span>Р: {row.pair.right_document_uid === undefined
+              ? <span title={row.pair.assembly_id}>сборка документов</span>
+              : <DocumentLink projectUid={projectUid} uid={row.pair.right_document_uid} names={names} />}</span>
+          </RowInView>
+        : <div className={styles.documents}>
+            <span>П: <DocumentLink projectUid={projectUid} uid={row.hint.left_document_uid} names={names} /></span>
+            <span>Р: <DocumentLink projectUid={projectUid} uid={row.hint.right_document_uid} names={names} /></span>
+          </div>,
     },
-    { key: 'method', header: 'Метод и модель', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="method" /> },
-    { key: 'date', header: 'Дата', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="date" /> },
-    { key: 'changes', header: 'Изменения', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="changes" /> },
-    { key: 'review', header: 'Требуют проверки', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="review" /> },
+    { key: 'method', header: 'Метод и модель', cell: ofPair((pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="method" />) },
+    { key: 'date', header: 'Дата', cell: ofPair((pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="date" />) },
+    { key: 'changes', header: 'Изменения', cell: ofPair((pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="changes" />) },
+    { key: 'review', header: 'Требуют проверки', cell: ofPair((pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="review" />) },
     {
       key: 'status', header: 'Статус',
-      cell: (pair) => <div className={styles.documents}>
-        <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="status" />
-        <span>{completenessLabel(pair.completeness)}</span>
-      </div>,
+      cell: (row) => row.kind === 'pair'
+        ? <div className={styles.documents}>
+            <PairRunCell pairId={row.pair.pair_id} inView={rowsInView.has(row.pair.pair_id)} cell="status" />
+            <span>{completenessLabel(row.pair.completeness)}</span>
+          </div>
+        // The proposal is the same pill as a status in the other lists, with a dashed edge: the word says it, the dash is the second carrier.
+        : <div className={styles.documents}>
+            <span className={`am-badge am-badge--pending ${styles.proposed}`} data-pair-suggestion="">предложение</span>
+            <span>{suggestionReason(row.hint.reason)}</span>
+          </div>,
     },
     {
       key: 'actions', header: 'Действия',
-      cell: (pair) => <div className={styles.actions}>
-        <OpenButton pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} onRunChange={onRunChange} />
-        {mayAct && pair.state === 'confirmed'
-          ? <ManageButton pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} open={managedId === pair.pair_id} onToggle={() => setManaged(managedId === pair.pair_id ? null : pair.pair_id)} /> : null}
-      </div>,
+      cell: (row) => row.kind === 'pair'
+        ? <div className={styles.actions}>
+            <OpenButton pairId={row.pair.pair_id} inView={rowsInView.has(row.pair.pair_id)} onRunChange={onRunChange} />
+            {mayAct && row.pair.state === 'confirmed'
+              ? <ManageButton pairId={row.pair.pair_id} inView={rowsInView.has(row.pair.pair_id)} open={managedId === row.pair.pair_id}
+                  onToggle={() => setManaged(managedId === row.pair.pair_id ? null : row.pair.pair_id)} /> : null}
+          </div>
+        // The documents are in the row, so the expert sees what they confirm: the same command as a pair made by hand, with its key.
+        : (mayAct
+          ? <button type="button" className="am-button" data-pair-confirm="" disabled={busy}
+              aria-label={`Подтвердить пару: ${documentCaption(names, row.hint.left_document_uid)} → ${documentCaption(names, row.hint.right_document_uid)}`}
+              onClick={() => confirm.mutate({ projectUid, leftDocumentUid: row.hint.left_document_uid, rightDocumentUid: row.hint.right_document_uid })}>Подтвердить</button>
+          : null),
     },
   ];
+
+  // Neither a pair nor a suggestion: the table has nothing to say, so the page says so once (a suggestion that could not be read is said by its error).
+  const nothing = pairs.data?.items.length === 0 && suggestionItems.length === 0 && !suggestions.isPending;
 
   return (
     <div className={styles.catalog}>
@@ -159,24 +212,39 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
               <button type="button" className="am-button am-button--quiet" onClick={() => setBatchSelection(Object.fromEntries(selectable.map((pair) => [pair.pair_id, pair])))}>Выбрать все</button>
               <button type="button" className="am-button am-button--quiet" disabled={Object.keys(batchSelection).length === 0} onClick={() => setBatchSelection({})}>Снять выбор</button>
             </> : null}
-            <button type="button" className="am-button" onClick={() => void pairs.refetch()}>Обновить</button>
+            <button type="button" className="am-button" onClick={() => { void pairs.refetch(); void suggestions.refetch(); }}>Обновить</button>
           </div>
         </div>
-        {pairs.data === undefined || suggestions.data === undefined ? null : (
-          <p data-pair-counters="">
-            Сопоставлено: {selectable.length}{pairs.data.page.next_cursor === null ? '' : ' на этой странице'} · Возможных пар: {suggestions.data.items.length}{suggestions.data.page.next_cursor === null ? '' : ' на этой странице'}
-          </p>
-        )}
+        <StageBatchControls projectUid={projectUid} selectedPairs={Object.values(batchSelection)} mayAct={mayAct} onBatchChange={setBatchId}
+          {...(batchId === undefined ? {} : { batchId })} {...(onOpenRun === undefined ? {} : { onOpenRun })}
+          summary={counters}
+          leadingActions={mayAct && suggestionItems.length > 0
+            ? <button type="button" className="am-button" data-confirm-all-open="" disabled={busy} onClick={() => setConfirmAllOver(suggestionItems)}>
+                Подтвердить все предложения ({suggestionItems.length})
+              </button>
+            : undefined} />
         {pairs.isPending ? <LoadingState what="пары стадий" /> : null}
+        {suggestions.isPending ? <LoadingState what="возможные пары" /> : null}
         {pairFailure === null ? null : <ErrorState title="Пары стадий не открылись" detail={pairFailure.detail} correlationId={pairFailure.correlationId} onRetry={pairFailure.retryable ? () => void pairs.refetch() : undefined} />}
-        {pairs.data?.items.length === 0 ? <EmptyState title="Подтверждённых пар пока нет" detail="Пары появятся после решения эксперта по документам П и Р." /> : null}
-        {items.length === 0 ? null : <Table columns={columns} rows={items} rowKey={(pair) => pair.pair_id} currentKey={managedId} />}
+        {suggestionFailure === null ? null : <ErrorState title="Предложения не открылись" detail={suggestionFailure.detail} correlationId={suggestionFailure.correlationId} onRetry={suggestionFailure.retryable ? () => void suggestions.refetch() : undefined} />}
+        {nothing ? <EmptyState title="Подтверждённых пар пока нет" detail="Пары появятся после решения эксперта по документам П и Р." /> : null}
+        {suggestionItems.length === 0 ? null : <p className="am-note" data-pair-suggestion-note="">Совпадение шифра или названия только подсказывает выбор. Документы связывает эксперт.</p>}
+        {rows.length === 0 ? null : <Table columns={columns} rows={rows} rowKey={(row) => row.key} currentKey={managedId === null ? null : pairRowKey(managedId)} />}
         {pairs.data === undefined ? null : (
           <nav className={styles.actions} aria-label="Страницы пар стадий">
             <button type="button" className="am-button" disabled={pairPages.length === 0} onClick={() => setPairPages((pages) => pages.slice(0, -1))}>Назад</button>
             <button type="button" className="am-button" disabled={pairs.data.page.next_cursor === null} onClick={() => {
               const next = pairs.data?.page.next_cursor;
               if (next !== null && next !== undefined) setPairPages((pages) => [...pages, next]);
+            }}>Далее</button>
+          </nav>
+        )}
+        {suggestions.data === undefined || (suggestions.data.page.next_cursor === null && suggestionPages.length === 0) ? null : (
+          <nav className={styles.actions} aria-label="Страницы возможных пар">
+            <button type="button" className="am-button" disabled={suggestionPages.length === 0} onClick={() => setSuggestionPages((pages) => pages.slice(0, -1))}>Назад</button>
+            <button type="button" className="am-button" disabled={suggestions.data.page.next_cursor === null} onClick={() => {
+              const next = suggestions.data?.page.next_cursor;
+              if (next !== null && next !== undefined) setSuggestionPages((pages) => [...pages, next]);
             }}>Далее</button>
           </nav>
         )}
@@ -200,49 +268,10 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
         </section>
       )}
 
-      <StageBatchControls projectUid={projectUid} selectedPairs={Object.values(batchSelection)} mayAct={mayAct} onBatchChange={setBatchId}
-        {...(batchId === undefined ? {} : { batchId })} {...(onOpenRun === undefined ? {} : { onOpenRun })} />
       <StageAssemblyCreator projectUid={projectUid} mayAct={mayAct} />
 
-      <section aria-labelledby="stage-suggestions-heading">
-        <h2 id="stage-suggestions-heading">Возможные пары</h2>
-        <p>Совпадение шифра или названия только подсказывает выбор. Документы связывает эксперт.</p>
-        {suggestions.isPending ? <LoadingState what="возможные пары" /> : null}
-        {suggestionFailure === null ? null : <ErrorState title="Предложения не открылись" detail={suggestionFailure.detail} correlationId={suggestionFailure.correlationId} onRetry={suggestionFailure.retryable ? () => void suggestions.refetch() : undefined} />}
-        {suggestions.data?.items.length === 0 ? <EmptyState title="Подходящих предложений пока нет" /> : null}
-        {suggestions.data?.items.map((hint: StagePairSuggestion) => (
-          <article className={styles.row} key={`${hint.left_document_uid}|${hint.right_document_uid}`}>
-            <div className={styles.documents}>
-              <span>П: <DocumentLink projectUid={projectUid} uid={hint.left_document_uid} names={names} /></span>
-              <span>Р: <DocumentLink projectUid={projectUid} uid={hint.right_document_uid} names={names} /></span>
-            </div>
-            <span>{suggestionReason(hint.reason)}</span>
-            {mayAct ? <button type="button" className="am-button" disabled={busy} onClick={() => setSelected(hint)}>Проверить связь</button> : null}
-          </article>
-        ))}
-        {suggestions.data === undefined ? null : (
-          <nav className={styles.actions} aria-label="Страницы возможных пар">
-            <button type="button" className="am-button" disabled={suggestionPages.length === 0} onClick={() => setSuggestionPages((pages) => pages.slice(0, -1))}>Назад</button>
-            <button type="button" className="am-button" disabled={suggestions.data.page.next_cursor === null} onClick={() => {
-              const next = suggestions.data?.page.next_cursor;
-              if (next !== null && next !== undefined) setSuggestionPages((pages) => [...pages, next]);
-            }}>Далее</button>
-          </nav>
-        )}
-      </section>
-
-      {selected === null ? null : (
-        <section className={styles.decision} aria-labelledby="stage-confirm-heading">
-          <h3 id="stage-confirm-heading">Подтвердить связь документов?</h3>
-          <p>П: <DocumentLink projectUid={projectUid} uid={selected.left_document_uid} names={names} /> · Р: <DocumentLink projectUid={projectUid} uid={selected.right_document_uid} names={names} /></p>
-          <p>Подтверждение создаст пару. Предложение само ничего не связывает.</p>
-          <div className={styles.actions}>
-            <button type="button" className="am-button" disabled={busy} onClick={() => {
-              confirm.mutate({ projectUid, leftDocumentUid: selected.left_document_uid, rightDocumentUid: selected.right_document_uid }, { onSuccess: () => setSelected(null) });
-            }}>Подтвердить пару</button>
-            <button type="button" className="am-button" disabled={busy} onClick={() => setSelected(null)}>Отмена</button>
-          </div>
-        </section>
+      {confirmAllOver === null ? null : (
+        <ConfirmAllSuggestions projectUid={projectUid} suggestions={confirmAllOver} names={names} onClose={() => setConfirmAllOver(null)} />
       )}
       {commandFailure === null ? null : <ErrorState title="Решение не сохранено" detail={commandFailure.detail} correlationId={commandFailure.correlationId} />}
     </div>
