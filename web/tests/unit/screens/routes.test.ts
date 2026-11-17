@@ -659,6 +659,7 @@ describe('every screen address is built once and matches a route file on disk', 
       logs: routes.logs(RUN_ID),
       queue: routes.queue(),
       workers: routes.workers(),
+      dispatcher: routes.dispatcher(),
       projects: routes.projects(),
       project: routes.project(PROJECT_UID),
       // `UI-B-02`: the section optimisation links a project's «Оптимизация» tab.
