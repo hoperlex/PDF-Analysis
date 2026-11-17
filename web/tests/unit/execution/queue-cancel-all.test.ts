@@ -52,10 +52,10 @@ describe('the number on the button', () => {
   });
 
   describe('on the page', () => {
-    function render(roles: readonly string[], overview: readonly ExecutionQueueStateCount[] | undefined = OVERVIEW): string {
+    function render(roles: readonly string[], overview: readonly ExecutionQueueStateCount[] | null = OVERVIEW): string {
       const client = newClient();
       client.setQueryData(queryKeys.execution.queue(), {
-        items: [job('A')], page: { next_cursor: null }, paused: false, ...(overview === undefined ? {} : { overview }),
+        items: [job('A')], page: { next_cursor: null }, paused: false, ...(overview === null ? {} : { overview }),
       });
       client.setQueryData(queryKeys.account.me(), { roles });
       return renderScreen(client, createElement(QueuePage as ComponentType<QueuePageProps>));
@@ -71,7 +71,7 @@ describe('the number on the button', () => {
       expect(render(['viewer'])).not.toContain('data-queue-cancel-all');
       expect(render([])).not.toContain('data-queue-cancel-all');
       expect(render(['expert'], OVERVIEW.map((entry) => ({ ...entry, count: entry.state === 'succeeded' ? 5 : 0 })))).not.toContain('data-queue-cancel-all');
-      expect(render(['expert'], undefined)).not.toContain('data-queue-cancel-all');
+      expect(render(['expert'], null)).not.toContain('data-queue-cancel-all');
     });
   });
 });
