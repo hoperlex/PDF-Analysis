@@ -1,9 +1,10 @@
 # ADR-0026: Executor capacity, universal agent enrollment, and homogeneous executor groups with dispatch-time binding
 
-- Status: accepted by the repository owner. The product decisions of the three design documents of 2026-11-02 are the owner's, the deviations are `R-149a`…`R-149d`, and the engineering choices below are the planner's inside them. They are revisable by a dated addendum.
-- Date: 2026-11-02
+- Status: accepted
+- Date: 2026-11-02; revised 2026-11-18 (ADR-OPTIMISE-01)
+- Basis: the owner's three design documents of 2026-11-02 (product decisions are the owner's, engineering choices the planner's inside them); deviations `R-149a`…`R-149d`; `R-149b`, `R-149c`; `R-154c`; `EXEC2-FOLLOWUP-01`. Revisable by a dated addendum.
+- Amends: the `executor_route_event` Primary/Standby route stops being the source of **new** routing decisions once an administrator cuts over (decision 17; history stays readable); the single-active-run rule of `EXEC-PAR-QUEUE-01` becomes the default capacity of one (decision 1). · Amended by: `ADR-0028` (decisions 1, 2, 3, 5, 8, 9, 10, 12–15, 17, for runs with a `stage_plan`).
 - Owners: repository owner / EXEC-2 integrator (`R-149f`)
-- Supersedes: the `executor_route_event` Primary/Standby route as the source of **new** routing decisions once an administrator cuts over (decision 17). The route history stays readable. The single-active-run rule of `EXEC-PAR-QUEUE-01` becomes the default capacity of one (decision 1).
 - Related ADRs: `ADR-0024` (OpenRouter base connection, AI execution), `ADR-0025` (comparison spend journal, ceilings, `max_images`)
 - Plan: `docs/program/dispatch/EXEC2-PLAN.md`
 
@@ -17,18 +18,7 @@ The owner's three design documents ask for:
 2. a universal Ubuntu agent installed either over SSH from the UI (path A) or by one copied command (path B), both first-class (Universal Agent);
 3. homogeneous executor groups chosen per kind of model work by rules, with model and connection frozen at dispatch rather than at request (Stage 3).
 
-The code on `origin/dev` `9617c759` (code tree `4ab29560`) already has the following:
-
-- per-connection exclusivity (`jobs/repository.py` `_hold_connection_limit`, an advisory lock per `connection_id`, mirrored by the comparison spend wrapper);
-- worker slots;
-- an explicit executor and a preset at run start;
-- the pull channel with runner tokens;
-- the CLI wrappers;
-- SSH with host-key pinning;
-- six `work_kind` values with a Primary/Standby route;
-- immutable cost consent for runs (`RunCostConsent`) and comparison jobs (`comparison_ai_job` consent columns under `am_guard_comparison_ai_job_consent`).
-
-It has no enrollment, no installer and no groups. The plan section 2 records the full reconciliation.
+`origin/dev` `9617c759` already has per-connection exclusivity (an advisory lock per `connection_id`, mirrored by the comparison spend wrapper), worker slots, an explicit executor and a preset at run start, the pull channel with runner tokens, the CLI wrappers, SSH with host-key pinning, six `work_kind` values with a Primary/Standby route, and immutable cost consent for runs (`RunCostConsent`) and comparison jobs (`comparison_ai_job`). It has no enrollment, no installer and no groups (reconciliation: `docs/program/dispatch/EXEC2-PLAN.md` section 2).
 
 ## Decision
 
@@ -113,7 +103,7 @@ It has no enrollment, no installer and no groups. The plan section 2 records the
     - The administrator's confirmation creates the groups, the rules and mode `rules` in one transaction.
     - Under `rules`, `setExecutorRoute` answers `conflict`, and a `work_kind` without a rule is a typed refusal.
     - Rollback is an explicit return to `legacy`. Work already admitted by rules finishes on its own group revisions and is never re-read through a legacy route.
-18. **Refusals reuse the catalogue.** Only `validation_failed`, `conflict`, `dependency_unavailable` and `model_identity_mismatch` are used, with typed details. EXEC-2 adds no error code. *Addendum (`EXEC2-FOLLOWUP-01`, 2026-11-03):* a group whose rate snapshot no longer equals the provider lock is refused with the existing cost-preflight refusal `analysis_input_invalid` (`stage_id`, `reason: cost_estimate_binding_changed`), the word the Run side already uses for a consent whose rates no longer hold, and **only** on operations whose contract declares `422`; an estimate that declares none is computed at the snapshot and the start refuses. Still no new code.
+18. **Refusals reuse the catalogue.** Only `validation_failed`, `conflict`, `dependency_unavailable` and `model_identity_mismatch` are used, with typed details. EXEC-2 adds no error code. A group whose rate snapshot no longer equals the provider lock is refused with the existing cost-preflight refusal `analysis_input_invalid` (`stage_id`, `reason: cost_estimate_binding_changed`), the word the Run side already uses for a consent whose rates no longer hold, and **only** on operations whose contract declares `422`; an estimate that declares none is computed at the snapshot and the start refuses (`EXEC2-FOLLOWUP-01`, 2026-11-03). Still no new code.
 
 ### Deviations recorded by the owner
 
@@ -122,10 +112,10 @@ It has no enrollment, no installer and no groups. The plan section 2 records the
 
 ## Consequences
 
-- Default behaviour is unchanged: capacity one, mode `legacy`, old agents and API callers unchanged.
-- About 57 lines in 16 files outside `executors/` and `comparison/`, and 24 inside `comparison/`, read a Run's or job's frozen revision. Each must handle `pending`. That is the bulk of `EXEC2-GROUP-RUN-01` and `EXEC2-GROUP-CMP-01`.
-- The stand serves one more unauthenticated route (the agent package) and one enrollment exchange. Both need throttling at the proxy.
-- Without database runs (`R-149d`), races in capacity, binding and consent are first exercised on a stand.
+- Positive: default behaviour is unchanged — capacity one, mode `legacy`, old agents and API callers unchanged.
+- Cost: about 57 lines in 16 files outside `executors/` and `comparison/`, and 24 inside `comparison/`, read a Run's or job's frozen revision. Each must handle `pending`; that is the bulk of `EXEC2-GROUP-RUN-01` and `EXEC2-GROUP-CMP-01`.
+- Cost: the stand serves one more unauthenticated route (the agent package) and one enrollment exchange. Both need throttling at the proxy.
+- Cost: without database runs (`R-149d`), races in capacity, binding and consent are first exercised on a stand.
 
 ## Alternatives considered
 
@@ -148,3 +138,10 @@ Any of these reopens this ADR:
 - a multi-instance pull protocol (decision 3);
 - mixed-billing groups (decision 10);
 - moving from subscriptions to direct APIs (decision 8, `R-149b`).
+
+## History
+
+- 2026-11-02 — accepted on the owner's design documents (deviations `R-149a`…`R-149d`).
+- 2026-11-03 — addendum `EXEC2-FOLLOWUP-01` (`analysis_input_invalid` / `cost_estimate_binding_changed` for a stale group rate snapshot) folded into decision 18.
+- 2026-11-09 — amended by `ADR-0028` for runs with a `stage_plan`; 2026-11-10 — run-group tables of decision 10 removed (`R-154c`).
+- 2026-11-18 — compressed under ADR-OPTIMISE-01; decisions 1–20 unchanged in number and meaning.

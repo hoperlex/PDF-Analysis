@@ -1,9 +1,10 @@
 # ADR-0029: Precedents — a model-free core that serves the AI critic through the client and the expert in «Разбор»
 
-- Status: accepted by the repository owner by direct polls of 2026-11-10 (`R-153q`…`R-153ar`, `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55). The product decisions are the owner's; the engineering choices inside them are the planner's. Two decisions are **temporary** and carry an end condition (section «Temporary decisions»). Revisable by a dated addendum.
-- Date: 2026-11-10
-- Owners: repository owner / the «Прецеденты» programme integrator
+- Status: accepted
+- Date: 2026-11-10; revised 2026-11-18 (ADR-OPTIMISE-01)
+- Basis: the owner's direct polls of 2026-11-10 (`R-153q`…`R-153ar`, `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55); the product decisions are the owner's, the engineering choices inside them are the planner's. Two decisions are **temporary** and carry an end condition (section «Temporary decisions»). Decision 14 corrects the ADR after the AR v3 removal and the plan v2 critic (`R-154a`…`R-154h`). Revisable by a dated addendum.
 - Amends: `ADR-0027` decisions 2, 3 and 6 (addendum there, 2026-11-10) and `DECISION-MEMORY-01` (Q4, Q8, Q9, Q10, section 5.3, phase M4; short dated notes there). It rewrites no text of either.
+- Owners: repository owner / the «Прецеденты» programme integrator
 - Related ADRs: `ADR-0027` (decision memory), `ADR-0028` (hosts and the stage layout), `ADR-0020` (pgvector, the embedding producer), `ADR-0021` (one host, no managed database), `ADR-0024` (AI execution), `ADR-0026` (the pull channel)
 - Plan and lanes: the plan is a working document of the integrator (git-ignored); this ADR carries its decisions and each lane has a task file under `docs/program/tasks/`. A task cites «ADR-0029 decision n» instead of re-deciding it.
 
@@ -11,16 +12,18 @@
 
 The owner asked for expert decisions already kept in the decision memory (`ADR-0027`) to work for the product (`R-153x`, `R-153r`): the AI critic gets the norm reference and, later, similar cases; the expert sees in «Разбор» a neutral mark, a collapsed «Рекомендовано снять» queue, other experts' comments and «Возможные нормы». What the tree has:
 
-- the memory holds cases, comments inside a decision, forget, withdraw and restore (`ADR-0027`, phases M1 and M2); it has no vectors and no read that compares cases;
-- a run started under the stage layout carries a frozen `stage_plan` (`ADR-0028` decision 5); a legacy run has none (`src/auditmanager/runs/executor.py:816`);
+- the memory (`ADR-0027`, phases M1 and M2) has no vectors and no read that compares cases;
+- a run started under the stage layout carries a frozen `stage_plan` (`ADR-0028` decision 5); a legacy run has none;
 - the AI critic exists only in the extended-review plan v3; on the base of this ADR the plan v2 has no critic (`rows_in_use` in `src/auditmanager/runs/stage_layout.py`), and the AR v3 removal wave gives it the original's deterministic critic and corrector, without a model (`R-154f`);
-- the gate publishes only text findings to «Разбор» (`src/auditmanager/findings/publication.py:131`); the candidates of the extended review stay machine observations outside the expert's list;
-- the executor client receives only what its task holds, and the CLI tools of the agent are closed (`tools/executor-runner/claude_answer.py:501`, `tools/executor-runner/codex_answer.py:402`);
-- the production host has 4 GB (`R-146ad`); the encoder of the norm corpus peaks at 3 177,9 MiB (`docs/program/NORM_EMBEDDING_BAKEOFF.md:62`); `infra/deploy/compose.server.yml` sets a memory limit only when `ALPHA_MEM_LIMIT_<SERVICE>` is given, and none is.
+- the gate publishes only text findings to «Разбор» (`src/auditmanager/findings/publication.py`); the candidates of the extended review stay machine observations outside the expert's list;
+- the executor client receives only what its task holds, and the CLI tools of the agent are closed (`tools/executor-runner/claude_answer.py`, `codex_answer.py`);
+- the production host has 4 GB (`R-146ad`); the norm-corpus encoder peaks at 3 177,9 MiB (`docs/program/NORM_EMBEDDING_BAKEOFF.md`); `infra/deploy/compose.server.yml` sets a memory limit only when `ALPHA_MEM_LIMIT_<SERVICE>` is given, and none is.
 
 The owner took no measurements before building: «Замеры: никакие, сразу строим» (`R-153an`). What is taken without a measurement is listed in section «Accepted risks».
 
 ## Decision
+
+Open: the two temporary decisions (section «Temporary decisions») end only on their stated conditions; decision 11 is later work for the second seal.
 
 1. **One model-free core, in a new bounded context `precedents`.**
    - It imports only the `public` module of any other context. It never calls a model.
@@ -28,7 +31,7 @@ The owner took no measurements before building: «Замеры: никакие, 
 2. **Two consumers, one writer of verdicts.**
    - The AI critic reads reference material through the executor client (decision 3).
    - The expert reads marks, the queue, comments and «Возможные нормы» in «Разбор» (`R-153x`: «И то, и другое»).
-   - The decision ledger is written only by the expert (`src/auditmanager/decisions/ledger.py:9-14`). A mark is advice; the expert's ✓/✕ decides. «Отмена» is a mark and a collapsed queue, never an automatic withdrawal (`R-153r`: «Метка + свёрнутая очередь»).
+   - The decision ledger is written only by the expert (`src/auditmanager/decisions/ledger.py`). A mark is advice; the expert's ✓/✕ decides. «Отмена» is a mark and a collapsed queue, never an automatic withdrawal (`R-153r`: «Метка + свёрнутая очередь»).
 3. **Prompts stay static; the client brings the data.**
    - The stand answers a task's `context_request` (kind `similar_cases` or `patterns`); the client appends one block after the JSON of `user_text`, headed `=== СПРАВОЧНО (не основание) ===`, and echoes its digest in the answer. Nothing is inserted before the task text.
    - A context failure never fails the task: on a refusal, a timeout or a 5xx the client calls the model without the block and says so in one line. The `Retry-After` rule of the runner API does not apply to context.
@@ -55,7 +58,7 @@ The owner took no measurements before building: «Замеры: никакие, 
    - Three switches, journalled in `precedent_setting_event`, all off: «один список», «контекст критику», marks per section. A run's publication mode is frozen by a marker at its start, so a switch acts on new runs only.
 7. **«Один список»: the extended-review candidates become findings in «Разбор» (`R-153al`).**
    - A new publisher turns a group of N observations into one finding; the canonical observation is the first member. Categories `drawing_discrepancy` and `cross_source` are added; a mixed group is `cross_source`. A group that is wholly `primary_text_*` is not published twice.
-   - **Gate v2.** A block as evidence is accepted when its `blk_` is in this run's geometry, the crop's sha matches `page_crops`, and a quote, if present, is verbatim in that block's recognised text. **Block grounding proves a place, not a content.** For block evidence the refusal `quote_in_recognised_text` of the text gate (`db/migrations/versions/20261016_0023_norm_citations.py:52`) is cancelled by this decision; for text evidence the rule is unchanged.
+   - **Gate v2.** A block as evidence is accepted when its `blk_` is in this run's geometry, the crop's sha matches `page_crops`, and a quote, if present, is verbatim in that block's recognised text. **Block grounding proves a place, not a content.** For block evidence the refusal `quote_in_recognised_text` of the text gate (migration `20261016_0023_norm_citations`) is cancelled by this decision; for text evidence the rule is unchanged.
    - Memory capture moves to `dm-capture/2` in the same release as the publisher, because capture skips empty evidence and a candidate case would be written without its block.
    - The legacy run is unchanged: it publishes text findings only (temporary decision 1).
    - The count of findings will grow; the owner took the volume without a measurement; the queue and the critic's advice are the help.
@@ -72,15 +75,13 @@ The owner took no measurements before building: «Замеры: никакие, 
     - **Failure patterns (`R-153ai`: «Предлагает алгоритм, утверждает эксперт»):** the algorithm proposes, an expert approves; an unapproved pattern never reaches P1; a pattern whose group dissolves is suspended.
     - **Cross-document parameters (`R-153aj`: «Расхождение как находка с ✓/✕»):** a discrepancy is a finding of the **newer** document's run, with the other document's evidence; there is no project-level finding (`finding_observation.run_id` and `finding.version_uid` are NOT NULL); different units are not compared.
     - **Quality of stages and models (`R-153ak`: «Таблица для администратора»):** the share of accepted findings by `stage_plan` cell and section; the model is read from the cell because `model_identity` is not copied into the memory.
-12. **Seals.** The first seal is one contract and one migration for everything above that needs them: **1.51.0 / `0064`**. The AR v3 removal wave takes 1.50.0 / `0063` first (`R-154h`). The second seal (patterns, cross-document evidence, parameter facts, `parameter_mismatch`) is **1.52.0 / `0065`**. The lane ids `CRIT-SEAL-50` and `CRIT-SEAL-51` are labels kept from the plan; they no longer name the versions. Every additive change is a minor version (`docs/program/VERSIONING_AND_FREEZE_POLICY.md:11-13`). Every new table, command type and event type is classified in the recovery tools in the lane that adds it. The new events use the prefixes `precedent.` and `vector.`.
+12. **Seals.** The first seal is one contract and one migration for everything above that needs them: **1.51.0 / `0064`**. The AR v3 removal wave takes 1.50.0 / `0063` first (`R-154h`). The second seal (patterns, cross-document evidence, parameter facts, `parameter_mismatch`) is **1.52.0 / `0065`**. The lane ids `CRIT-SEAL-50` and `CRIT-SEAL-51` are labels kept from the plan; they no longer name the versions. Every additive change is a minor version (`docs/program/VERSIONING_AND_FREEZE_POLICY.md`). Every new table, command type and event type is classified in the recovery tools in the lane that adds it. The new events use the prefixes `precedent.` and `vector.`.
 13. **Amendments to `ADR-0027` and `DECISION-MEMORY-01`.**
-    - `ADR-0027` decision 6 stays in force and is refined: the memory does not import the core; the core reads the memory through `decision_memory.public` (addendum there).
-    - Decision 2: tables of derived state (probes, the precedent run and advice) are `PRODUCT`; the content, comments, block evidence, embeddings and their intents stay `KEEP`.
-    - Decision 3: a mark reads the verdicts of **other** cases; the verdict of the finding itself is still decided by the ledger.
+    - `ADR-0027` decisions 2, 3 and 6 are refined as `ADR-0027` itself records: the memory does not import the core and the core reads it through `decision_memory.public`; derived-state tables are `PRODUCT` while content, comments, block evidence, embeddings and intents stay `KEEP`; a mark reads the verdicts of **other** cases and the finding's own verdict is still the ledger's.
     - `DECISION-MEMORY-01`: Q4 is closed by `R-153z`; Q8 is revised by decision 10; Q9(b) and Q10 are answered in part; section 5.3 and phase M4 are replaced by this ADR (short notes there).
 14. **Correction after the AR v3 removal and the plan v2 critic (`R-154a`…`R-154h`).**
     - AR v3 is removed (`R-154a`). The rules that applied only to it are not built: the hints P2 (importance) and P3 (norm), and the ban on «снять» for `critical` and normative AR v3 findings.
-    - The extended-review plan v3 is opt-in by `AUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v3`, **default v2** (`R-154b`). On the base of this ADR `src/auditmanager/runs/preflight.py:345` still defaults to v3; the removal wave changes it.
+    - The extended-review plan v3 is opt-in by `AUDITMANAGER_EXTENDED_ANALYSIS_PLAN=v3`, **default v2** (`R-154b`). On the base of this ADR `src/auditmanager/runs/preflight.py` still defaults to v3; the removal wave changes it.
     - Plan v2 is the original's legacy flow with the executors split per stage (`R-154e`). It gains the original's **deterministic critic and corrector**, without a model, after the norms, advice only (`R-154f`); its «Критик» and «Уточнение» rows and the critic counters show real results (`R-154g`). On the base of this ADR none of that exists yet; the AR v3 removal wave builds it as the lane `V2-ORIGINAL-REVIEW-01`.
     - **So «В3» applies to v2 and v3 in the same way:** a finding that a critic (deterministic in v2, AI in v3) reviewed and did not veto can get «снять»; a finding no critic reviewed cannot (`R-153ar`). Until the v2 critic's output is mapped, a v2 finding counts as not reviewed and gets no «снять».
     - Neutral marks, comments and «Возможные нормы» work under any plan. The critic's reference block (decision 3) works only under v3, because only the AI critic reads it.
@@ -116,11 +117,11 @@ Each has an end condition. Neither may be taken as the final shape without a new
 
 ## Consequences
 
-- A user-visible list grows. The release note must say that the number of findings will grow, that for runs with «один список» «проверено» and «ждут решения» count differently, and that the v3 queue is re-consented.
-- Rollback is a switch for new runs; a migration with rows in the new tables is not rolled back, as with `0059`…`0062`.
-- The compose file gains its first memory-limited service and the host gains its first timer; `deploy.sh` checks the disk before the image build (the image is 5,51 GB and a rebuild needed 9,5 GB, `docs/program/W54-EMBED-BUILD-01.md`).
-- «Разбор» gains a source chip and a mark in each row, a collapsed queue and, above the list, one line while vectors are missing. The concepts per screen are counted in each UI task (`R-153f`).
-- The lanes of `docs/program/tasks/` carry the owner of each hotspot; `runs/extended_review.py` has one owner at a time.
+- Cost: a user-visible list grows. The release note must say that the number of findings will grow, that for runs with «один список» «проверено» and «ждут решения» count differently, and that the v3 queue is re-consented.
+- Cost: rollback is a switch for new runs; a migration with rows in the new tables is not rolled back, as with `0059`…`0062`.
+- Cost: the compose file gains its first memory-limited service and the host gains its first timer; `deploy.sh` checks the disk before the image build (the image is 5,51 GB and a rebuild needed 9,5 GB, `docs/program/W54-EMBED-BUILD-01.md`).
+- Cost: «Разбор» gains a source chip and a mark in each row, a collapsed queue and, above the list, one line while vectors are missing. The concepts per screen are counted in each UI task (`R-153f`).
+- Cost: the lanes of `docs/program/tasks/` carry the owner of each hotspot; `runs/extended_review.py` has one owner at a time.
 
 ## Alternatives considered
 
@@ -153,3 +154,8 @@ Any of these reopens this ADR:
 - the encoder or the vectors move off the host;
 - a model is allowed to write a mark, a reason or a verdict;
 - the legacy route is removed.
+
+## History
+
+- 2026-11-10 — accepted on the owner's direct polls `R-153q`…`R-153ar`; decision 14 corrects it after the AR v3 removal and the plan v2 critic (`R-154a`…`R-154h`).
+- 2026-11-18 — compressed under ADR-OPTIMISE-01; line references removed; no decision added, renumbered or dropped; temporary decision 2 (night-only encoder) unchanged.

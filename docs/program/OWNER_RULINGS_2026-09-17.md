@@ -2066,3 +2066,18 @@ restart only, the confirm-only carryover of `W59-DECISION-CARRYOVER-01`.
 | R-155g | Second poll, when the source is deleted: «При публикации нового». | The tombstone is written when the new run publishes; a restart that fails leaves the source listed and itself visible with its reason. |
 | R-155h | Second poll, the window of one model call: «Как в оригинале». | A call's window is its stage row's window (`ROW_TIMEOUT_SECONDS`: text and blocks 1800 s, cross-check 3600 s, norms, critic and correction 600 s), not the ~540 s the stall window cuts it to today. |
 | R-155i | Second poll, the release order: «Всё вместе». | The time limits and the restart ship as one minor version. |
+
+## 3.57 — R-156a…R-156e, the ADR optimisation before the fork and the fork server (owner's statements and poll, 2026-11-18)
+
+The occasion: the owner is preparing a fork of this project for a new server. He asked to optimise the ADRs before the hand-over
+and stated the new server's premises. `R-156a` is a one-time exception to the rule that an ADR is amended, never rewritten; the rule
+stays for every later change. `R-156b`…`R-156e` apply to the fork's server; the current production VPS is unchanged until the owner
+decides otherwise. They are recorded in `ADR-0020` decision 7, `ADR-0021` section 11 and `ADR-0029` (decision 8, temporary decision 2).
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-156a | «Правила adr не переписывается, а дополняется — оставляем, данная задача исключение (оптимизация перед передачей на форк)»; poll: «Сжать и унифицировать», «3 линии Sonnet + сведение», «dev и сразу main (docs-only)», «Сразу в этой оптимизации». | `ADR-OPTIMISE-01` rewrites every ADR into one compact form (`docs/architecture/ADR_TEMPLATE.md`), folds the addenda in, keeps every ADR number, decision, section and `AD-` number, recomputes `ADR_INDEX.md` and adds the fork decisions below in the same change. |
+| R-156b | «На новом форк сервере будет доступно 32Гб ram, поэтому нужно переписать планы и изменить некоторые архитектурные решения». | The fork runs on its own server with 32 GB RAM; plans and decisions sized for the 4 GB VPS are revised for it. |
+| R-156c | «Векторизацию делать на лету и использовать модель с большим объемом параметров». | On the fork server texts are embedded when they arrive, not in a night window, by a model larger than today's BGE-M3 int8 profile. |
+| R-156d | «БД мы делаем локальную, так как яндекс клауд предоставляет нам в сравнении урезанные решения по векторизации с меньшим количеством параметров и не даст такой скорости векторизации новых данных „на лету“». | On the fork server the database stays local, in the stack; a managed cluster is not the target. |
+| R-156e | «Репозиторий разработки и папка развернутого приложения находятся на одном логическом диске, что снимает необходимость ssh миграции БД». | On the fork server the cross-host copy transport is not needed to move the database. |
