@@ -87,6 +87,37 @@
  * the rows this change writes are still valid rows for the code before it, which ignores the
  * extra field, so a rollback signs nobody out, where a version bump would sign everybody out
  * both ways.
+ *
+ * ## A sliding session (owner ruling of 2026-11-18)
+ *
+ * A session used to die exactly one credential lifetime after sign-in, because nothing renewed
+ * the credential: the cookie's `Max-Age` equalled the lifetime and the row's `expiresAt` was
+ * the credential's. It now **slides**. The forwarder renews the held credential
+ * (`renewToken`, `./renewal.ts`) on the first request that finds it more than
+ * {@link RENEW_AFTER_SECONDS} old, and {@link replaceCredential} swaps the new credential, its
+ * expiry and its issue time into the **same row under the same id**, so the cookie is
+ * unchanged and `openedAt` is kept. The two limits the owner ruled:
+ *
+ * - **idle, 8 hours.** A session with no request through the forwarder for 8 hours ends: the
+ *   credential the API mints lives 8 h 10 min (`TOKEN_LIFETIME_SECONDS`), the 8 hours plus the
+ *   renewal cadence, and nothing extends it but a request;
+ * - **absolute, {@link SESSION_ABSOLUTE_CAP_SECONDS} (30 days) from `openedAt`.** Past it there
+ *   is no renewal and the row is **dead even if its credential is not**: a row's end is the
+ *   earlier of the two ({@link sessionEndsAt}). The reviewer signs in again however active.
+ *
+ * The browser's cookie therefore lives as long as the cap and not as long as a credential
+ * ({@link remainingCapSeconds}); the register is what ends a session earlier, and the browser
+ * is never the one to say so. Which is why **a lapsed session is remembered** (`lapsed`): the
+ * cookie outlives the row, so a request that names a row this process has just dropped for
+ * its expiry would be indistinguishable from a forged identifier, and the sign-in screen
+ * would say «Сеанс недействителен» where the truth is «Сеанс истёк».
+ * {@link sessionLapsed} answers that, from ids the register itself dropped, and they are
+ * persisted beside the rows (an optional `lapsed` array of the same version-2 file, ignored
+ * by the code before this one) so a restart in between does not turn «истёк» into «недействителен».
+ *
+ * A row written before this change has no `credentialIssuedAt`. It is read as it is and is
+ * **due for renewal on its first use**: an unknown issue time means renew now, and no value is
+ * invented for it.
  */
 
 import {
@@ -125,17 +156,39 @@ export const MIN_LIFETIME_SECONDS = 30;
 export const MAX_LIFETIME_SECONDS = 12 * 60 * 60;
 
 /**
+ * How long ago a credential must have been issued before the forwarder renews it. The
+ * renewal cadence the API's lifetime is built on: `TOKEN_LIFETIME_SECONDS` is the 8 hour idle
+ * window plus these 10 minutes.
+ */
+export const RENEW_AFTER_SECONDS = 600;
+
+/**
+ * The absolute cap on a session, from `openedAt` (owner ruling of 2026-11-18). A session
+ * older than this is dead and is never renewed, however recently it was used.
+ */
+export const SESSION_ABSOLUTE_CAP_SECONDS = 30 * 24 * 60 * 60;
+
+/**
  * What a screen may learn about the open session: the account `getMe` described (see
  * {@link SessionAccount} for each field) and the two instants. Deliberately no credential.
+ * `expiresAt` is when the **held credential** runs out and moves forward at each renewal; the
+ * session's own end is the earlier of it and the absolute cap from `openedAt`.
  */
 export interface SessionSubject extends SessionAccount {
   readonly openedAt: number;
   readonly expiresAt: number;
 }
 
-/** The row. `credential` leaves this module only through `credentialOf`. */
+/**
+ * The row. `credential` leaves this module only through `credentialOf`.
+ *
+ * `credentialIssuedAt` is when the held credential was minted, in epoch milliseconds, and it
+ * is **optional on purpose**: a row written before the sliding session has none, and an
+ * unknown issue time is read as "due for renewal", never as a value this tier made up.
+ */
 interface HeldSession extends SessionSubject {
   readonly credential: string;
+  readonly credentialIssuedAt?: number;
 }
 
 /** The version this module writes, and the only one it reads rows from. */
@@ -156,6 +209,13 @@ const REGISTRY_KEY = Symbol.for('auditmanager.web.session-register');
  */
 interface Registry {
   readonly rows: Map<string, HeldSession>;
+  /**
+   * Ids of sessions this register dropped because they ended (idle expiry or the absolute cap),
+   * with the instant each ended. Kept so a request that still carries the cookie can be told
+   * «истёк» and not «недействителен» ({@link sessionLapsed}); pruned once the cookie cannot
+   * be alive any more. No credential is kept here, only the id the browser already holds.
+   */
+  readonly lapsed: Map<string, number>;
   hydrated: boolean;
   /**
    * `Y7`. Whether the last attempt to write the file failed, and with what.
@@ -174,19 +234,26 @@ interface Registry {
 interface PersistedRegister {
   readonly version: typeof REGISTER_FORMAT_VERSION;
   readonly sessions: readonly (HeldSession & { readonly id: string })[];
+  /** Optional, and ignored by the code before the sliding session: see {@link Registry.lapsed}. */
+  readonly lapsed: readonly { readonly id: string; readonly at: number }[];
 }
 
 /** One row as it comes off the disk: nothing is trusted until {@link heldSessionFrom} checks it. */
 type StoredRow = { readonly [field in keyof HeldSession | 'id']?: unknown };
 
 /**
- * A version-2 row the register will hold, or `null` when any field is not the type it must
- * be. A row that fails is skipped, exactly as an expired one is: one bad row costs one
- * reviewer a sign-in, never the whole register.
+ * A version-2 row with every field the type it must be, or `null` when any is not. Says
+ * nothing about whether the session is still alive: that is {@link sessionEndsAt}'s question,
+ * asked by {@link heldSessionFrom}.
+ *
+ * `credentialIssuedAt` is the one field a whole row may lack. A value that is present and not
+ * a finite number is treated as absent -- the row is then due for renewal at its first use,
+ * which is the safe reading of a value this tier cannot trust -- and nothing is written in its
+ * place.
  */
-function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
+function wholeRowFrom(row: StoredRow): HeldSession | null {
   if (typeof row.credential !== 'string' || row.credential.length === 0) return null;
-  if (typeof row.expiresAt !== 'number' || row.expiresAt <= now) return null;
+  if (typeof row.expiresAt !== 'number') return null;
   if (typeof row.openedAt !== 'number') return null;
   if (typeof row.userUid !== 'string' || row.userUid.length === 0) return null;
   if (typeof row.login !== 'string' || row.login.length === 0) return null;
@@ -195,10 +262,15 @@ function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
   if (!isRoleSet(row.roles)) return null;
   if (typeof row.isDefaultCredential !== 'boolean') return null;
   if (typeof row.profileComplete !== 'boolean') return null;
+  const issuedAt =
+    typeof row.credentialIssuedAt === 'number' && Number.isFinite(row.credentialIssuedAt)
+      ? { credentialIssuedAt: row.credentialIssuedAt }
+      : {};
   return {
     credential: row.credential,
     openedAt: row.openedAt,
     expiresAt: row.expiresAt,
+    ...issuedAt,
     userUid: row.userUid,
     login: row.login,
     displayLabel: row.displayLabel,
@@ -207,6 +279,26 @@ function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
     isDefaultCredential: row.isDefaultCredential,
     profileComplete: row.profileComplete,
   };
+}
+
+/**
+ * The instant a session ends, in epoch milliseconds: the earlier of its credential's expiry
+ * and the absolute cap. The cap wins over a credential that still has time, so a session at its
+ * cap is dead without waiting for its last credential to run out.
+ */
+function sessionEndsAt(row: { readonly expiresAt: number; readonly openedAt: number }): number {
+  return Math.min(row.expiresAt, row.openedAt + SESSION_ABSOLUTE_CAP_SECONDS * 1000);
+}
+
+/**
+ * A version-2 row the register will hold, or `null` when any field is not the type it must
+ * be or the session has ended. A row that fails is skipped, exactly as an expired one is: one
+ * bad row costs one reviewer a sign-in, never the whole register.
+ */
+function heldSessionFrom(row: StoredRow, now: number): HeldSession | null {
+  const whole = wholeRowFrom(row);
+  if (whole === null || sessionEndsAt(whole) <= now) return null;
+  return whole;
 }
 
 /**
@@ -225,6 +317,7 @@ function registry(): Registry {
   if (existing !== undefined) return existing;
   const created: Registry = {
     rows: new Map<string, HeldSession>(),
+    lapsed: new Map<string, number>(),
     hydrated: false,
     lastWriteError: null,
   };
@@ -318,6 +411,7 @@ function hydrate(now: number): void {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as {
       readonly version?: unknown;
       readonly sessions?: unknown;
+      readonly lapsed?: unknown;
     };
     if (parsed.version === REPLACED_REGISTER_FORMAT_VERSION) {
       console.warn(
@@ -338,7 +432,23 @@ function hydrate(now: number): void {
       const session = heldSessionFrom(row, now);
       if (session !== null) held.rows.set(row.id, session);
       else if (isRowFromBeforeUserUid(row, now)) withoutUserUid += 1;
+      else {
+        // A whole row that has ended while nothing was running: remembered as lapsed, so the
+        // reviewer who comes back to it is told it expired.
+        const ended = wholeRowFrom(row);
+        if (ended !== null) held.lapsed.set(row.id, sessionEndsAt(ended));
+      }
     }
+    // The ids a previous process had already dropped, kept in the optional `lapsed` array.
+    if (Array.isArray(parsed.lapsed)) {
+      for (const entry of parsed.lapsed as readonly { id?: unknown; at?: unknown }[]) {
+        if (entry === null || typeof entry !== 'object') continue;
+        if (typeof entry.id !== 'string' || !SESSION_ID_PATTERN.test(entry.id)) continue;
+        if (typeof entry.at !== 'number' || !Number.isFinite(entry.at)) continue;
+        held.lapsed.set(entry.id, entry.at);
+      }
+    }
+    pruneLapsed(now);
     if (withoutUserUid > 0) {
       console.warn(
         `[session-register] ${path} holds ${String(withoutUserUid)} open session(s) written ` +
@@ -376,6 +486,7 @@ function persist(): void {
   const snapshot: PersistedRegister = {
     version: REGISTER_FORMAT_VERSION,
     sessions: [...held.rows].map(([id, row]) => ({ id, ...row })),
+    lapsed: [...held.lapsed].map(([id, at]) => ({ id, at })),
   };
   const temporary = `${path}.writing-${String(process.pid)}`;
   try {
@@ -483,7 +594,8 @@ export function mintSessionId(): string {
 }
 
 /**
- * Drop every row that has expired. Called on each read, so nothing lingers.
+ * Drop every row that has ended -- its credential ran out, or it reached the absolute cap --
+ * and remember its id as lapsed. Called on each read, so nothing lingers.
  *
  * It is also where the file is read into a fresh process: every reader goes through here,
  * so a process that has just started finds the sessions the previous one left before it
@@ -492,15 +604,32 @@ export function mintSessionId(): string {
  */
 function sweep(now: number): void {
   hydrate(now);
-  const rows = register();
+  const held = registry();
   let removed = false;
-  for (const [id, row] of rows) {
-    if (row.expiresAt <= now) {
-      rows.delete(id);
+  for (const [id, row] of held.rows) {
+    const endsAt = sessionEndsAt(row);
+    if (endsAt <= now) {
+      held.rows.delete(id);
+      // Remembered as lapsed, with the instant it ended and not the instant it was noticed.
+      held.lapsed.set(id, endsAt);
       removed = true;
     }
   }
+  pruneLapsed(now);
   if (removed) persist();
+}
+
+/**
+ * Forget lapsed ids whose cookie cannot be alive any more: a session cookie lives at most the
+ * absolute cap from sign-in, and a session ended at most that long after it, so an id that
+ * ended a whole cap ago names a cookie the browser has already dropped. Bounds the memory by
+ * what the last 30 days of sign-ins produced.
+ */
+function pruneLapsed(now: number): void {
+  const lapsed = registry().lapsed;
+  for (const [id, at] of lapsed) {
+    if (at + SESSION_ABSOLUTE_CAP_SECONDS * 1000 <= now) lapsed.delete(id);
+  }
 }
 
 /**
@@ -588,6 +717,9 @@ export function openSession(
     credential,
     openedAt: now,
     expiresAt: now + Math.floor(lifetimeSeconds) * 1000,
+    // The credential was minted at the exchange this call records: a known instant, and the
+    // reference the forwarder's renewal clock starts from.
+    credentialIssuedAt: now,
   });
   persist();
   return id;
@@ -616,8 +748,8 @@ function accountFields(account: SessionAccount): SessionAccount {
  *
  * `W49-PLAN.md` §3.5's refresh: called after a successful profile change, so a completed
  * profile — its new login, its name, `profileComplete` — is current without a new sign-in.
- * The credential and both instants are kept: the API did not issue a new credential, so the
- * session is the same session, and its lifetime is the one the exchange granted.
+ * The credential and its instants are kept: the API did not issue a new credential, so the
+ * session is the same session.
  */
 export function refreshSubject(
   id: string | null,
@@ -634,6 +766,8 @@ export function refreshSubject(
     credential: row.credential,
     openedAt: row.openedAt,
     expiresAt: row.expiresAt,
+    // Kept as it is, absent or not: a refresh of the subject says nothing about the credential.
+    ...(row.credentialIssuedAt === undefined ? {} : { credentialIssuedAt: row.credentialIssuedAt }),
   });
   persist();
   return true;
@@ -668,6 +802,97 @@ export function credentialOf(id: string | null, now: number = Date.now()): strin
   return register().get(id)?.credential ?? null;
 }
 
+/**
+ * Is the credential this session holds due for renewal? True for a **live** session whose
+ * credential was issued more than {@link RENEW_AFTER_SECONDS} ago -- or whose issue time is
+ * unknown, a row written before the sliding session, which is renewed on first use rather
+ * than given an invented age. False for no session, an ended one, a session at its absolute
+ * cap (there is no renewal past it) and a credential that is young enough.
+ *
+ * Reads nothing out of the row but instants, so it is safe for the forwarder to ask before it
+ * asks for the credential.
+ */
+export function renewalDue(id: string | null, now: number = Date.now()): boolean {
+  if (id === null || !SESSION_ID_PATTERN.test(id)) return false;
+  sweep(now);
+  const row = register().get(id);
+  if (row === undefined) return false;
+  if (row.credentialIssuedAt === undefined) return true;
+  return now - row.credentialIssuedAt > RENEW_AFTER_SECONDS * 1000;
+}
+
+/**
+ * Put a renewed credential into the **same row**, under the same id, and keep everything else.
+ *
+ * The credential, its expiry and its issue time are replaced; `openedAt` (the cap's reference),
+ * the subject and the id the cookie carries are not, so the browser notices nothing. `now` is
+ * the instant the renewal was **asked for**, not answered: the API minted the credential
+ * somewhere between the two, and the earlier instant makes the row's `expiresAt` and issue
+ * time err toward ending a little early and renewing a little early, never toward claiming a
+ * longer life than the credential has.
+ *
+ * True when the row existed (and was live) and was replaced. False for an unknown or ended
+ * session -- closed while the renewal was in flight, for one -- and nothing is written then:
+ * a renewal never resurrects a session. Also false, with nothing written, for a lifetime or a
+ * credential this tier will not hold, for the reason `openSession` refuses them.
+ */
+export function replaceCredential(
+  id: string | null,
+  credential: string,
+  lifetimeSeconds: number,
+  now: number = Date.now(),
+): boolean {
+  if (id === null || !SESSION_ID_PATTERN.test(id)) return false;
+  if (
+    !Number.isFinite(lifetimeSeconds) ||
+    lifetimeSeconds < MIN_LIFETIME_SECONDS ||
+    lifetimeSeconds > MAX_LIFETIME_SECONDS
+  ) {
+    return false;
+  }
+  if (credential.trim().length === 0) return false;
+  sweep(now);
+  const rows = register();
+  const row = rows.get(id);
+  if (row === undefined) return false;
+  rows.set(id, {
+    ...row,
+    credential,
+    expiresAt: now + Math.floor(lifetimeSeconds) * 1000,
+    credentialIssuedAt: now,
+  });
+  persist();
+  return true;
+}
+
+/**
+ * Seconds left until this session's **absolute cap**, rounded down: what the session cookie's
+ * `Max-Age` is, and what the `open` note adds its grace to. Not the credential's lifetime -- a
+ * credential is renewed, the cap is not. `0` for an unknown or ended session, which a cookie
+ * reads as "delete me": the truthful rendering of there being no session to hold.
+ */
+export function remainingCapSeconds(id: string | null, now: number = Date.now()): number {
+  if (id === null || !SESSION_ID_PATTERN.test(id)) return 0;
+  sweep(now);
+  const row = register().get(id);
+  if (row === undefined) return 0;
+  return Math.max(0, Math.floor((row.openedAt + SESSION_ABSOLUTE_CAP_SECONDS * 1000 - now) / 1000));
+}
+
+/**
+ * True when this identifier names a session **this register ended** -- its credential ran out
+ * unrenewed, or it reached the absolute cap -- and not one it never held. The one thing that
+ * lets the sign-in screen say «Сеанс истёк» for a cookie that is still in the browser (see the
+ * header: the cookie now lives to the cap, so a lapse no longer takes the cookie with it).
+ * `false` for an id it has never held, closed on purpose or ended by the API: those are other
+ * answers, written by the code that knows them.
+ */
+export function sessionLapsed(id: string | null, now: number = Date.now()): boolean {
+  if (id === null || !SESSION_ID_PATTERN.test(id)) return false;
+  sweep(now);
+  return registry().lapsed.has(id);
+}
+
 /** Forget the session. True when there was one to forget. */
 export function closeSession(id: string | null): boolean {
   if (id === null || !SESSION_ID_PATTERN.test(id)) return false;
@@ -695,6 +920,7 @@ export function openSessionCount(now: number = Date.now()): number {
 export function forgetEverySession(): void {
   const held = registry();
   held.rows.clear();
+  held.lapsed.clear();
   held.hydrated = true;
   persist();
 }
@@ -737,7 +963,8 @@ export function readSessionId(cookieHeader: string | null): string | null {
  * `HttpOnly` so no script on the origin can read it; `SameSite=Strict` so no other site
  * can cause a credentialed request with it; `Path=/` because both the screens and the
  * forwarder are under the one origin; `Max-Age` so the browser forgets it no later than
- * the register does. `Secure` is decided by the caller from the proxy's own header rather
+ * the register's **absolute cap** does -- callers pass {@link remainingCapSeconds}, not the
+ * credential's lifetime, since the credential is renewed and the cookie is not re-sent. `Secure` is decided by the caller from the proxy's own header rather
  * than assumed: the alpha's nginx terminates TLS and speaks plain HTTP to this process, so
  * setting it unconditionally would make sign-in impossible on a plain-HTTP stand, and
  * setting it never would let the cookie travel in clear on a TLS one.
