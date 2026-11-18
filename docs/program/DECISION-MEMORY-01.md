@@ -58,22 +58,22 @@ drawn from it is labelled as a hint».
 | P2 | The event holds `decision_id`, `finding_uid`, `finding_observation_id`, `event_type` (`accept`, `reject`, `comment`; `revoke` is refused), `verdict`, `severity`, `comment` (≤ 4000), `author_label`, `author_user_uid`, `recorded_at`, `command_id`. The request must name the observation the expert reviewed. | `ledger.py:96-108`, `:193-218`; `contracts/api/v1/openapi.json` `AppendDecisionRequest`, `DecisionEvent` |
 | P3 | The carryover renders its provenance into the event's `comment`; the workbook import calls `record_decision` with **no `command_id`**, so neither "carried" nor "imported" is a column. | `carryover.py:1-30`, `:137-150`; `decision_import.py:183-186` |
 | P4 | Project, document and version names are **joined at read time and stored nowhere**; the version's section is `version_classification_current.section_code`. | `src/auditmanager/decisions/journal.py:54-67` |
-| P5 | `ADR-0012`: the similar-case index is a *rebuildable projection*; owner `R-16`: «never a source of truth». The one exception is the operator project erase (`R-146o`), which deletes a project's decision events with the project and keeps only the record of the erasure. | `docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md:7-23`; `docs/program/OWNER_RULINGS_2026-09-17.md:266-283`; `docs/architecture/adr/ADR-0022-production-data-governance.md:89-134` |
+| P5 | `ADR-0012`: the similar-case index is a *rebuildable projection*; owner `R-16`: «never a source of truth». The one exception is the operator project erase (`R-146o`), which deletes a project's decision events with the project and keeps only the record of the erasure. | `ADR-0012` (the `R-146o` erase exception in its Decision); `docs/program/OWNER_RULINGS_2026-09-17.md:266-283`; `ADR-0022` section 3 |
 | P6 | Evidence of an observation: `finding_text`, `recommendation_text` (≤ 4000 each); `finding_evidence` rows (`page_number`, `quote` ≤ 2000, `char_start`/`char_end` into the *prepared text layer*, optional `block_id` `b_NNNNNN`); up to five verified `finding_observation_norm_citation` rows (ids, `quote` 20–4000). **No evidence row names a crop or a portal block.** | `20260910_0002_pc01_schema.py:916-1009`; `20261016_0023_norm_citations.py:355-385`; `openapi.json` `Evidence`, `NormCitation`, `FindingObservation` |
 | P7 | Crops exist only for **portal IMAGE blocks** (`crop_policy: portal_image_blocks`), as PNG Blobs (long side ≥ 800 px, ≤ 4 000 000 px) named in `geometry.page_crops`; a version without a bundle has `crops: []`. They are served by `streamVersionPortalBlockCrop`. | `src/auditmanager/api/schemas/blocks.py:15-26`; `contracts/analysis/v1/crop-manifest.schema.json`; `src/auditmanager/ingest/crop_geometry.py:48-56`; `src/auditmanager/api/routers/blocks.py:127-160`; `adapters.py:2301-2326` |
 | P8 | Block geometry (`bbox`, `bbox_unit`, `bbox_origin`, `char_start`/`char_end`) is a property of the version, served by `getVersionBlocks`. | `schemas/blocks.py:50-62`; `blocks.py:56-75` |
 | P9 | `blob_id` is derived from `(sha256, size)`; equal bytes are one Blob; a role belongs to the *binding*, not the Blob; the storage port has **no delete**; object keys are private. | `src/auditmanager/storage/README.md:45-50`, `:120-150` |
 | P10 | The product purge classifies every table `PRODUCT`/`KEEP`/`MIXED` and stops on an unclassified one. A Blob referenced by **any `KEEP` table stays with its object**; the set is read from the live catalog. `expert_decision_event`, `finding*`, `project`, `document*` are `PRODUCT`. | `scripts/recovery/product_purge.py:1-46`, `:120-125`, `:134-166`, `:523-543` |
-| P11 | The project erase deletes every row reachable from `project` by a **foreign-key closure**, switches one append-only trigger off at a time, deletes Blobs no other project and no `KEEP` table references, in four resumable phases, and keeps `erasure.requested`/`erasure.completed`. It refuses without an owner-permission reference (`R-146aj`). | `scripts/recovery/project_erase.py:1-60`; `ADR-0022:89-175` |
+| P11 | The project erase deletes every row reachable from `project` by a **foreign-key closure**, switches one append-only trigger off at a time, deletes Blobs no other project and no `KEEP` table references, in four resumable phases, and keeps `erasure.requested`/`erasure.completed`. It refuses without an owner-permission reference (`R-146aj`). | `scripts/recovery/project_erase.py:1-60`; `ADR-0022` section 3 |
 | P12 | No API operation deletes a project or a document; the only user-facing «delete» is the reversible document archive (`R-151a`). Deletion is an operator act. | `openapi.json` (operations named `archive*`, `purge*`, `setDocumentArchived`); `OWNER_RULINGS_2026-09-17.md:1919` |
 | P13 | `expert_decision_event.author_user_uid` is a `RESTRICT` foreign key registered in `ACCOUNT_REFERENCES`, so an author's account cannot be purged (`R-61`). | `src/auditmanager/access/references.py:1-35`, `:70-75` |
 | P14 | Vectors: pgvector 0.8.6; profile `bge-m3-dense-v1` (BAAI/bge-m3), 1024 dimensions, unit norm (CHECK), inner product, windows ≤ 512 tokens; HNSW `vector_ip_ops`, `m = 16`, `ef_construction = 64`; filtered search sets `hnsw.iterative_scan = strict_order`. | `db/migrations/versions/20261001_0013_norm_embeddings.py:25-27`, `:157`, `:172-176`; `src/auditmanager/norms/embedding/profile.py:14-21`; `src/auditmanager/norms/embedding_repository.py:24-28` |
-| P15 | The encoder runs **only offline, inside the norms-worker image**; the corpus build runs there with `--network none` and no database; `embed-texts` refuses a text over 512 tokens instead of cutting it. `ADR-0020`: the embedding producer «may run as a separate execution process … publishes only through the existing transactional PostgreSQL boundary». | `src/auditmanager/norms/embedding/encoder.py:1-12`; `src/auditmanager/norms/README.md:92-126`; `ADR-0020-normative-corpus-alpha-runtime.md:48-50` |
+| P15 | The encoder runs **only offline, inside the norms-worker image**; the corpus build runs there with `--network none` and no database; `embed-texts` refuses a text over 512 tokens instead of cutting it. `ADR-0020`: the embedding producer «may run as a separate execution process … publishes only through the existing transactional PostgreSQL boundary». | `src/auditmanager/norms/embedding/encoder.py:1-12`; `src/auditmanager/norms/README.md:92-126`; `ADR-0020`, the embedding-producer paragraph of its Decision |
 | P16 | Pull-channel executors claim a task holding `system`, `user_text`, `output_schema` and **up to 8 PNG descriptors**; bytes are fetched one by one through the claim-bound `getExecutorTaskImage`; limits 8 images, 16 MiB each, 32 MiB in all; the payload is cleared 7 days after the task ends, only when a runner polls. | `openapi.json` `ClaimedExecutorTask`, `RunnerImage`; `src/auditmanager/executors/runner.py:155`, `:430-457`; `src/auditmanager/executors/image_input.py:1-25`, `:51-52` |
 | P17 | The pull adapter writes a task and **waits for the answer inside the Attempt**, with a deadline derived from the watchdog; a task never claimed is `not_sent`. | `src/auditmanager/executors/pull.py:1-30` |
 | P18 | Norm text reaches a model through the Run's pinned, verified **retrieval set** (a Blob) and prompt labels; a citation is verified against canonical paragraph text (`norm-quote-v1`) and stored with ids. | `src/auditmanager/findings/retrieval_set_input.py:1-15`; `src/auditmanager/runs/v3_citations.py:1-10`; `src/auditmanager/norms/citation_prep.py:1-10`, `:49`; `0023_norm_citations.py:355-385` |
 | P19 | Norm source **crops are single-page PDFs** bound to a `norm_document` with anchor kind `crop` (opaque `blk_…`); the corpus has one whole-page block per page. Local drop: 28 246 crop PDFs; a random sample of 200 (python3, seed 1, `.local/norms/corpus/*/crops/*.pdf`): median 145 016 B, p95 210 577 B, max 11 212 554 B. | `docs/program/NORM_CORPUS_CUSTODY.md:5-33`; `src/auditmanager/norms/custody/roles.py:25-60`; `src/auditmanager/norms/corpus_source.py:483-489`; `OWNER_RULINGS_2026-09-17.md:284-294` |
-| P20 | `allow_client_documents` is stored on every executor revision and **checked nowhere** (`D-291`, `ADR-0026` decision 19). The corpus is **internal use only** (`NORM-Q04`). Document text already reaches the provider (`A-2`); the runner channel hands the complete prompt to the operator's own session (`A-9`). | `docs/program/DEBT_REGISTER.md:188`; `docs/program/NORM_CORPUS_DECISION_BACKLOG.md:12`; `OWNER_RULINGS_2026-09-17.md:1810`; `ADR-0022:210` |
+| P20 | `allow_client_documents` is stored on every executor revision and **checked nowhere** (`D-291`, `ADR-0026` decision 19). The corpus is **internal use only** (`NORM-Q04`). Document text already reaches the provider (`A-2`); the runner channel hands the complete prompt to the operator's own session (`A-9`). | `docs/program/DEBT_REGISTER.md:188`; `docs/program/NORM_CORPUS_DECISION_BACKLOG.md:12`; `OWNER_RULINGS_2026-09-17.md:1810`; `ADR-0022` section 5, accepted risk A-2 |
 | P21 | Cross-context imports go through `<context>.public` only; `bootstrap` and `shared` are exempt. Identity prefixes are globally unique and frozen in the domain contract; the error catalogue has 27 codes and `EXEC-2` added none. | `tests/contract/architecture/test_alr05_boundaries.py:16-17`, `:116-122`; `src/auditmanager/shared/identity/ids.py:84-93`; `contracts/domain/v1/identifiers.json`, `error-codes.json`; `ADR-0026:` decision 18 |
 | P22 | Roles: `appendDecision` is expert-only, `listDecisions` is any product role including viewer. The product has **no owner role**; the owner's permission enters as an operator-supplied reference. | `src/auditmanager/api/security.py:353-365`, `:594`, `:667`; `project_erase.py:44-46` |
 
@@ -110,7 +110,7 @@ id, so capture is idempotent) and one **memory decision** per ledger event on it
 | `capture_version`, `content_sha256`, `captured_at` | the capture | fact |
 
 **Not copied:** `author_label`, logins, project name, document title, file names, prompts, model responses, anything
-from `model_call` (which stores checksums only, `ADR-0022:30-34`).
+from `model_call` (which stores checksums only, `ADR-0022` section 1).
 
 ### 3.3 Identities that survive deletion
 
@@ -197,7 +197,7 @@ tombstone (who, when, which `content_sha256` was forgotten) that proves what is 
   stay until the owner drops that profile; the current profile is a setting. A different dimension needs a new
   column or table because a pgvector index is fixed-dimension. Re-embedding reads `decision_memory_content` and the
   evidence rows only, never the source product tables, so it works after erase.
-- **Producer:** a separate embedder process in the norms-worker image (`ADR-0020:48-50`) claims
+- **Producer:** a separate embedder process in the norms-worker image (`ADR-0020`, the embedding-producer paragraph of its Decision) claims
   `decision_memory_embedding_intent` rows (`FOR UPDATE SKIP LOCKED`, five tries, then `poisoned`) and writes the vector
   and the `done` transition in one transaction. It needs database access, so the corpus build's `--network none`,
   no-database isolation does not carry over: it gets its own restricted role (`SELECT` on the content tables,
@@ -212,7 +212,7 @@ tombstone (who, when, which `content_sha256` was forgotten) that proves what is 
 - There is **no edit path** for a memory decision. A case whose source is gone accepts only status events.
 - **Withdraw** (reversible) excludes a case from hints, prompts and exports; **restore** reverses it; both are
   append-only status events with a closed `reason_code` (`capture_defect`, `wrong_decision`, `client_request`,
-  `test_data`, `other`; no free text, for the reason `ADR-0022:101-104` gives for the erase). The current status is the
+  `test_data`, `other`; no free text, for the reason `ADR-0022` section 3, its inputs gives for the erase). The current status is the
   latest event. History is never rewritten. **Forget** is terminal and is 4.5.
 - `origin_kind` `carried` and `imported` cases are kept but are **not independent judgements** of the expert for the
   new finding: training export excludes them by default (5.1); hints show them with their label.
@@ -282,7 +282,7 @@ A guard needs a test proving it can fail; both follow the `# >>> guard:` convent
   operation, screen or job deletes or rewrites an expert decision event» for every product path; the copy should not be
   easier to delete than the ledger. An API operation that merely *requests* a forget is possible later (Q5).
 - **What forget does not reach:** exports already produced, prompts already sent, dumps, and any model trained on an
-  export — the list of `ADR-0022:175-181`, extended by the last item.
+  export — the list of `ADR-0022` section 3, «What an erase does not reach», extended by the last item.
 
 ## 5. Uses
 
@@ -298,7 +298,7 @@ A guard needs a test proving it can fail; both follow the `# >>> guard:` convent
   never straddles train and validation). **No author, no names, no ids that resolve.**
 - **Filters:** section, category, verdict, date range, `data_class` (default `real` only), `origin_kind` (default
   `direct`), status (default active), with-crops, minimum comment length, dedup on `content_sha256`, per-project cap.
-- **Consent and audit:** an export of `real` data is a release of client-derived content off the host (`ADR-0022:175-181`,
+- **Consent and audit:** an export of `real` data is a release of client-derived content off the host (`ADR-0022` section 3, «What an erase does not reach»,
   `A-2`). It requires an installation switch `training_use = on` (off by default) and `--owner-permission-ref`; the
   tool writes `decision_memory_export` and `memory.exported` (filter digest, counts, manifest sha256, no content).
   `test` data needs no reference.

@@ -1,282 +1,218 @@
 # ADR-0022: Production data governance: what is kept, how a project is erased, what leaves the host
 
-- Status: accepted (nothing in this ADR is still proposed)
+- Status: accepted (the legal-hold authority is settled by `R-146aj`; the classification labels stay open by `R-146ak`)
 - Date: 2026-10-26; revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`; `AD-06` confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09`, `AD-16` by `R-146w` as written at commit `83600aed` (the poll showed a one-line summary of each; the mechanism is this document); principles P-01, P-03, P-06, P-07, P-13, P-15, P-18
-- Amends: `ADR-0012` (erase exception, `R-146o`; the addendum is in that ADR); supersedes nothing. Fills the retention and erasure half that `ADR-0014` left open and that `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) reserves
+- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`, `R-146aj`, `R-146ak`; `AD-06` confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09`, `AD-16` by `R-146w` as written at commit `83600aed`; fork note: `R-156f`, `R-156i`
+- Amends: `ADR-0012` (erase exception, `R-146o`); supersedes nothing. Fills the retention and erasure half that `ADR-0014` and `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) left open
 
 ## Context
 
 The production release may receive real client documents from the day it is released, with no
 precondition of provider terms or expert acceptance (`R-146f`). The owner chose no automatic retention
 limit and a journalled operator operation that erases one project (`R-146c`), manual copies (`R-146b`),
-a purge of the closed beta's test data at the release (`R-146m`), and a package that includes an
-offline copy of the secret key ring but **not** any restriction of what the model provider may do with
-the text it receives (`R-146n`). The legal-hold authority and data classification labels were not asked
-and stay open (`ADR-0014`). Facts read from the tree at `4d7b7c38` on 2026-10-26:
-
-- Blobs are content-addressed and shared (`uq_blob_available_content`; `R-76` lets a corpus admission
-  and a project reuse one), and the references to a Blob are a closed set
-  (`blob_reference_audit._SOURCES`).
-- The only automatic retention in the code: `executor_task.payload` and `answer_text` are set to `NULL`
-  seven days after the task is terminal (`PAYLOAD_RETENTION_DAYS`,
-  `src/auditmanager/executors/runner.py`), by housekeeping that runs inside a runner's claim call, so a
-  stand where no runner polls never runs it. It is not a retention policy and is not extended.
-- `audit_event` and `expert_decision_event` are append-only by trigger (`am_append_only`); published
-  rows such as `document_version` and `finding_observation` are immutable by trigger
-  (`am_immutable_row`). The frozen domain contract has an `ErasureRequest` identity (`era_`, "not
-  allocated in PC-01"), a Blob state machine `available` to `erasure_pending` to `erased`, and the
-  sentence "Erasing bytes never deletes decision, finding or audit history"
-  (`contracts/domain/v1/state-machines.json`). No code implements erasure;
-  `src/auditmanager/storage/README.md` says P01 "must not approximate" it.
-- `scripts/recovery/product_purge.py` (wrapped by `infra/deploy/purge-product-data.sh`) removes **all**
-  product data and keeps accounts, the norm corpus, executor configuration and release notes. It
-  classifies every table as PRODUCT, KEEP or MIXED and refuses an unclassified one, takes a verified
-  dump first, deletes the mixed tables' product rows with `audit_event`'s one append-only trigger
-  switched off inside the transaction, and deletes objects by exact key after the commit; it needs the
-  table owner. There is no project-scoped deletion; `purgeUser` removes an account.
-- The private key ring `AUDITMANAGER_SECRETS_KEYS` is in `provider.env`, read by the worker only, and
-  "is not in PostgreSQL, S3 or any backup" (`DEPLOYMENT_RUNBOOK.md` section 14).
+a purge of the closed beta's test data (`R-146m`), and an offline copy of the secret key ring but
+**not** any restriction of what the model provider may do with the text it receives (`R-146n`). Forces:
+Blobs are content-addressed and shared (`R-76`); `audit_event` and `expert_decision_event` are
+append-only by trigger; the frozen domain contract says "Erasing bytes never deletes decision, finding
+or audit history" (`contracts/domain/v1/state-machines.json`).
 
 ## Decision
 
 ### 1. The data inventory
 
-| Data | Where | Client content | Removed by |
-| --- | --- | --- | --- |
-| Source PDF, portal bundle, crops, extracted-text artifacts, price-list files | S3 objects; `blob` rows; bound by `input_manifest_entry`, `analysis_artifact_publication`, `price_list_revision` | yes | project erase (section 3) |
-| Project, document and file names | `project`, `document`, `document_version` | may identify the client | project erase |
-| Findings, evidence quotes, expert comments and verdicts | `finding`, `finding_observation`, `finding_evidence`, `expert_decision_event` | yes | project erase (`AD-06`) |
-| Model-call records | `model_call` | no text (checksums, tokens, latency, cost) | project erase |
-| Executor task payloads and answers | `executor_task` | yes | 7 days after terminal, only when a runner polls; project erase |
-| Run and execution journal | `audit_event` | identities only | not removed by erase; removed by the 1.0 purge |
-| Accounts and roles | `app_user`, `app_user_role`, `registration_request` | personal data of staff | `purgeUser`; kept by every purge |
-| Norm corpus | `norm*` tables, S3 objects | no (licensing `NORM-Q04`) | untouched |
-| Sealed connection secrets | `executor_secret` | secrets, sealed | administrator |
-| Session register | the `web-sessions` volume | credentials, not documents | expiry |
-| Manual copies | `infra/deploy/dumps/`, the copy directory | everything | the operator, by hand |
-| Provider side | OpenRouter and whatever it routes to | the document text of every call | not reachable (`A-2`) |
+| Data | Client content | Removed by |
+| --- | --- | --- |
+| Source PDF, portal bundle, crops, extracted-text artifacts, price-list files (S3 objects, `blob` rows) | yes | project erase (section 3) |
+| Project, document and file names | may identify the client | project erase |
+| Findings, evidence quotes, expert comments and verdicts (`expert_decision_event`) | yes | project erase (`AD-06`) |
+| Model-call records (`model_call`) | no text | project erase |
+| Executor task payloads and answers (`executor_task`) | yes | 7 days after terminal, only when a runner polls; project erase |
+| Run and execution journal (`audit_event`) | identities only | not by erase; by the 1.0 purge |
+| Accounts and roles | personal data of staff | `purgeUser`; kept by every purge |
+| Norm corpus | no (`NORM-Q04`) | untouched |
+| Sealed connection secrets (`executor_secret`) | secrets, sealed | administrator |
+| Session register (`web-sessions` volume) | credentials | expiry |
+| Manual copies (`infra/deploy/dumps/`, the copy directory) | everything | the operator, by hand |
+| Provider side (OpenRouter and its routes) | the document text of every call | not reachable (`A-2`) |
 
 ### 2. Retention (`R-146c`)
 
-There is **no automatic retention limit** for client data. A project's data lives until an operator
+There is **no automatic retention limit** for client data: a project's data lives until an operator
 erases the project. The seven-day clearing of executor payloads continues and is not a commitment. No
-TTL value is declared anywhere, which satisfies the rule of `OPEN-RETENTION` that no lane declares one
-before the owner's input, now given by `R-146c`. The legal-hold authority is **open**: the product has
-no hold concept, an erase does not check one, and the operator is responsible for not erasing a project
-that is subject to a hold. Data classification labels are open.
+TTL value is declared anywhere, as `OPEN-RETENTION` requires before the owner's input (`R-146c`).
+**Legal hold (`R-146aj`):** the product has no hold mechanism in 1.0; a hold is a rule of procedure, the
+owner's word is the only ground on which the operator erases a project on which a hold is claimed, and
+an erase never runs without the owner's permission (decision 3); the erase checks no hold.
+Classification labels: none introduced or fixed (`R-146ak`); the question stays open.
 
 ### 3. The operator project erase (`R-146c`, `R-146o`)
 
 `AD-06`, confirmed by `R-146o` in full: the erase of one project removes its documents, pages, files,
 extracted text, crops, findings, evidence quotes, comments and expert decisions; what stays is the
-record of the erasure itself (who, when, what, hashes). `AD-07` (the tool's design below, including
-that the identity-only run journal stays) is confirmed by `R-146w` as written at commit `83600aed`.
+record of the erasure itself (who, when, what, hashes). `AD-07` (the design below, including that the
+identity-only run journal stays) is confirmed by `R-146w`.
 
-**Entry points and inputs.** `infra/deploy/erase-project.sh` (guards, dry run by default, runs inside
-the `api` image) and `scripts/recovery/project_erase.py`, modelled on `product_purge.py`; operator
-procedure: `docs/program/DEPLOYMENT_RUNBOOK.md` section 17. The wrapper passes the migrator's
-connection URL explicitly (`ADR-0021` `AD-02`: the api's own `DATABASE_URL` is the restricted role, which the
-`owner-may-write` guard would refuse) and the tool refuses any other role. Inputs:
-`--project prj_<ULID>` (an identity, never a name); `--actor <login>`, an active account holding
-`admin`, resolved to its `usr_` identity; `--reason`, one of a closed list (`client_request`,
-`end_of_engagement`, `test_data`, `other`; free text is refused because it would put personal data into
-an append-only table); `--dry-run` (the default) or `--apply --plan-sha256 <hex>`; `--resume
-era_<ULID>`.
+**Tool and inputs.** `infra/deploy/erase-project.sh` (dry run by default) over
+`scripts/recovery/project_erase.py`; procedure: `docs/program/DEPLOYMENT_RUNBOOK.md` section 17. The
+tool refuses any role but the migrator's (`ADR-0021` `AD-02`). The project is named by identity
+(`prj_<ULID>`), never by name; the actor is an active `admin`; the reason is one of `client_request`,
+`end_of_engagement`, `test_data`, `other` (free text would put personal data into an append-only table);
+`--owner-permission-ref` is **required to apply or resume** (`R-146aj`): one line saying where the
+owner's permission is recorded, written into both journal events, never verified; an apply needs the
+plan digest of a dry run.
 
-**Scope: what it removes.** Every row reachable from `project` by foreign key, found by a foreign-key
-closure and not by a hand list (the project-scoped subset of `product_purge.py`'s `PRODUCT_TABLES`),
-plus the `project_uid IS NOT NULL` rows of `vendor_list_revision` and their entries; the idempotency
-receipts (`command_record`) of the erased rows; and every Blob that no other project and no KEEP table
-references, with its object. `worker`, the global vendor list (`project_uid IS NULL`) and everything
-account-side stay. A table in neither the closure nor an explicit keep list stops the tool before it
-touches anything, as in `product_purge.py`; a migration that adds a table is therefore a decision about
-that table (`D-213`).
+**Scope.** Every row reachable from `project` by foreign key (a closure, not a hand list), the project's
+rows of `vendor_list_revision` and their entries, the idempotency receipts of the erased rows, and every
+Blob that no other project and no KEEP table references, with its object. `worker`, the global vendor
+list and everything account-side stay. A table in neither the closure nor an explicit keep list stops
+the tool before it touches anything, so a migration that adds a table is a decision about that table
+(`D-213`). **Kept:** accounts, roles, registrations, release notes, executor configuration, the norm
+corpus; **the record of the erasure** (the `erasure.requested` and `erasure.completed` events and the
+manifest file); **the project's run journal**, whose `audit_event` payloads are identities and
+classifiers only (`R-146o` says only the record of the erasure stays; that this includes the journal is
+part of `AD-07`); a Blob still referenced elsewhere, with its object.
 
-**What it keeps.**
+**The exception (`R-146o`).** `ADR-0012` makes expert decisions append-only, and the frozen domain
+contract says erasing bytes never deletes decision, finding or audit history. `R-146o` grants a
+**deliberate exception** to both for this one operation (`ADR-0012` carries the addendum). The frozen
+file is **not edited**: the sentence stays true of the Blob `erased` transition, which this operation
+does not use; a clarifying edit is a contract-owner item (`PROD-22`, still open). It is the one place
+where the append-only and immutable triggers are switched off: one named trigger at a time inside the
+transaction, switched on again before commit, the state compared before and after; only the table owner
+can do it, not the application role.
 
-- Accounts, roles, registrations, release notes, executor configuration, the norm corpus.
-- **The record of the erasure**: the `erasure.requested` and `erasure.completed` events and the
-  manifest file.
-- **The project's run journal**, the `audit_event` rows whose payloads are identities and classifiers
-  only: "an audit entry that a cascade could delete is not an audit trail" (the comment on
-  `audit_event.aggregate_id`), and they hold no client content. `R-146o` says only the record of the
-  erasure stays; that this includes the identity-only journal is part of `AD-07`, which `R-146w`
-  confirms.
-- A Blob still referenced elsewhere, with its object. A shared Blob loses only this project's bindings.
+**Erased Blobs leave no row (`AD-07`).** The tool deletes the `blob` row with its object (a row left in
+the terminal `erased` state would meet a byte-identical re-upload), so a later upload of the same bytes
+declares a fresh row. What the owner's "hashes" need is kept in a manifest of the erased Blobs
+(`blob_id`, SHA-256, size, media type) written next to the plan, whose SHA-256 is a field of the erasure
+event; the operator keeps the manifest file with the release record, and the database keeps no
+fingerprint of client content.
 
-**The exception to the ledger and to the frozen sentence (`R-146o`).** `ADR-0012` makes expert
-decisions append-only, and the frozen domain contract says of an erased Blob that erasing bytes never
-deletes decision, finding or audit history. `R-146o` grants a **deliberate exception** to both for this
-one operation, and `ADR-0012` carries the addendum. The frozen file is **not edited** by this pack; the
-sentence stays true of the Blob `erased` transition, which this operation does not use (it deletes the
-row, below); a clarifying edit is a contract-owner item, `PROD-22`. Mechanically the exception is the
-one place where the append-only and immutable triggers are switched off: one named trigger at a time
-inside the transaction, switched on again before it commits, with the trigger state compared before and
-after, as `product_purge.py` does for `audit_event`; only the table owner can do it and the application
-role cannot (`ADR-0021` `AD-02`).
+**Phases (`AD-07`).** Object deletion must not be a dual write (`AGENTS.md` section 4):
 
-**Erased Blobs leave no row, and a re-upload meets nothing (`AD-07`).** A `blob_id` is derived from
-`(sha256, size)`, `record_declared` returns an existing row of that identity, and `erased` is terminal;
-a row left in `erased` would meet a byte-identical upload after the erase and leave it nowhere to go.
-The tool therefore deletes the `blob` row together with its object, so a later upload of the same bytes
-declares a fresh row. What the owner's "hashes" need is kept in the record: the tool writes a manifest
-of the erased Blobs (`blob_id`, SHA-256, size, media type) next to its plan under the dump root, and the
-SHA-256 of that manifest is a field of the erasure event. The operator keeps the manifest file with the
-release record; it is not in the database. Someone holding it can prove that a known document was
-erased, without the database keeping a fingerprint of client content.
-
-**Phases (`AD-07`).** The external side effect (object deletion) must not be a dual write
-(`AGENTS.md` section 4):
-
-1. *Plan* (read-only, always first): guards, per-table row counts, the Blob list classified exclusive
-   or shared, the object keys, and a plan SHA-256. Nothing is journalled.
-2. *Commit* (one transaction): re-derive and compare the plan, take an advisory lock, append
+1. *Plan* (read-only, always first): guards, row counts, exclusive and shared Blobs, object keys and a
+   plan SHA-256; nothing is journalled.
+2. *Commit* (one transaction): re-derive and compare the plan, advisory lock, append
    `erasure.requested`, move every exclusive Blob to `erasure_pending`, delete the project's rows with
    the trigger switch, verify that every keep row is unchanged by count and digest and every trigger is
-   restored, commit.
+   restored.
 3. *Objects*: delete each exclusive Blob's object by exact key (a 404 counts as done).
 4. *Finish* (one transaction): delete those Blob rows, append `erasure.completed` with the manifest
    digest.
 
-A crash after phase 2 leaves Blobs in `erasure_pending` and nothing referencing them; the same command
-with `--resume era_<ULID>` completes phases 3 and 4. Re-running a finished erase finds
-`erasure.completed` for the project and exits 0 with "nothing to do". A project that never existed is a
-refusal.
+A crash after phase 2 leaves Blobs in `erasure_pending` and nothing referencing them; `--resume
+era_<ULID>` completes phases 3 and 4. Re-running a finished erase exits 0 with "nothing to do"; a
+project that never existed is a refusal.
 
-**Guards.** The project exists and no run, job, attempt or executor task of it is non-terminal (a
-claimed remote task counts: `D-215` is the cautionary case); the connected role owns the tables; the
-schema head equals the declared head and the classification is closed; another erase or purge holds no
-lock; the actor is an active `admin`.
+**Guards and journal.** The tool refuses unless the project exists and is idle (a non-terminal run, job,
+attempt or executor task refuses, a claimed remote task included: `D-215`), the role owns the tables,
+the schema head equals the declared head, the classification is closed, no other erase or purge runs,
+the actor is an active `admin` and the permission reference is present. Events `erasure.requested` and
+`erasure.completed` (aggregate `ErasureRequest`, id `era_<ULID>`; no table is added) carry identities,
+counts, digests and the permission reference only; `product_purge.py` keeps the `erasure.` prefix.
 
-**Journal.** Event types `erasure.requested` and `erasure.completed`; aggregate type `ErasureRequest`;
-aggregate id `era_<ULID>` (the identity the frozen domain contract reserves; no table is added).
-Payload: identities, counts and digests only (keys in `scripts/recovery/project_erase.py`; they include
-`project_uid`, `actor_uid`, `reason_code`, `plan_sha256` and `manifest_sha256`). `product_purge.py` must
-keep the `erasure.` prefix (it stops on an event type nobody classified).
-
-**What an erase does not reach**, and the operator is told so by the tool's closing message:
-
-- manual dumps, mirrors and copies on the host (`infra/deploy/dumps/`, the copy directory), the copy
-  fetched to the development host for an `R-93` restore test, the VPS provider's snapshots and any copy
-  outside the host: the operator removes or ages them by hand and records that in the release record;
-- the model provider and anything OpenRouter routed the text to (`A-2`), and the local copies of a
-  remote executor;
-- the disk blocks of a deleted object (no secure wipe), container logs, and exports a user already
-  downloaded;
-- the legal-hold question.
+**What an erase does not reach** (the tool says so at the end; runbook section 17): every copy outside
+the live service (dumps, mirrors, the `R-93` restore-test copy, provider snapshots), which the operator
+ages out by hand and records; the model provider and its routes (`A-2`); a remote executor's local
+copies; disk blocks, container logs and exports already downloaded; the legal-hold question (`R-146aj`).
 
 ### 4. The purge of the closed beta's data at the release (`R-146m`)
 
-`AD-09`, confirmed by `R-146w` as written at commit `83600aed`. At the 1.0 release the operator runs
-`infra/deploy/purge-product-data.sh`. The tool has no selector for the removed AR v1 and v2 paths: it
-removes **all** product data (the stated intent: "the production stand starts clean"), including the
-test runs of every section. It keeps accounts, the norm corpus, executor configuration and release
-notes, so the operator reviews the account list afterwards and archives or purges the test accounts
-(`archiveUser`, `purgeUser`). Preconditions: the owner confirms that the stand holds only test data
-(`R-141c`: no real client document is uploaded to the closed beta); the tool's own verified dump is taken
-first and deleted by hand after the release is accepted; the rehearsal runs it on a restored copy first.
-`KEEP_EVENT_PREFIXES` gains `access.` and `erasure.` in the same lane that introduces those events
-(`ADR-0023`).
+`AD-09`, confirmed by `R-146w`. At the 1.0 release the operator runs
+`infra/deploy/purge-product-data.sh`. It has no selector for the removed AR v1 and v2 paths: it removes
+**all** product data, test runs of every section included, and keeps accounts, the norm corpus, executor
+configuration and release notes; the operator then reviews the account list and archives or purges the
+test accounts. Preconditions: the owner confirms that the stand holds only test data (`R-141c`); the
+tool's own verified dump is taken first and deleted by hand after the release is accepted; the rehearsal
+runs it on a restored copy first. `KEEP_EVENT_PREFIXES` includes `access.` and `erasure.` (`ADR-0023`).
 
 ### 5. Egress to the model provider (`R-146e`, `R-146f`, `R-146n`)
 
-OpenRouter is the base connection; `R-133` is unchanged. What leaves the host on a call: the system
-prompt of the profile and the recorded text layer of the document being analysed (all pages in one
-request for the text profiles; `build_request`, `src/auditmanager/analysis/text/adapter.py`) and, once
-a stage is activated that sends them, selected PNG crops of pages (no run stage sends one until the
-vision policy is activated, `CURRENT_STATE.md`). The source PDF is not sent. No project name, file
-name, account name or run identity is in the body. The destination is the administrator-configured
-connection; `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows it and stays optional. Any other executor
-connection an administrator configures (a pull-channel runner, an SSH host) receives the same payload;
-this statement covers the OpenRouter base only.
+OpenRouter is the base connection; `R-133` is unchanged. A call sends the system prompt of the profile
+and the recorded text layer of the document analysed (all pages in one request for the text profiles)
+and, once a stage that sends them is activated, selected PNG crops of pages. The source PDF is not sent;
+no project, file or account name and no run identity is in the body. The destination is the
+administrator-configured connection (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` optionally narrows it); any
+other executor connection receives the same payload, so this statement covers the OpenRouter base only.
 
 **Accepted risk A-2 (`R-146f`, `R-146n` item 4 not accepted).** The tree holds no provider terms, data
-processing agreement, consent or data-handling policy. The product asks OpenRouter for no routing
-restriction, no ban on retention or training, and no ban on model substitution (the last is caught after
-the fact by `R-133`, which turns a different reported model into a typed failure, but the text has
-already been sent). Document text therefore reaches OpenRouter and whichever provider it routes to,
-which may retain or train on it. The owner bears this risk; nothing in the product mitigates it. Reopen
-trigger (`AD-16`, confirmed by `R-146w`): the first client who asks for data-handling terms, any
-contract that promises confidentiality, or the owner's decision to accept `R-146n` item 4.
+processing agreement, consent or data-handling policy, and the product asks OpenRouter for no routing
+restriction, no ban on retention or training and no ban on model substitution (`R-133` turns a different
+reported model into a typed failure, but after the text has been sent). Document text therefore reaches
+OpenRouter and whichever provider it routes to, which may retain or train on it; the owner bears this
+risk and nothing in the product mitigates it. Reopen trigger (`AD-16`, confirmed by `R-146w`): the first
+client who asks for data-handling terms, any contract that promises confidentiality, or the owner's
+decision to accept `R-146n` item 4.
 
 ### 6. Key-ring custody (`R-146n` item 7)
 
-The ring is the only thing that lets the worker open a sealed connection secret (the OpenRouter key
-under the `database` source). A restore of the database onto another host brings the connections back as
-`secret_unreadable` until the ring is installed.
-
-`AD-08`, confirmed by `R-146w` as written at commit `83600aed`: after the ring is generated, the
-operator makes one encrypted copy of `provider.env` on a medium that is neither the VPS, nor the
-repository, nor the dump directory; the encryption tool is the operator's, and the passphrase or
-recipient key is held by a different means than the copy. The release record carries the date, the key
-ids and the SHA-256 of the ring line. The copy is verified on a second machine by decrypting it and
-comparing `sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' provider.env | sha256sum` there and on the VPS, and
-is redone after every rotation (procedure: `DEPLOYMENT_RUNBOOK.md` sections 14 and 18). The ring is
-never put in a dump, in the repository, in a message or in the output of `docker compose config`.
+The ring (`AUDITMANAGER_SECRETS_KEYS` in `provider.env`, read by the worker only, in no database, bucket
+or backup) alone opens a sealed connection secret; a restore onto another host leaves the connections
+`secret_unreadable` until it is installed. `AD-08`, confirmed by `R-146w`: after the ring is generated,
+the operator makes one encrypted copy of `provider.env` on a medium that is neither the VPS, nor the
+repository, nor the dump directory, with the passphrase or recipient key held by different means than
+the copy; the copy is verified on a second machine by decrypting it and comparing the SHA-256 of the
+ring line there and on the VPS, and redone after every rotation; the release record carries the date,
+the key ids and that SHA-256. The ring is never put in a dump, in the repository, in a message or in the
+output of `docker compose config` (`DEPLOYMENT_RUNBOOK.md` section 18).
 
 ### 7. Manual copies and their limits (`R-146b`)
 
-A manual copy is a `pg_dump` (everything in PostgreSQL: all client text, the password hashes, the
-sealed secrets) and optionally a bucket mirror (every document). It is not encrypted, it sits on the
-host's disk, and it does not contain the key ring. A copy contains erased data until it is deleted
-(section 3); a restore brings back accounts and credentials as they were, so every credential is
-revoked and default passwords are reported (`R-52`, `ADR-0023`); there is no schedule and no recovery
-point (`A-1`, `ADR-0021`).
+A manual copy is a `pg_dump` (all client text, the password hashes, the sealed secrets) and optionally a
+bucket mirror (every document). It is not encrypted, sits on the host's disk and lacks the key ring. It
+contains erased data until deleted (section 3); a restore brings back accounts and credentials as they
+were, so every credential is revoked and default passwords are reported (`R-52`, `ADR-0023`); schedule
+and recovery point: `A-1`, `ADR-0021`.
+
+**Fork (`R-156f`, `R-156i`).** After the fork's bucket lane the documents' bytes are held by the
+object-storage provider in the region the owner chooses: one more place where data leaves the host. Copies
+stay as above until the off-disk backup decision (`R-156i`); that decision states the copies' retention
+period, until which erased data lives in them.
 
 ## Consequences
 
-- Positive: a client's data, findings and expert decisions included, can be removed on request by a
-  tested, dry-runnable, journalled script that is safe to repeat.
-- Positive: the erase reuses the purge's classification and refusal discipline, so a new table cannot be
-  forgotten silently; no audit event is rewritten or deleted, the erase adds its own record.
-- Cost: the erase is a destructive operator path that switches database guards off; a defect in it is a
-  defect in the one place the append-only contract is overridden, so it needs the mutation proofs the
-  purge has. The exception (`R-146o`) is not reversible except from a copy.
-- Cost: erased data survives in every copy, in the provider's systems and on the disk blocks; "erased"
-  in a client conversation means "removed from the live service", and the operator must say so.
-- Cost: the record of an erasure is a digest in an event and a manifest file the operator must keep; if
-  the file is lost the digest proves nothing about what was erased.
-- Cost: the product asks the provider for nothing; what the provider does with the text is outside the
-  product's reach (`A-2`).
+- Positive: a client's data, expert decisions included, can be removed on request by a tested,
+  dry-runnable, journalled, repeatable script.
+- Cost: the erase is the one place the append-only contract is overridden (`R-146o`) and is reversible
+  only from a copy; erased data survives in every copy, at the provider (`A-2`) and on disk blocks
+  ("erased" means "removed from the live service"); a lost manifest file proves nothing about what was
+  erased.
 
 ## Alternatives considered
 
-1. **Delete bytes only and keep findings and decisions** (the literal reading of the domain contract):
-   leaves quoted client text in the database; rejected by `R-146o`.
-2. **Keep the `blob` row of an erased document as the frozen `erased` state** with its SHA-256 and
-   size: rejected, the derived identity would make a byte-identical re-upload meet a terminal row, and
-   the owner's record is the event and the manifest.
-3. **An automatic TTL.** Declined by `R-146c`.
-4. **An erase through the API (an administrator operation).** Needs a contract reseal and puts a
-   trigger-disabling path behind the application role; rejected for 1.0, an operator script keeps the
-   power on the host.
-5. **Restrict routing to providers that do not retain or train, and ban substitution.** The package
-   item the owner did not accept (`R-146n` item 4); recorded as `A-2`.
+1. **Delete bytes only and keep findings and decisions** — rejected by `R-146o`: quoted client text
+   stays in the database.
+2. **Keep the `blob` row of an erased document in the frozen `erased` state** — rejected: a
+   byte-identical re-upload would meet a terminal row.
+3. **An automatic TTL** — declined by `R-146c`.
+4. **An erase through the API** — rejected for 1.0: it needs a contract reseal and a trigger-disabling
+   path behind the application role.
+5. **Restrict routing to providers that do not retain or train, and ban substitution** — not accepted by
+   the owner (`R-146n` item 4); `A-2`.
 
 ## Verification
 
-- Automated (delivered by `PROD-07`, none exists today): `tests/integration/recovery/` tests that drive the tool on a
-  populated lane database and prove, for each guard, that deleting its marked block makes the refusal
-  disappear (the discipline of `tests/integration/recovery/test_product_purge.py`); that the keep rows
-  are byte-identical by count and digest; that the trigger state is identical after a failed run; that a
-  second `--apply` exits 0 and a `--resume` after a forced crash between the phases completes; that a
-  shared Blob keeps its object; and **that a byte-identical upload after an erase succeeds and creates a
-  fresh `blob` row** (the re-upload case of `AD-07`).
-- At rest: `select count(*) from blob where state = 'erasure_pending'` is `0`; `select count(*) from
-  project where project_uid = '<erased id>'` is `0` and an `erasure.completed` event names it.
-- Operational: an erase rehearsal on a restored copy before the release (`PROD-17`).
+`tests/integration/recovery/test_project_erase.py`, `test_project_erase_shapes.py`,
+`tests/unit/recovery/test_project_erase_pure.py`: each guard shown able to fail, keep rows and triggers
+unchanged after a run, a second `--apply` exits 0, `--resume` after a crash between the phases
+completes, a shared Blob keeps its object, a byte-identical upload after an erase creates a fresh `blob`
+row (`AD-07`). At rest: no `blob` row in `erasure_pending`; the erased `project_uid` counts `0` and an
+`erasure.completed` event names it. Operational: an erase rehearsal on a restored copy (`PROD-17`).
 
 ## Revisit trigger
 
-Replace this ADR when the legal-hold authority or the classification labels are decided, when a client
-contract imposes a retention period or an erasure deadline, when an off-host copy is introduced (erase
-must then reach it), when the owner accepts or rules on provider terms (`A-2`), or when
-multi-organisation access is added (an erase would then need an organisation boundary, `ADR-0023`).
+Replace this ADR when the owner gives the product a legal-hold mechanism (`R-146aj`: a rule of procedure
+for 1.0) or decides the classification labels (`R-146ak`), when a client contract imposes a retention
+period or an erasure deadline, when an off-host copy is introduced, when the owner rules on provider
+terms (`A-2`), or when multi-organisation access is added (`ADR-0023`).
 
 ## History
 
-- 2026-10-26 — accepted for production by the repository owner (`R-146b`, `R-146c`, `R-146f`,
-  `R-146m`, `R-146n`, `R-146o`); `AD-06` confirmed by `R-146o`, `AD-07`, `AD-08`, `AD-09`, `AD-16` by
-  `R-146w`.
-- 2026-11-18 — compressed and unified (ADR-OPTIMISE-01); no decision changed.
+- 2026-10-26 — accepted for production by the repository owner; the `AD-` confirmations in Basis came by
+  `R-146o` and `R-146w`.
+- 2026-11-18 — compressed (ADR-OPTIMISE-01); the full earlier text: git show fb6c2203e:docs/architecture/adr/ADR-0022-production-data-governance.md
+- 2026-11-18 — status statements updated to dev fb6c2203e: the erase tool, wrapper and tests exist
+  (`PROD-07A-PROJECT-ERASE-CORE-01`); `--owner-permission-ref` is required (`R-146aj`); the legal-hold
+  authority is settled by `R-146aj`, the classification labels stay open (`R-146ak`); `PROD-22` is still
+  open.
+- 2026-11-18 — fork note (`R-156f`, `R-156i`): the bucket provider holds the fork's documents; copies wait for the backup decision.

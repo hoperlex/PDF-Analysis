@@ -1,85 +1,60 @@
 # ADR index
 
-| ADR | Status | Decision |
-|---|---|---|
-| [ADR-0001-greenfield-behavioral-oracle](adr/ADR-0001-greenfield-behavioral-oracle.md) | accepted bootstrap | Greenfield product; legacy is a behavioral oracle |
-| [ADR-0002-modular-monolith-control-plane](adr/ADR-0002-modular-monolith-control-plane.md) | accepted bootstrap | Modular monolith control plane |
-| [ADR-0003-contract-first-and-data-ownership](adr/ADR-0003-contract-first-and-data-ownership.md) | accepted bootstrap | Contract-first boundaries and single data owner |
-| [ADR-0004-repository-layout-and-module-boundaries](adr/ADR-0004-repository-layout-and-module-boundaries.md) | accepted bootstrap | Repository layout and module boundaries |
-| [ADR-0005-postgresql-metadata-and-durable-state](adr/ADR-0005-postgresql-metadata-and-durable-state.md) | accepted bootstrap | PostgreSQL owns metadata and durable workflow state |
-| [ADR-0006-private-s3-artifact-storage](adr/ADR-0006-private-s3-artifact-storage.md) | accepted bootstrap | Private S3-compatible artifact storage |
-| [ADR-0007-postgres-jobs-outbox-and-attempt-fencing](adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md) | accepted bootstrap | PostgreSQL jobs/outbox; Attempt fencing |
-| [ADR-0008-execution-engine-package-contract](adr/ADR-0008-execution-engine-package-contract.md) | accepted bootstrap | Execution engine is a package-contract boundary |
-| [ADR-0009-nextjs-react-typescript-fsd](adr/ADR-0009-nextjs-react-typescript-fsd.md) | accepted bootstrap | Next.js/React/TypeScript strict with FSD vertical slices |
-| [ADR-0010-stable-finding-identity](adr/ADR-0010-stable-finding-identity.md) | accepted bootstrap | Stable Finding identity is separate from run observation |
-| [ADR-0011-llm-reproducibility-and-cost](adr/ADR-0011-llm-reproducibility-and-cost.md) | accepted bootstrap | LLM reproducibility and cost ledger |
-| [ADR-0012-expert-decision-ledger-and-kb-projection](adr/ADR-0012-expert-decision-ledger-and-kb-projection.md) | accepted bootstrap | Expert decisions are append-only; KB is a projection (addendum R-146o: the operator project erase is the one exception) |
-| [ADR-0013-comparison-evidence-layers](adr/ADR-0013-comparison-evidence-layers.md) | accepted bootstrap | Comparison separates approved state, raw evidence and AI synthesis |
-| [ADR-0014-authz-classification-retention](adr/ADR-0014-authz-classification-retention.md) | proposed; partially accepted by R-146 (2026-10-26) | Object authorization and classification/retention policy; tenant model, identity provider and TTL decided for 1.0, legal-hold authority and classification labels open |
-| [ADR-0015-observability-audit-and-redaction](adr/ADR-0015-observability-audit-and-redaction.md) | accepted bootstrap | Diagnostic logs, durable audit and metrics are separate |
-| [ADR-0016-testing-evidence-model](adr/ADR-0016-testing-evidence-model.md) | accepted bootstrap | Testing is an evidence model, not a test pyramid quota |
-| [ADR-0017-contract-waves-and-worktree-ownership](adr/ADR-0017-contract-waves-and-worktree-ownership.md) | accepted bootstrap | Contract waves and worktree-per-task ownership |
-| [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted bootstrap | Checkpoint version = tag + frozen contracts + automated + manual evidence |
-| [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed prototype extension | Rebuildable decision ↔ code/contracts/tests navigation for humans and AI agents |
-| [ADR-0020-normative-corpus-alpha-runtime](adr/ADR-0020-normative-corpus-alpha-runtime.md) | accepted alpha | PostgreSQL canonical norms + in-database pgvector; source bytes in private S3 |
-| [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted production (R-146) | One VPS; TLS terminator and ACME renewal in `infra/`; manual copies as accepted risk A-1; confirmed AD-s: AD-02, AD-03, AD-05, AD-16, AD-17, AD-01 (server name only); not confirmed: AD-04 and the ACME mechanism of AD-01 |
-| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted production (R-146) | No automatic retention; journalled operator project erase (an exception to ADR-0012, R-146o); purge of beta data at 1.0; egress to the model provider; all its AD-s are confirmed (AD-06 by R-146o, AD-07/08/09/16 by R-146w) |
-| [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted production (R-146) | One organisation, local accounts; seeded administrator closed by the deploy and the public listener (R-146s); audited access changes; all its AD-s are confirmed (AD-10 by R-146w, AD-11 by R-146s, AD-19 by R-146z) |
-| [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted production (R-146) | АР runs the standard analysis like every section (`R-154a`, replacing `R-146g`); АР v1/v2 removed; OpenRouter base connection; other sections to full versions first (`reviewed` without a human review, A-5 and A-7, `R-146ag`); AD-12/13/14/15 confirmed; open: the AD-18 choice after the PROD-20 measurement |
-| [ADR-0025-comparison-modules](adr/ADR-0025-comparison-modules.md) | accepted by the repository owner (Q-CMP-1…Q-CMP-11, 2026-10-27) | Comparison modules: comparison-local durable queue and spend journal (pre-call breadcrumb, `spend_unknown`); raw evidence then AI layers; child-process compute under `RLIMIT_AS`; refusal caps, no eviction; N images with server-side `max_images` gating; USD ceilings; CHANGED→SAME becomes UNCERTAIN; verdicts carried per evidence; `numpy` + `opencv-python-headless` + `reportlab`; marked defaults revisable by CMP-MEASURE-01 |
-| [ADR-0026-executor-capacity-enrollment-groups](adr/ADR-0026-executor-capacity-enrollment-groups.md) | accepted by the repository owner (design documents and polls of 2026-11-02, R-149a…R-149f) | Executor capacity counted per connection under the existing advisory lock; pull claims serialised per token; universal agent enrollment (one installer for SSH and copied-command paths); homogeneous executor groups and per-work-kind rules with dispatch-time write-once binding, consent re-check before model I/O and an explicit legacy→rules cut-over; client-document enforcement and test runs deferred (D-291, D-292) |
-| [ADR-0027-decision-memory](adr/ADR-0027-decision-memory.md) | accepted in the autonomous window 2026-11-09 by the recommendations of `DECISION-MEMORY-01`; revisable by the repository owner | Decision memory: the case content (decision fact, finding text, evidence quotes and geometry, normative references, crop references) is a primary record written in the decision's transaction that outlives its project and document; vectors and probes stay rebuildable; amends `ADR-0012` / `R-16` and, for what an erase leaves, `R-146o` for the content only; `training_use` off, v1 crops are existing portal image-block crops (at most 4), the author is an opaque `user_uid`, `accept`/`reject` captured with their `origin_kind`, no automatic retention, no hints yet |
-| [ADR-0028-hosts-and-stage-models](adr/ADR-0028-hosts-and-stage-models.md) | accepted by the repository owner (request and poll of 2026-11-09, R-153a…R-153f) | Executor hosts with one host token and system-managed connections and groups per host·provider·access·model and per (model, access); capacity unit (run, `capacity_pool`) with the advisory lock on the pool; per-stage models frozen as a `stage_plan` with every cell bound at dispatch (`audit_run_cell_binding`) and the wait reason `model_unavailable` in the existing `pending` state; `binding_for(cell)` with one `CallBinding` per call and exact `accepted_reported`; consent v2; the model catalogue file over lock pins only; closed block schemes and ensemble identities; the sets «Только Claude» / «Только Codex»; a database switch for the layout; a direct-API key file on the VPS (new outward path, `D-291`); per-run distribution and the dropped capability mapping as recorded departures from the original; plan v3 of the extended review opt-in by env, default v2 (`R-154b`); amends ADR-0026 decisions 1, 2, 3, 5, 8, 9, 10, 12–15, 17 |
-| [ADR-0029-precedents](adr/ADR-0029-precedents.md) | accepted by the repository owner (polls of 2026-11-10, R-153q…R-153ar) | Precedents: a model-free core in a new context `precedents` for the AI critic and the expert; two temporary decisions (the legacy run, the night-only encoder) |
+A locator: the ADR text is the authority. Rebuilt on 2026-11-18 by `ADR-OPTIMISE-01` (owner ruling `R-156a`).
 
-## CP-00 disposition
+## Rules
 
-Task `W0-ARC-01` recorded a disposition for ADR-0001 through ADR-0018 in
-[CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md) and its machine matrix
-[CP00_ARCHITECTURE_REVIEW.json](CP00_ARCHITECTURE_REVIEW.json). No status in that
-original set was changed by the review and it added, rewrote or removed no ADR.
+- **Status** is one of `accepted`, `proposed` or `superseded by ADR-YYYY`. A point still open inside an accepted ADR is an
+  "Open:" line in its Decision; partial acceptance is stated in the Basis line.
+- **An ADR is amended, never rewritten.** The one exception is `R-156a`: on 2026-11-18 every ADR was brought to
+  [the template](ADR_TEMPLATE.md), its addenda folded in and ADR-0020…0029 compressed. The full earlier text of any ADR is
+  `git show fb6c2203e:docs/architecture/adr/<file>`.
+- **Numbers are permanent.** ADR numbers, decision and section numbers, table rows and `AD-NN` are cited from code, tests and
+  documents; a revision may shorten the text but never renumbers, merges or drops one.
+- **A new ADR** takes the next free number, follows the template and gets its row here in the same commit
+  (`scripts/validate_bootstrap.py` checks files against this index).
 
-ADR-0019 was added afterwards as a post-CP-00 prototype extension. It is not included in
-the earlier CP-00 disposition and is accepted or revised with the detailed P02–P05 plan.
+## Index
 
-ADR-0020 is a post-CP-00 owner decision for the alpha normative-runtime topology. It does not
-rewrite the historical CP-00 disposition and must be superseded by a new ADR before an external
-or distributed vector service is introduced.
+| ADR | Status | Area | Decision | Amends · amended by |
+| --- | --- | --- | --- | --- |
+| [ADR-0001-greenfield-behavioral-oracle](adr/ADR-0001-greenfield-behavioral-oracle.md) | accepted | foundation | Greenfield product; the legacy application is a behavioural oracle, not a code base | — |
+| [ADR-0002-modular-monolith-control-plane](adr/ADR-0002-modular-monolith-control-plane.md) | accepted | foundation | Modular monolith control plane; model work by the worker (`R-105`) and remote executors (`R-143`) | — |
+| [ADR-0003-contract-first-and-data-ownership](adr/ADR-0003-contract-first-and-data-ownership.md) | accepted | foundation | Contract-first boundaries; one owner per data set | — |
+| [ADR-0004-repository-layout-and-module-boundaries](adr/ADR-0004-repository-layout-and-module-boundaries.md) | accepted (CP-00 qualification) | foundation | Repository layout and module boundaries | — |
+| [ADR-0005-postgresql-metadata-and-durable-state](adr/ADR-0005-postgresql-metadata-and-durable-state.md) | accepted | data | PostgreSQL owns metadata and durable workflow state | — |
+| [ADR-0006-private-s3-artifact-storage](adr/ADR-0006-private-s3-artifact-storage.md) | accepted | data | Durable bytes in private S3-compatible storage behind opaque `blob_id`; the fork's objects move to a Yandex bucket | — |
+| [ADR-0007-postgres-jobs-outbox-and-attempt-fencing](adr/ADR-0007-postgres-jobs-outbox-and-attempt-fencing.md) | accepted (CP-00 qualification) | data | PostgreSQL jobs and outbox; Attempt fencing | — |
+| [ADR-0008-execution-engine-package-contract](adr/ADR-0008-execution-engine-package-contract.md) | accepted (CP-00 qualification) | analysis | The execution engine is a package-contract boundary | — |
+| [ADR-0009-nextjs-react-typescript-fsd](adr/ADR-0009-nextjs-react-typescript-fsd.md) | accepted | web | Next.js, React and strict TypeScript with FSD vertical slices | — |
+| [ADR-0010-stable-finding-identity](adr/ADR-0010-stable-finding-identity.md) | accepted | data | Stable Finding identity is separate from a run's observation | — |
+| [ADR-0011-llm-reproducibility-and-cost](adr/ADR-0011-llm-reproducibility-and-cost.md) | accepted | analysis | LLM reproducibility by artifacts and a cost ledger | — |
+| [ADR-0012-expert-decision-ledger-and-kb-projection](adr/ADR-0012-expert-decision-ledger-and-kb-projection.md) | accepted (CP-00 qualification) | data | Expert decisions are append-only; the KB is a projection | · ADR-0022 (project erase, `R-146o`), ADR-0027 (case content) |
+| [ADR-0013-comparison-evidence-layers](adr/ADR-0013-comparison-evidence-layers.md) | accepted (CP-00 qualification) | comparison | Approved state, raw evidence and AI synthesis are separate layers | · ADR-0025 |
+| [ADR-0014-authz-classification-retention](adr/ADR-0014-authz-classification-retention.md) | proposed; accepted in part by `R-146` | data | Object authorization, classification and retention; the parts `R-146` decided live in ADR-0022/0023 | · ADR-0022, ADR-0023 |
+| [ADR-0015-observability-audit-and-redaction](adr/ADR-0015-observability-audit-and-redaction.md) | accepted | operations | Diagnostic logs, durable audit and metrics are separate | — |
+| [ADR-0016-testing-evidence-model](adr/ADR-0016-testing-evidence-model.md) | accepted | foundation | Testing is an evidence model, not a pyramid quota | — |
+| [ADR-0017-contract-waves-and-worktree-ownership](adr/ADR-0017-contract-waves-and-worktree-ownership.md) | accepted (CP-00 qualification) | foundation | Contract waves and worktree-per-task ownership | — |
+| [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted | foundation | Checkpoint = tag + frozen contracts + automated and manual evidence | — |
+| [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed | foundation | Rebuildable decision ↔ code/contracts/tests navigation for people and agents | — |
+| [ADR-0020-normative-corpus-alpha-runtime](adr/ADR-0020-normative-corpus-alpha-runtime.md) | accepted | norms | Canonical norms in PostgreSQL with in-database pgvector, source bytes in private S3; on the fork server embeddings on the fly by a larger model, DB local (decision 7) | — |
+| [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted (`AD-04` open) | production | One VPS, TLS and ACME in `infra/`, two database roles, manual copies (A-1); the fork's 32 GB server with a local DB and one disk (section 11) | — |
+| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted | production | No automatic retention; journalled operator project erase; what leaves the host | ADR-0012, ADR-0014 · — |
+| [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted | production | One organisation, local accounts, sliding session; seeded administrator closed by the deploy (`R-146s`); audited access changes | ADR-0014 (accepts it in part) · — |
+| [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted (`AD-18` open) | analysis | АР runs the standard analysis (`R-154a`); OpenRouter base connection; other sections to full versions first | — |
+| [ADR-0025-comparison-modules](adr/ADR-0025-comparison-modules.md) | accepted | comparison | «Сравнение версий» and «Сравнение стадий»: comparison-local queue and spend journal, raw evidence then AI layers, refusal caps | ADR-0013 · — |
+| [ADR-0026-executor-capacity-enrollment-groups](adr/ADR-0026-executor-capacity-enrollment-groups.md) | accepted | executors | Capacity per connection, one agent enrollment path, homogeneous executor groups with dispatch-time binding | · ADR-0028 |
+| [ADR-0027-decision-memory](adr/ADR-0027-decision-memory.md) | accepted (revisable by the owner) | memory | The case content is a primary record written with the decision and outliving it | ADR-0012 · ADR-0029 |
+| [ADR-0028-hosts-and-stage-models](adr/ADR-0028-hosts-and-stage-models.md) | accepted | executors | Executor hosts with system-managed groups; per-stage models frozen at dispatch | ADR-0026 · — |
+| [ADR-0029-precedents](adr/ADR-0029-precedents.md) | accepted | memory | A model-free precedents core for the AI critic and the expert; the night encoder is temporary, on the fork server vectors on the fly | ADR-0027 · — |
 
-ADR-0021 to ADR-0024 are post-CP-00 production decisions recorded under owner ruling `R-146`
-(`OWNER_RULINGS_2026-09-17.md` section 3.46, 2026-10-26). They do not rewrite the historical CP-00
-disposition. The `AD-` decisions inside them are the architect's implementation choices within
-`R-146`; the owner has confirmed all of them by `R-146o`…`R-146z` except `AD-04` (limits from a VPS measurement), which was not polled, and the choice `AD-18` leaves open after its measurement; the ACME mechanism of `AD-01` is confirmed by `R-146aa`. ADR-0014 keeps its CP-00 `defer`
-disposition and gains a dated addendum for the points `R-146` decided.
+## Where the statuses come from
 
-ADR-0027 is a post-CP-00 decision of the decision-memory programme (`docs/program/DECISION-MEMORY-01.md`), recorded in the autonomous
-window of 2026-11-09 because the owner was unreachable: its answers are the design's own recommendations and are revisable. It adds an
-amendment to `ADR-0012` (and, for the case content, to `R-16` and `R-146o`); it rewrites neither text, which stay as written.
-
-ADR-0028 is a post-CP-00 decision of the executor-hosts programme (`docs/program/dispatch/HOSTS-PLAN.md`), accepted by the owner's approval of
-the plan as a whole (`R-153c`, 2026-11-09). It amends `ADR-0026` for runs that carry a stage plan and rewrites no text of it; decision 16 stays.
-
-State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:
-
-- `adapt` (ratifiable only with the recorded qualification): ADR-0004, ADR-0007,
-  ADR-0008, ADR-0012, ADR-0013, ADR-0017.
-- `defer` (not ratifiable at CP-00): ADR-0014 only — the tenant model, identity
-  provider, retention TTL matrix and legal-hold authority (`U-04`) remain open.
-- `ratify`: the remaining eleven ADRs.
-- `supersede`: none issued; the owner approved all four decisions, so no baseline ADR
-  was contradicted and no replacement ADR was created.
-
-Owner decisions `PD-01`–`PD-04` are recorded in
-[CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md): `PD-01`, `PD-02` and `PD-03`
-approved with modification, `PD-04` approved. ADR-0012 moved from `defer` to `adapt`
-because `PD-01` was decided. A lane consuming an `adapt` ADR must carry its
-qualification: notably `ADR-0008` is not consumable for a registry freeze until the
-name-level legacy alias map required by the approved `PD-02` exists.
-
-## Status semantics
-
-`accepted bootstrap` means this package selects the decision as its baseline, but the program still requires the explicit CP-00 ratification task so a coding agent cannot silently treat a supplied/refactoring proposal as owner-approved production policy.
-
-`proposed prototype extension` means the decision is mandatory input to prototype
-planning but does not claim retroactive CP-00 ratification or authorize implementation by
-itself.
+ADR-0001…0018 were the bootstrap baseline. The CP-00 review (`W0-ARC-01`,
+[CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md) and its JSON) recorded a disposition for each — `ratify` for
+eleven, `adapt` for ADR-0004, 0007, 0008, 0012, 0013 and 0017, `defer` for ADR-0014 — and the owner decided `PD-01`…`PD-05`
+([CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md)). The review's JSON still records `ratified: false`; each ADR's Basis
+line names its disposition and an `adapt` ADR carries its qualification in its Decision. Later ADRs rest on owner rulings:
+ADR-0020 (owner, alpha), ADR-0021…0024 (`R-146`), ADR-0025 (`Q-CMP-1`…`Q-CMP-11`, `R-147`), ADR-0026 (`R-149`),
+ADR-0027 (the autonomous window of 2026-11-09, revisable), ADR-0028 (`R-153a`…`R-153f`), ADR-0029 (`R-153q`…`R-153ar`); the
+fork decisions in ADR-0006, 0020, 0021, 0022 and 0029 rest on `R-156b`…`R-156l`.

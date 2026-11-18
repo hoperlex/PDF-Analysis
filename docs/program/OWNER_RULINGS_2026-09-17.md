@@ -2067,12 +2067,14 @@ restart only, the confirm-only carryover of `W59-DECISION-CARRYOVER-01`.
 | R-155h | Second poll, the window of one model call: «Как в оригинале». | A call's window is its stage row's window (`ROW_TIMEOUT_SECONDS`: text and blocks 1800 s, cross-check 3600 s, norms, critic and correction 600 s), not the ~540 s the stall window cuts it to today. |
 | R-155i | Second poll, the release order: «Всё вместе». | The time limits and the restart ship as one minor version. |
 
-## 3.57 — R-156a…R-156e, the ADR optimisation before the fork and the fork server (owner's statements and poll, 2026-11-18)
+## 3.57 — R-156a…R-156l, the ADR optimisation before the fork and the fork server (owner's statements and polls, 2026-11-18)
 
 The occasion: the owner is preparing a fork of this project for a new server. He asked to optimise the ADRs before the hand-over
 and stated the new server's premises. `R-156a` is a one-time exception to the rule that an ADR is amended, never rewritten; the rule
 stays for every later change. `R-156b`…`R-156e` apply to the fork's server; the current production VPS is unchanged until the owner
-decides otherwise. They are recorded in `ADR-0020` decision 7, `ADR-0021` section 11 and `ADR-0029` (decision 8, temporary decision 2).
+decides otherwise. `R-156f`…`R-156l` are the owner's answers to the polls of session `pdf-analysis-16` (the fork's storage plan),
+relayed verbatim by that session. They are recorded in `ADR-0020` decision 7, `ADR-0021` section 11, `ADR-0029` (decisions 4
+and 8, temporary decision 2) and in fork notes of `ADR-0006` and `ADR-0022`.
 
 | Ruling | Owner's answer | Consequence |
 | --- | --- | --- |
@@ -2081,3 +2083,10 @@ decides otherwise. They are recorded in `ADR-0020` decision 7, `ADR-0021` sectio
 | R-156c | «Векторизацию делать на лету и использовать модель с большим объемом параметров». | On the fork server texts are embedded when they arrive, not in a night window, by a model larger than today's BGE-M3 int8 profile. |
 | R-156d | «БД мы делаем локальную, так как яндекс клауд предоставляет нам в сравнении урезанные решения по векторизации с меньшим количеством параметров и не даст такой скорости векторизации новых данных „на лету“». | On the fork server the database stays local, in the stack; a managed cluster is not the target. |
 | R-156e | «Репозиторий разработки и папка развернутого приложения находятся на одном логическом диске, что снимает необходимость ssh миграции БД». | On the fork server the cross-host copy transport is not needed to move the database. |
+| R-156f | Where the fork stores files: «Локальный MinIO, надо поднять. Одна из первых линий разработки будет перенос на бакет яндекс». | The fork starts with MinIO in the stack; an early lane of the fork moves the objects to a private Yandex Object Storage bucket. The database stays local (`R-156d`). |
+| R-156g | Which data comes to the fork server: «Корпус норм». | Only the norms corpus; no projects, no decision memory, no PDF-proverka import. |
+| R-156h | Hardware for embeddings: «Только cpu 12 ядер». | The fork server is CPU only, 12 cores, no GPU. |
+| R-156i | Off-disk backups: «Решение после развертывание можешь пометить в планах миграций». | The off-disk backup target is decided after the fork is deployed and before the first client data. |
+| R-156j | How the embedding model is chosen: «Giga-Embrending но после независимого иследования (проведу сам, отчет предоставлю от тебя только промт с вариантами которые надо сравнивать)». | Giga-Embeddings is the leading candidate; the owner chooses after his own independent study. Model name and dimension stay open until then. |
+| R-156k | Where the code is written: «В форке». | The storage and embedding code of these decisions is written in the fork, not in this repository. |
+| R-156l | The fork's storage thesis plan r2: «Утвердить с правками. Правки возможны после решения по модели векторизации.» | The plan of `pdf-analysis-16` is approved; it may change after the model decision. |
