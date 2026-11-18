@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-01 (accepted for alpha by the repository owner, `NORM-ADR-01`); revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: `NORM-ADR-01`; `R-76` (2026-10-09); `R-104` (2026-10-12, `OWNER_RULINGS_2026-09-17.md` section 3.30, `docs/program/dispatch/W54-PLAN.md`, recorded by `W54-SEAL-01`); fork decision 7: `R-156b`…`R-156k`
+- Basis: `NORM-ADR-01`; `R-76` (2026-10-09); `R-104` (2026-10-12, `OWNER_RULINGS_2026-09-17.md` section 3.30, `docs/program/dispatch/W54-PLAN.md`, recorded by `W54-SEAL-01`); fork decision 7: `R-156b`…`R-156d`, `R-156g`, `R-156h`, `R-156j`…`R-156l` (the specifics are the fork storage plan r2, approved by `R-156l`)
 - Amends: settles the unresolved pgvector-versus-external-index choice in `ROADMAP.md`; no prior ADR is replaced
 
 ## Context
@@ -23,7 +23,7 @@ pgvector 0.8.6. There is no separate external or distributed vector database. Au
 2. `norm_chunk`, tokenizer windows and `norm_embedding` are versioned rebuildable retrieval projections
    in the same PostgreSQL service. Search results resolve to canonical snapshot, document and paragraph
    identities and anchors; a vector row is never cited as authority.
-3. Every source PDF and crop is a private S3-compatible Blob; PostgreSQL owns binding metadata and
+3. Every source PDF and crop is an immutable private S3-compatible Blob with an opaque `blob_id`; PostgreSQL owns binding metadata and
    publication state, MinIO owns the bytes. A local path, filename, bucket or object key is never
    identity. A Blob is content-derived (`R-76`): equal verified bytes in the corpus and in a project
    reuse one object, and a mismatch rejects the admission or Attempt, never the shared Blob row. Each
@@ -50,7 +50,7 @@ pgvector 0.8.6. There is no separate external or distributed vector database. Au
    identities, content/build digests and all-or-nothing visibility while moving a verified canonical
    snapshot and complete embedding build into alpha PostgreSQL.
 7. **The fork server: embeddings on the fly, in local PostgreSQL (`R-156b`…`R-156d`, `R-156g`, `R-156h`,
-   `R-156j`, `R-156k`).** On the fork's own server (32 GB RAM, 12 CPU cores, no GPU) texts are embedded when
+   `R-156j`…`R-156l`).** On the fork's own server (32 GB RAM, 12 CPU cores, no GPU) texts are embedded when
    they arrive, by a model larger than today's BGE-M3 int8 profile; there is no night window. Vectors stay
    in the local PostgreSQL with pgvector 0.8.6 on the repository's own image, one failure domain: no managed
    or external vector service, because the managed offers are cut down and too slow for on-the-fly
@@ -59,7 +59,7 @@ pgvector 0.8.6. There is no separate external or distributed vector database. Au
      and precision; vectors of different profiles are never mixed; the profile is part of each vector key
      and each profile has its own partial HNSW index.
    - One resident embedder service on the stack network is permitted: no database access, no published
-     port, a hard memory limit (8 GB planned) and at most 8 of the 12 cores. The worker calls it and writes
+     port, a hard memory limit and a CPU cap, both fixed by a measurement on that server (`ADR-0021` section 11, `AD-04`; the plan's starting figures: 8 GB, 8 of the 12 cores). The worker calls it and writes
      the vectors in its own transaction. For the fork this replaces "not a new network service" below.
    - **Open:** the model — the owner chooses after his own study, Giga-Embeddings is the leading candidate
      (`R-156j`), and a switch is preceded by the corpus retrieval fixture (BGE-M3 baseline MRR 0.849), a

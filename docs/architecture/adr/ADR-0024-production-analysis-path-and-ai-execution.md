@@ -43,8 +43,7 @@ guarded by `tests/unit/analysis/test_ar_v1_v2_removal.py`.
    start on an АР version resolves it (decision 1).
 2. The recorded v2 path: its run, findings, recorded and merge modules and the `recorded_v2` branch of
    the run executor.
-3. The contract text and enum that name them: `AnalysisProfileStatus.builtin`, the `builtin` sentence of
-   `listAnalysisProfiles` and the АР v2 sentence of `info.description`.
+3. The contract text and enum that name them: `AnalysisProfileStatus.builtin`, the `builtin` sentence of `listAnalysisProfiles` and the АР v2 sentence of `info.description`; `listAnalysisProfiles` returned `profile: null` for АР — superseded 2026-10-30 with item 1.
 4. The tests and recorded fixtures of those paths and the web files that name `builtin`.
 
 **What stays.** The v1 **machinery** (`src/auditmanager/analysis/text/`), the nine stage ids and the

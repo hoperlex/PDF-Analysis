@@ -23,3 +23,4 @@ The checkpoint's integration report and manual runbook (for CP-00: `docs/manual-
 - 2026-08-31 — bootstrap baseline, status `accepted for bootstrap; ratify at CP-00`.
 - 2026-09-01 — CP-00 disposition recorded: ratify (W0-ARC-01; status text unchanged).
 - 2026-11-18 — unified to the template (`ADR-OPTIMISE-01`); meaning unchanged.
+- 2026-09-07 — CP-00 ratified (acceptance round ten, tag `v0.0.0-architecture`); status `accepted` from then (`E-05` stays open).

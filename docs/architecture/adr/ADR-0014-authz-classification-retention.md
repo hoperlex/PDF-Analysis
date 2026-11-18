@@ -3,7 +3,7 @@
 - Status: proposed
 - Date: 2026-08-31; revised 2026-11-18 (ADR-OPTIMISE-01)
 - Basis: CP-00 (W0-ARC-01) disposition: defer (`docs/architecture/CP00_ARCHITECTURE_REVIEW.md` §5; input `U-04` open by explicit owner disposition); partially accepted by `R-146` (2026-10-26; `R-146c`, `R-146d`; `docs/program/OWNER_RULINGS_2026-09-17.md` §3.46; recorded by `PRODUCTION-ADR-PACK-01`); legal-hold authority settled by `R-146aj` and classification labels left open by `R-146ak` (same section)
-- Amends: — · Amended by: — (the accepted parts are detailed in `ADR-0022` and `ADR-0023`)
+- Amends: — · Amended by: `ADR-0022`, `ADR-0023` (the parts `R-146` decided)
 
 ## Context
 The source ADR is `proposed` with a retention matrix whose values are all unfilled; the legacy evidence does not exercise an exact runtime policy (`WS-01`), has an explicit insecure-admin mode (`DW-01`) and establishes no retention/immutability guarantee (`LO-01`) (CP-00 review §5). CP-00 kept `U-04` open with deadlines: tenant/IdP boundary before `W2-C-01`, TTL/legal hold before `W9-C-01`.

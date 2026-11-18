@@ -58,8 +58,7 @@ The eight lines of `ADR-0021` section 7 (`R-146h`, `R-146n` item 5). They are
 a list a person works through; there is no CI and no machine that checks them
 (accepted risk `A-3`). Each line is done on the exact candidate of line 1.
 
-1. The candidate SHA, the owner's direct instruction naming it, and a clean
-   tree ([`MAIN_AUTODEPLOY_POLICY.md`](MAIN_AUTODEPLOY_POLICY.md)).
+1. The candidate SHA, the release authority [`MAIN_AUTODEPLOY_POLICY.md`](MAIN_AUTODEPLOY_POLICY.md) requires (a delegated release integrator since 2026-11-02, `AGENTS.md` section 6), and a clean tree.
 2. The complete gate on that exact tree with the literal `GATE OK`, on a host
    that can run it (`D-205`).
 3. The manual dependency and image scan: run

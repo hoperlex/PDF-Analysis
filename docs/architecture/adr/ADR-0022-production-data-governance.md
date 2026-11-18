@@ -2,8 +2,8 @@
 
 - Status: accepted (the legal-hold authority is settled by `R-146aj`; the classification labels stay open by `R-146ak`)
 - Date: 2026-10-26; revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`, `R-146aj`, `R-146ak`; `AD-06` confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09`, `AD-16` by `R-146w` as written at commit `83600aed`; fork note: `R-156f`, `R-156i`
-- Amends: `ADR-0012` (erase exception, `R-146o`); supersedes nothing. Fills the retention and erasure half that `ADR-0014` and `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) left open
+- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`, `R-146aj`, `R-146ak`; `AD-06` confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09`, `AD-16` by `R-146w` as written at commit `83600aed`; fork note: `R-156f`, `R-156i`, `R-156l`
+- Amends: `ADR-0012` (erase exception, `R-146o`); supersedes nothing. Fills the retention and erasure half that `ADR-0014` and `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) left open · Amended by: `ADR-0027` (the case content of a decision outlives an erase)
 
 ## Context
 
@@ -57,7 +57,7 @@ identity-only run journal stays) is confirmed by `R-146w`.
 tool refuses any role but the migrator's (`ADR-0021` `AD-02`). The project is named by identity
 (`prj_<ULID>`), never by name; the actor is an active `admin`; the reason is one of `client_request`,
 `end_of_engagement`, `test_data`, `other` (free text would put personal data into an append-only table);
-`--owner-permission-ref` is **required to apply or resume** (`R-146aj`): one line saying where the
+`--owner-permission-ref` is **required to apply or resume** (added for `R-146aj` after the `R-146w` confirmation of `AD-07`): one line saying where the
 owner's permission is recorded, written into both journal events, never verified; an apply needs the
 plan digest of a dry run.
 
@@ -166,8 +166,7 @@ and recovery point: `A-1`, `ADR-0021`.
 
 **Fork (`R-156f`, `R-156i`).** After the fork's bucket lane the documents' bytes are held by the
 object-storage provider in the region the owner chooses: one more place where data leaves the host. Copies
-stay as above until the off-disk backup decision (`R-156i`); that decision states the copies' retention
-period, until which erased data lives in them.
+stay as above until the off-disk backup decision (`R-156i`); that decision states the copies' retention period, until which erased data lives in them. The current production VPS is unchanged.
 
 ## Consequences
 
@@ -216,3 +215,4 @@ terms (`A-2`), or when multi-organisation access is added (`ADR-0023`).
   authority is settled by `R-146aj`, the classification labels stay open (`R-146ak`); `PROD-22` is still
   open.
 - 2026-11-18 — fork note (`R-156f`, `R-156i`): the bucket provider holds the fork's documents; copies wait for the backup decision.
+- 2026-10-26 — the revisit trigger «legal-hold authority decided» was met by `R-146aj`; the ADR records the ruling and the trigger now reads «a legal-hold mechanism in the product».

@@ -30,3 +30,4 @@ Legacy overwrite/delete of a matching decision — characterized legacy behavior
 - 2026-10-26 — addendum `R-146o` (`PRODUCTION-ADR-PACK-01`), folded into Decision: the operator project erase is the one exception; the addendum changed no runtime behaviour.
 - 2026-11-18 — unified to the template (`ADR-OPTIMISE-01`); qualification copied into Decision, addendum folded in; meaning unchanged.
 - 2026-11-18 — status statements updated to dev fb6c2203e: the erase tool exists (`PROD-07A-PROJECT-ERASE-CORE-01`: `scripts/recovery/project_erase.py`, `infra/deploy/erase-project.sh`, `tests/integration/recovery/test_project_erase.py`); `PROD-22` (the clarifying edit of the frozen sentence) is still open.
+- 2026-09-07 — CP-00 ratified (acceptance round ten, tag `v0.0.0-architecture`); status `accepted` from then (`E-05` stays open).

@@ -22,3 +22,4 @@ Qualification (CP-00, PD-02, PD-05): the "single versioned stage registry" claus
 - 2026-09-01 — CP-00 disposition recorded: adapt, qualification `PD-02` / `PD-05` / `ID-03` (W0-ARC-01; status text unchanged).
 - 2026-11-18 — unified to the template (`ADR-OPTIMISE-01`); qualification copied into Decision; meaning unchanged.
 - 2026-11-18 — status statements updated to dev fb6c2203e: the `PD-02` alias map exists, met by `contracts/analysis/v1/legacy-stage-name-map.json` (commit `cf7740474`; `docs/program/reviews/W0-QA-01.md` section 7.3); the qualification no longer says the map is missing.
+- 2026-09-07 — CP-00 ratified (acceptance round ten, tag `v0.0.0-architecture`); status `accepted` from then (`E-05` stays open).

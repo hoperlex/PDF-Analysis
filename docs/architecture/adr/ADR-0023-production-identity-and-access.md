@@ -40,7 +40,7 @@ sign-ins in 900 seconds start a 300-second cooling-off; the edge limits registra
 to 6 requests per minute per address; the password policy is `R-48` (length 8, a contextual blocklist,
 no expiry). Once TLS is terminated by the stack (`ADR-0021` `AD-01`) the session cookie carries `Secure`
 and HSTS is sent on every TLS answer (`ADR-0021` rows 3 and 4). The cookie rules, in full: `am_session`,
-`Path=/`, `HttpOnly`, `SameSite=Strict`, `Max-Age` no longer than the credential's lifetime, `Secure` on
+`Path=/`, `HttpOnly`, `SameSite=Strict`, `Max-Age` no longer than the session's absolute cap (thirty days after sign-in, `SESSION-RENEW-01`: the credential is renewed, the cookie is not re-sent), `Secure` on
 every TLS answer.
 
 ### 3. The seeded administrator is closed by the deploy (`R-146i`, `R-146s`)
@@ -91,8 +91,7 @@ most once per account per 300 seconds); other failed attempts and attempts on un
 `access.role_revoked` is added beside the owner's "role grant" because a role set that can only grow in
 the record misstates the state. Registration approval and rejection, archive, restore, purge and unlock
 are **not** journalled; they are the first additions if the audit is widened. Events are written in the
-same transaction as the change they describe. Retention: forever; the 1.0 purge keeps them. Contract
-1.36.0 adds a seventh type, `access.sessions_ended` (an administrator ended every session of an account;
+same transaction as the change they describe. Retention: forever; the 1.0 purge keeps them. Contract 1.36.0 (`UI-A-93`, after the `R-146w` confirmation of `AD-10`) adds a seventh type, `access.sessions_ended` (an administrator ended every session of an account;
 keys `subject_uid`, `actor_uid`, `source`), under the same rules.
 
 ### 5. Out of scope, and what reopens it
@@ -160,9 +159,10 @@ decision 4 lacks the fact needed to explain it.
 
 - 2026-10-26 — accepted for production by the repository owner; `AD-11` confirmed by `R-146s`, `AD-10`
   by `R-146w`, `AD-19` settled by `R-146z`.
-- 2026-11-18 — credential lifetime 29 400 s, the sliding session (release of fb6c2203e)
+- 2026-11-18 — credential lifetime 29 400 s, the sliding session (release of fb6c2203e); the cookie lives to the 30-day cap
 - 2026-11-18 — compressed (ADR-OPTIMISE-01); the full earlier text: git show fb6c2203e:docs/architecture/adr/ADR-0023-production-identity-and-access.md
 - 2026-11-18 — status statements updated to dev fb6c2203e: the credential gate, the `access.*` journal
   and the restore token raise exist (`PROD-01`, `PROD-02`, `PROD-06`); legal hold settled by `R-146aj`;
   users are the organisation's employees (`R-146al`); a seventh event type `access.sessions_ended`
   (contract 1.36.0); the table's snapshot columns dropped.
+- 2026-10-26 — the revisit trigger «legal-hold authority decided» was met by `R-146aj`; the ADR records the ruling and the trigger now reads «a legal-hold mechanism in the product».

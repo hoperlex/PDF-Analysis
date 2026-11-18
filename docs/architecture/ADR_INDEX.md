@@ -39,12 +39,12 @@ A locator: the ADR text is the authority. Rebuilt on 2026-11-18 by `ADR-OPTIMISE
 | [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed | foundation | Rebuildable decision ↔ code/contracts/tests navigation for people and agents | — |
 | [ADR-0020-normative-corpus-alpha-runtime](adr/ADR-0020-normative-corpus-alpha-runtime.md) | accepted | norms | Canonical norms in PostgreSQL with in-database pgvector, source bytes in private S3; on the fork server embeddings on the fly by a larger model, DB local (decision 7) | — |
 | [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted (`AD-04` open) | production | One VPS, TLS and ACME in `infra/`, two database roles, manual copies (A-1); the fork's 32 GB server with a local DB and one disk (section 11) | — |
-| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted | production | No automatic retention; journalled operator project erase; what leaves the host | ADR-0012, ADR-0014 · — |
+| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted | production | No automatic retention; journalled operator project erase; what leaves the host | ADR-0012, ADR-0014 · ADR-0027 |
 | [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted | production | One organisation, local accounts, sliding session; seeded administrator closed by the deploy (`R-146s`); audited access changes | ADR-0014 (accepts it in part) · — |
 | [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted (`AD-18` open) | analysis | АР runs the standard analysis (`R-154a`); OpenRouter base connection; other sections to full versions first | — |
 | [ADR-0025-comparison-modules](adr/ADR-0025-comparison-modules.md) | accepted | comparison | «Сравнение версий» and «Сравнение стадий»: comparison-local queue and spend journal, raw evidence then AI layers, refusal caps | ADR-0013 · — |
 | [ADR-0026-executor-capacity-enrollment-groups](adr/ADR-0026-executor-capacity-enrollment-groups.md) | accepted | executors | Capacity per connection, one agent enrollment path, homogeneous executor groups with dispatch-time binding | · ADR-0028 |
-| [ADR-0027-decision-memory](adr/ADR-0027-decision-memory.md) | accepted (revisable by the owner) | memory | The case content is a primary record written with the decision and outliving it | ADR-0012 · ADR-0029 |
+| [ADR-0027-decision-memory](adr/ADR-0027-decision-memory.md) | accepted (revisable by the owner) | memory | The case content is a primary record written with the decision and outliving it | ADR-0012, ADR-0022 · ADR-0029 |
 | [ADR-0028-hosts-and-stage-models](adr/ADR-0028-hosts-and-stage-models.md) | accepted | executors | Executor hosts with system-managed groups; per-stage models frozen at dispatch | ADR-0026 · — |
 | [ADR-0029-precedents](adr/ADR-0029-precedents.md) | accepted | memory | A model-free precedents core for the AI critic and the expert; the night encoder is temporary, on the fork server vectors on the fly | ADR-0027 · — |
 
@@ -53,8 +53,7 @@ A locator: the ADR text is the authority. Rebuilt on 2026-11-18 by `ADR-OPTIMISE
 ADR-0001…0018 were the bootstrap baseline. The CP-00 review (`W0-ARC-01`,
 [CP00_ARCHITECTURE_REVIEW.md](CP00_ARCHITECTURE_REVIEW.md) and its JSON) recorded a disposition for each — `ratify` for
 eleven, `adapt` for ADR-0004, 0007, 0008, 0012, 0013 and 0017, `defer` for ADR-0014 — and the owner decided `PD-01`…`PD-05`
-([CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md)). The review's JSON still records `ratified: false`; each ADR's Basis
-line names its disposition and an `adapt` ADR carries its qualification in its Decision. Later ADRs rest on owner rulings:
+([CP00_OWNER_DECISIONS.md](CP00_OWNER_DECISIONS.md)). CP-00 was ratified on 2026-09-07 on acceptance round ten (commit `39a3a643`, tag `v0.0.0-architecture`, `artifacts/checkpoints/CP-00/acceptance.md`); the review's JSON keeps `ratified: false` for the review artefact itself. Each ADR's Basis line names its disposition and an `adapt` ADR carries its qualification in its Decision. Ratification is not owner approval of a refactoring proposal (`E-05`, open, carried forward at ratification): for an ADR whose refactoring source ADR was `proposed` (CP-00 review §5: ADR-0002, ADR-0004, ADR-0011, ADR-0017), `accepted` means the ratified CP-00 baseline, not owner-approved production policy, except for parts a later owner ruling named in the ADR approves. Later ADRs rest on owner rulings:
 ADR-0020 (owner, alpha), ADR-0021…0024 (`R-146`), ADR-0025 (`Q-CMP-1`…`Q-CMP-11`, `R-147`), ADR-0026 (`R-149`),
 ADR-0027 (the autonomous window of 2026-11-09, revisable), ADR-0028 (`R-153a`…`R-153f`), ADR-0029 (`R-153q`…`R-153ar`); the
 fork decisions in ADR-0006, 0020, 0021, 0022 and 0029 rest on `R-156b`…`R-156l`.

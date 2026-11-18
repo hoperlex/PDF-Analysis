@@ -22,3 +22,4 @@ A shared checkout as the isolation model — admissible only under the qualifica
 - 2026-08-31 — bootstrap baseline, status `accepted for bootstrap; ratify at CP-00`.
 - 2026-09-01 — CP-00 disposition recorded: adapt, qualification `U-02` resolved (W0-ARC-01; status text unchanged).
 - 2026-11-18 — unified to the template (`ADR-OPTIMISE-01`); qualification copied into Decision; meaning unchanged.
+- 2026-09-07 — CP-00 ratified (acceptance round ten, tag `v0.0.0-architecture`); status `accepted` from then (`E-05` stays open).

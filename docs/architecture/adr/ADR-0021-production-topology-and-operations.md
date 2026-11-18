@@ -2,7 +2,7 @@
 
 - Status: accepted (open: the `AD-04` numbers, pending the `PROD-05a` measurement; the `AD-18` choice after `PROD-20`)
 - Date: 2026-10-26; revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`, `R-146ac` (server name), `R-146ad` (host size), `R-146ae` (MinIO); `AD-01` confirmed by `R-146p` (server name) and `R-146aa` (ACME mechanism); `AD-02`, `AD-05`, `AD-16` by `R-146w` as written at commit `83600aed`; `AD-03` by `R-146t`; `AD-17` by `R-146x`; `AD-18` settled by `R-146y` (what stands until the measurement); `AD-19` by `R-146z`; `R-153ab`, `R-153af` (2026-11-10); fork section 11: `R-156b`, `R-156d`…`R-156i`
+- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`, `R-146ac` (server name), `R-146ad` (host size), `R-146ae` (MinIO); `AD-01` confirmed by `R-146p` (server name) and `R-146aa` (ACME mechanism); `AD-02`, `AD-05`, `AD-16` by `R-146w` as written at commit `83600aed`; `AD-03` by `R-146t`; `AD-17` by `R-146x`; `AD-18` settled by `R-146y` (what stands until the measurement); `AD-19` by `R-146z`; `R-153ab`, `R-153af` (2026-11-10); fork section 11: `R-156b`, `R-156d`…`R-156i`, `R-156l`
 - Amends: supersedes the reading of `R-1` that no host exists yet (`R-146a`); no earlier ADR is replaced
 
 ## Context
@@ -10,8 +10,7 @@
 `ADR-0002` and `ADR-0020` chose a modular monolith on one PostgreSQL and one private S3 store; neither
 said what production runs on, who terminates TLS, what is copied or not provided. The owner decided by
 direct poll on 2026-10-26 (`OWNER_RULINGS_2026-09-17.md` section 3.46, `R-146`). Forces: the live
-terminator is an nginx outside the repository with a certificate expiring on 2026-12-30 (`D-191`); no
-scheduled backup, rollback tooling, memory limit or log rotation (`D-166`). Binding: `AGENTS.md` section
+terminator is an nginx outside the repository with a certificate expiring on 2026-12-30 (`D-191`); when decided: no scheduled backup, rollback tooling, memory limit or log rotation (`D-166`). Binding: `AGENTS.md` section
 6, `MAIN_AUTODEPLOY_POLICY.md`, `R-46` (`readiness.sh` reports and blocks no deploy; narrowed by
 `R-146i`, `R-146s`) and `R-88`, `R-93`, `R-110` (decision 5); `R-146` repeals none.
 
@@ -66,9 +65,7 @@ append-only or immutable get `SELECT` and `INSERT` only, so `UPDATE` and `DELETE
 privilege and by trigger.
 
 **Grants are an idempotent step, not a migration** (a `--no-privileges` restore would lose granted
-privileges, and a password cannot live in a revision): `infra/deploy/apply-grants.sh` derives every
-grant from the grant classification; a table or sequence the classification does not name gets no rights
-and stops the step (`[grants_unclassified]`): **there is no `ALTER DEFAULT PRIVILEGES`**. `deploy.sh`
+privileges, and a password cannot live in a revision): `infra/deploy/apply-grants.sh` creates the role if it is absent and derives every grant from the catalog and the grant classification. `AD-02` as confirmed also named `ALTER DEFAULT PRIVILEGES` for later tables. The built step departs from that sentence and is stricter: a table or sequence the classification does not name gets no rights and stops the step (`[grants_unclassified]`) (`docs/program/PROD-04-DB-ROLES-01.md` item 2; a recorded departure, not an owner ruling). `deploy.sh`
 runs it after `migrate` and before `api` and `worker` start; `reset.sh --restore` and `copy-serve.sh
 restore-db` run it after the restore. **No Alembic revision is added.** `DATABASE_URL` stays the
 application's; the migrator's URL (`MIGRATOR_DATABASE_URL`) goes only to `migrate`, `release-notes`, the
@@ -199,7 +196,7 @@ objects, or a client asking for a storage statement); under `A-3` no scan covers
 - **Objects.** MinIO in the stack at bring-up; an early lane of the fork moves the objects to a private Yandex
   Object Storage bucket (`R-156f`, `ADR-0006`). Region, bucket and account are the owner's when that lane
   starts.
-- **Memory.** `AD-04` applies: limits are fixed by a measurement on that server. Starting budget of the plan:
+- **Memory.** `AD-04` applies: limits are fixed by a measurement on that server. Starting budget of the fork storage plan r2 (`R-156l`):
   PostgreSQL 6 GB, embedder 8 GB and 8 cores, worker 2.5 GB, api 1.5 GB, web and proxy 0.75 GB, MinIO 1 GB
   until the bucket move, image build 3 GB, development 5 GB.
 - **Copies.** No cross-host transport (`R-156e`): the dump before every migration, its receipt (`R-146t`) and
@@ -229,7 +226,7 @@ shown or pasted.
 | 10 | The release checklist carries the manual scan (`R-146n` item 5) | `grep -n "manual_scan" docs/program/RELEASE_PROCESS.md` has a hit; `scripts/release/manual_scan.sh --check-tools` exits non-zero when a scanner is missing |
 | 11 | No CI workflow is added (`R-146h`) | `tests/contract/test_deploy_auto_workflow.py`; `.github/workflows` holds only `deploy-auto.yml` |
 | 12 | One worker slot (`R-146j`) | the `worker` table has one live row (heartbeat under 90 s) with `slots` 1 |
-| 13 | No metrics, tracing or error-reporting library (`R-146k`); **documentation check only** | `rg -il "prometheus\|opentelemetry\|sentry" src infra --glob '!*.md'` prints nothing |
+| 13 | No metrics, tracing or error-reporting library (`R-146k`); **documentation check only** | `rg -il "prometheus\|opentelemetry\|sentry" src infra --glob '!*.md'` prints nothing; `grep -c "@opentelemetry" web/package-lock.json` prints `2` (the web framework's optional peer) |
 | 14 | The missing off-host copy stays visible (`A-1`, `A-4`); do not silence it | `readiness.sh` prints `readiness FINDING off-host-backup`; `tests/integration/composition/test_readiness_command.py` (readiness reports, never gates: `R-46`) |
 | 15 | A restore drill was run at the released head; **documentation check only**: the drill is the owner's act | a `docs/program/RECOVERY-DRILL-*.md` record has `head:` equal to the released head and `result: pass`; none exists at the current head (`D-216`) |
 
@@ -284,8 +281,7 @@ the new failure domains.
 - 2026-11-10 — addendum (`YC-MOVE-PLAN`, `R-153ab`, `R-153af`): a move to Yandex Cloud is planned, not
   started; folded into Alternative 4 and the Revisit trigger.
 - 2026-11-18 — compressed (ADR-OPTIMISE-01); the full earlier text: git show fb6c2203e:docs/architecture/adr/ADR-0021-production-topology-and-operations.md
-- 2026-11-18 — status statements updated to dev fb6c2203e: decision 3 (no `ALTER DEFAULT PRIVILEGES`;
-  the migrator stays a superuser); decision 6 (`restore-db` raises `token_epoch`); decisions 2, 4, 9
-  (`R-146ac`, `R-146ad`, `R-146ae`; limit mechanism present, values empty); release authority per
-  `AGENTS.md` section 6; the table's snapshot columns dropped.
+- 2026-11-18 — status statements updated to dev fb6c2203e: decision 3 (the grants step's recorded departure from `AD-02`'s `ALTER DEFAULT PRIVILEGES`; the migrator stays a superuser); decision 6 (`restore-db` raises `token_epoch`); decisions 2, 4, 9
+  (`R-146ac`, `R-146ad`, `R-146ae`; limit mechanism present, values empty); the table's snapshot columns dropped.
 - 2026-11-18 — section 11 added: the fork server (`R-156b`, `R-156d`…`R-156i`).
+- 2026-11-18 — decision 6 and checklist item 1 follow `MAIN_AUTODEPLOY_POLICY.md` (effective 2026-11-02) and `AGENTS.md` section 6: a delegated release integrator replaces «the owner's direct instruction naming it» of the `AD-05` checklist as `R-146w` confirmed it at `83600aed`; a change by the owner's process rule, not a status update.
