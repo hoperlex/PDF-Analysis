@@ -121,8 +121,8 @@ Branch `integration/style-orig`, published to `origin/dev` only (`R-157g`, `R-15
 - S1–S4 as listed above. Three tokens were added for the sign-in drawing (`--am-card-edge`, `--am-sheet-edge`, `--am-grid-dot`), plus `--am-panel` and
   `--am-text-2xs`. The showcase tokens were NOT folded into the shared palette: their values now equal the root ones, the frame's remap keeps only the
   control boundary, and the fold is a later cleanup.
-- S5: `contrast.ts` answers an edge with 3:1 only for a control (`R-157b`); 24 modules moved their controls' borders to `--am-line-strong`; 52 pending rows
-  left the list (one stays); `--am-ok` is `#0c7830`; `navigation-fit` was re-measured in Onest. Three guard files outside the first path list were
+- S5: `contrast.ts` answers an edge with 3:1 only for a control (`R-157b`); 24 modules moved their controls' borders to `--am-line-strong`; 50 of the 52 pending rows
+  (counted by palette) left the list, the loading shimmer stays in both palettes; `--am-ok` is `#0c7830`; `navigation-fit` was re-measured in Onest. Three guard files outside the first path list were
   edited (`navigation-fit`, `dense-overview`, `v2-finding-fields`) because they pinned the old values; they are listed above now.
 - Checks: `vitest` on `tests/unit/styles`, `tests/unit/shell`, `tests/unit/dashboard`, the sign-in screen, `executor-density-n2`, `sheet-chips` and
   `v2-finding-fields`: 38 files, 655 tests, all green; `tsc --noEmit` clean; `eslint` on the changed test files clean; `next build` exit 0;
