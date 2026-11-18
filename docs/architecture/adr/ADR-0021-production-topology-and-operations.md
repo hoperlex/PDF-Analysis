@@ -2,7 +2,7 @@
 
 - Status: accepted (open: the `AD-04` numbers, pending the `PROD-05a` measurement; the `AD-18` choice after `PROD-20`)
 - Date: 2026-10-26; revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`, `R-146ac` (server name), `R-146ad` (host size), `R-146ae` (MinIO); `AD-01` confirmed by `R-146p` (server name) and `R-146aa` (ACME mechanism); `AD-02`, `AD-05`, `AD-16` by `R-146w` as written at commit `83600aed`; `AD-03` by `R-146t`; `AD-17` by `R-146x`; `AD-18` settled by `R-146y` (what stands until the measurement); `AD-19` by `R-146z`; `R-153ab`, `R-153af` (2026-11-10); fork section 11: `R-156b`, `R-156d`…`R-156i`, `R-156l`; decision 3's default privileges: `R-156n`
+- Basis: `PRODUCTION-ADR-PACK-01`; owner rulings `R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`, `R-146ac` (server name), `R-146ad` (host size), `R-146ae` (MinIO); `AD-01` confirmed by `R-146p` (server name) and `R-146aa` (ACME mechanism); `AD-02`, `AD-05`, `AD-16` by `R-146w` as written at commit `83600aed`; `AD-03` by `R-146t`; `AD-17` by `R-146x`; `AD-18` settled by `R-146y` (what stands until the measurement); `AD-19` by `R-146z`; `R-153ab`, `R-153af` (2026-11-10); fork section 11: `R-156b`, `R-156d`…`R-156i`, `R-156l`; decision 3's default privileges: `R-156n`; amendment `R-156o`
 - Amends: supersedes the reading of `R-1` that no host exists yet (`R-146a`); no earlier ADR is replaced
 
 ## Context
@@ -198,7 +198,9 @@ objects, or a client asking for a storage statement); under `A-3` no scan covers
   starts.
 - **Memory.** `AD-04` applies: limits are fixed by a measurement on that server. Starting budget of the fork storage plan r2 (`R-156l`):
   PostgreSQL 6 GB, embedder 8 GB and 8 cores, worker 2.5 GB, api 1.5 GB, web and proxy 0.75 GB, MinIO 1 GB
-  until the bucket move, image build 3 GB, development 5 GB.
+  until the bucket move, image build 3 GB, development 5 GB. Amendment 2026-11-18 (`R-156o`): the embedder's
+  starting budget is 4 GB, not 8 GB (BGE-M3 F32 for the beta; the 4 GB freed go to the page cache and worker
+  slots), and the `AD-04` measurement includes the embedder's p95 latency beside running LLM workers.
 - **Copies.** No cross-host transport (`R-156e`): the dump before every migration, its receipt (`R-146t`) and
   the trial restore (`R-93`) stay and run on that server; the copy key (`PROD-03`) is not needed there.
 - **Risk.** No copy leaves the server, so a disk loss loses the database, the objects and every copy (A-1,
@@ -286,3 +288,4 @@ the new failure domains.
 - 2026-11-18 — section 11 added: the fork server (`R-156b`, `R-156d`…`R-156i`).
 - 2026-11-18 — decision 6 and checklist item 1 follow `MAIN_AUTODEPLOY_POLICY.md` (effective 2026-11-02) and `AGENTS.md` section 6: a delegated release integrator replaces «the owner's direct instruction naming it» of the `AD-05` checklist as `R-146w` confirmed it at `83600aed`; a change by the owner's process rule, not a status update.
 - 2026-11-18 — decision 3: `ALTER DEFAULT PRIVILEGES` restored and an unclassified relation warns instead of refusing (owner, R-156n).
+- 2026-11-18 — section 11 amended: embedder budget 4 GB, p95 latency in the `AD-04` measurement (`R-156o`).

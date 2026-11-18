@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-01 (accepted for alpha by the repository owner, `NORM-ADR-01`); revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: `NORM-ADR-01`; `R-76` (2026-10-09); `R-104` (2026-10-12, `OWNER_RULINGS_2026-09-17.md` section 3.30, `docs/program/dispatch/W54-PLAN.md`, recorded by `W54-SEAL-01`); fork decision 7: `R-156b`…`R-156d`, `R-156g`, `R-156h`, `R-156j`…`R-156l` (the specifics are the fork storage plan r2, approved by `R-156l`)
+- Basis: `NORM-ADR-01`; `R-76` (2026-10-09); `R-104` (2026-10-12, `OWNER_RULINGS_2026-09-17.md` section 3.30, `docs/program/dispatch/W54-PLAN.md`, recorded by `W54-SEAL-01`); fork decision 7: `R-156b`…`R-156d`, `R-156g`, `R-156h`, `R-156j`…`R-156l` (the specifics are the fork storage plan r2, approved by `R-156l`); amendment `R-156o`
 - Amends: settles the unresolved pgvector-versus-external-index choice in `ROADMAP.md`; no prior ADR is replaced
 
 ## Context
@@ -66,6 +66,17 @@ pgvector 0.8.6. There is no separate external or distributed vector database. Au
      lower score going to the owner; the dimension — 1024 if the model gives it without material loss,
      otherwise `halfvec(N)`, N ≤ 4000, and a migration of the three vector columns.
    - The current production VPS keeps the BGE-M3 profile and the windows of `ADR-0029`.
+   - **Amendment 2026-11-18, the model for the beta (`R-156o`).** The owner's study chose BGE-M3 F32: the
+     fork's embedder serves the existing profile `bge-m3-dense-v1` (BAAI/bge-m3 at its pinned revision,
+     fp32, 1024 dimensions) in the profile's own runtime, the norms-worker image. The int8 model of
+     `norm-embed` was only the production VPS's temporary stand-in, not a profile, so "a model larger than
+     today's BGE-M3 int8 profile" reads, for the beta, as the full-precision BGE-M3 of the profile. No new
+     profile, no dimension change, no migration and no corpus rebuild: the verified bundle already carries
+     this profile's build. The «Open» bullet is closed for the beta; the profile-as-setting, the partial
+     HNSW per profile and the dimension rule are deferred until another model is chosen after the beta, and
+     the fixture rule applies to that choice. The embedder's caps are still fixed by the measurement on the
+     fork server, which includes the p95 latency alone and beside running LLM workers; the plan's starting
+     figures become 4 GB and 8 of the 12 cores.
 
 The embedding producer may run as a separate execution process (a different resource profile), but it is
 not a new network service and publishes only through the transactional PostgreSQL boundary.
@@ -113,3 +124,4 @@ and canonical citation before adding a network service.
   re-recognition from the drop; folded into decisions 3, 4 and 5.
 - 2026-11-18 — compressed (ADR-OPTIMISE-01); the full earlier text: git show fb6c2203e:docs/architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md
 - 2026-11-18 — decision 7 added: the fork server, embeddings on the fly in local PostgreSQL (`R-156b`…`R-156k`).
+- 2026-11-18 — decision 7 amended: BGE-M3 F32 (`bge-m3-dense-v1`) is the fork's model for the beta; no new profile, no migration, no rebuild (`R-156o`).
