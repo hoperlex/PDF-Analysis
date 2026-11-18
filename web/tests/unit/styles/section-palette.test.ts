@@ -539,23 +539,21 @@ describe('every colour is a graphic that stands out from every surface it is dra
   it('reads the surfaces off the stylesheet, as the root palette has them and as the frame remaps them', () => {
     const light = surfacesOf(CSS, 'light');
     const names = light.map((surface) => surface.name);
+    // `STYLE-ORIG-01`: the frame's remap to the `--am-showcase-*` tokens is now the same colour as the root palette in every surface,
+    // so no surface is listed twice; the menu band is the flat side panel (`--am-panel`), no longer the card.
     expect(names).toEqual([
       'page (--am-surface)',
-      'page in the frame (--am-showcase-bg)',
       'card (--am-paper)',
-      'card in the frame (--am-showcase-card)',
       'sunken surface (--am-surface-sunken)',
-      'sunken surface in the frame (--am-showcase-card-alt)',
-      'menu band (--am-paper)',
-      'menu band in the frame (--am-showcase-card)',
+      'menu band (--am-panel)',
       'menu current-row tint (--am-accent-light)',
-      'menu current-row tint in the frame (--am-showcase-accent-soft)',
     ]);
-    const tokens = palette(CSS, 'light');
-    expect(light.find((surface) => surface.name.startsWith('page in the frame'))?.hex).toBe(tokens.get('--am-showcase-bg'));
-    expect(surfacesOf(CSS, 'dark').find((surface) => surface.name.startsWith('page in the frame'))?.hex).toBe(
-      palette(CSS, 'dark').get('--am-showcase-bg'),
-    );
+    // The frame's remap is the root palette now, in both themes: the page in the frame is the page.
+    for (const theme of THEMES) {
+      const tokens = palette(CSS, theme);
+      expect(tokens.get('--am-surface')).toBe(tokens.get('--am-showcase-bg'));
+      expect(tokens.get('--am-paper')).toBe(tokens.get('--am-showcase-card'));
+    }
   });
 
   it('clears 3:1 against the page, the card, the sunken surface, the menu band and the menu tint', () => {

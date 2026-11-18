@@ -13,7 +13,7 @@
 .more :global(.am-menu__trigger) {
   min-height: var(--am-target-min);
   padding: var(--am-gap-2xs) var(--am-gap-sm);
-  border: 1px solid var(--am-line);
+  border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   color: var(--am-ink);

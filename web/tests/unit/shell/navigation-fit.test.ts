@@ -159,18 +159,23 @@ describe('NAV-01b: the rows of the side menu fit the column', () => {
 
   describe('the widest group label, in the narrowest column', () => {
     /**
-     * «Администрирование», 17 capitals, set in `UbuntuSans-variable.ttf` at wght 650 and 11.5 px with no tracking: 138.1 px.
-     * Measured with Pillow 12.2 on the Raqm (HarfBuzz) layout engine, the variation axes set, kerning on; the unkerned sum of the
-     * advance widths read from `hmtx` is 137.8. Linux Chrome rounds advances, so a browser may differ by a pixel or two; the budget
-     * keeps {@link SLACK} for that. Re-measure when a group is renamed (the next case fails then) or the font file changes.
+     * «Администрирование», 17 capitals, set in `Onest-variable.ttf` at wght 700 and 10 px with no tracking: 122.7 px
+     * (`STYLE-ORIG-01`, `R-157a`: the typeface of the original; it was 138.1 px in Ubuntu Sans at 11.5 px).
+     * Measured with Pillow 12.3 on the Raqm (HarfBuzz) layout engine, the variation axes set, kerning on (the basic layout gives
+     * 122.5). Linux Chrome rounds advances, so a browser may differ by a pixel or two; the budget keeps {@link SLACK} for that.
+     * Re-measure when a group is renamed (the next case fails then) or the font file changes.
      */
-    const LABEL_PX = 138.1;
+    const LABEL_PX = 122.7;
     const LETTERS = 17;
-    const FONT_PX = 11.5;
+    const FONT_PX = 10;
     /** The chevron: `0.4em` wide and a 1.5 px border on its right (`globals.css`, `.am-disclosure__button::after`). */
     const CHEVRON_PX = 0.4 * FONT_PX + 1.5;
-    /** The nav box is 182 px (the bar's 200, its border and padding); a 10 px thin scrollbar leaves 172 (measured, owner, 0.20.3). */
-    const NARROWEST_COLUMN_PX = 172;
+    /**
+     * The bar is the 214 px grid column with a 1 px border on its right, the nav takes 8 px of padding on both sides (197), and a
+     * 10 px thin scrollbar leaves 187 (the scrollbar measured by the owner, 0.20.3; the bar was a 200 px card, 172 px of nav, until
+     * `STYLE-ORIG-01`).
+     */
+    const NARROWEST_COLUMN_PX = 214 - 1 - 2 * 8 - 10;
     /** What the browser's own rounding may take. */
     const SLACK = 4;
 
@@ -186,26 +191,39 @@ describe('NAV-01b: the rows of the side menu fit the column', () => {
       const padding = (button.get('padding') ?? '').split(' ').map(px);
       if (padding.length !== 4) throw new Error(`padding is four lengths: ${button.get('padding')}`);
       const [, right = 0, , left = 0] = padding;
-      return LABEL_PX + LETTERS * trackingEm(button.get('letter-spacing')) * FONT_PX + px(button.get('gap') ?? '0px') + CHEVRON_PX + left + right;
+      // The button holds the group's square marker (`::before`), the label and the chevron: two gaps, and the marker's own margin.
+      const marker = rule(css, `${GROUP_BUTTON}::before`);
+      const markerPx = px(marker.get('width') ?? '0px') + px(marker.get('margin-right') ?? '0px');
+      return (
+        LABEL_PX + LETTERS * trackingEm(button.get('letter-spacing')) * FONT_PX + 2 * px(button.get('gap') ?? '0px') + markerPx + CHEVRON_PX + left + right
+      );
     }
 
-    it('fits with room to spare, label, gap, chevron and padding together', () => {
+    it('fits with room to spare, marker, label, gaps, chevron and padding together', () => {
       expect(need(FRAME_CSS)).toBeLessThanOrEqual(NARROWEST_COLUMN_PX - SLACK);
     });
 
-    it('can fail: the tracking, gap and padding the button had need 187.7 px of 172, the width the earlier clip measured as 188', () => {
-      // `letter-spacing: 0.11em`, the 6 px gap `globals.css` gives a button, and 8 px on both sides.
-      const was = FRAME_CSS
-        .replace('letter-spacing: calc(var(--am-tracking-caps) * 0.5);', 'letter-spacing: 0.11em;')
-        .replace('  gap: var(--am-gap-xs);\n  /* 11.5 px type', '  gap: 6px;\n  /* 11.5 px type')
-        .replace('padding: var(--am-gap-xs) var(--am-gap-xs) var(--am-gap-xs) var(--am-gap-sm);', 'padding: var(--am-gap-xs) var(--am-gap-sm) var(--am-gap-xs) var(--am-gap-sm);');
-      expect(was, 'the mutation changed nothing').not.toBe(FRAME_CSS);
-      expect(need(was)).toBeCloseTo(187.7, 1);
-      expect(need(was)).toBeGreaterThan(NARROWEST_COLUMN_PX - SLACK);
-      // The old tracking alone is enough to overflow the 172 px column, with the new gap and padding.
-      const trackingOnly = FRAME_CSS.replace('letter-spacing: calc(var(--am-tracking-caps) * 0.5);', 'letter-spacing: 0.11em;');
-      expect(trackingOnly).not.toBe(FRAME_CSS);
-      expect(need(trackingOnly)).toBeGreaterThan(NARROWEST_COLUMN_PX - SLACK);
+    /** `css` with `from` replaced by `to` inside the group button's own rule only (the first `from` after its opening brace). */
+    function inGroupButton(css: string, from: string, to: string): string {
+      const start = css.indexOf(`${GROUP_BUTTON} {`);
+      expect(start, 'the group button rule moved').toBeGreaterThanOrEqual(0);
+      const at = css.indexOf(from, start);
+      expect(at, `the group button rule has no \`${from}\``).toBeGreaterThan(start);
+      return css.slice(0, at) + to + css.slice(at + from.length);
+    }
+
+    it('can fail: a group label spaced at 0.25em overflows the column, and so does 8 px of padding on both sides with the wide tracking', () => {
+      const tracked = inGroupButton(FRAME_CSS, 'letter-spacing: var(--am-tracking-caps);', 'letter-spacing: 0.25em;');
+      expect(tracked, 'the mutation changed nothing').not.toBe(FRAME_CSS);
+      expect(need(tracked)).toBeGreaterThan(NARROWEST_COLUMN_PX - SLACK);
+      // The padding alone is not enough, which is the point of the budget: it has room, and the tracking is what spends it.
+      const padded = inGroupButton(
+        FRAME_CSS,
+        'padding: var(--am-gap-xs) var(--am-gap-xs) var(--am-gap-xs) var(--am-gap-sm);',
+        'padding: var(--am-gap-xs) var(--am-gap-lg) var(--am-gap-xs) var(--am-gap-lg);',
+      );
+      expect(padded).not.toBe(FRAME_CSS);
+      expect(need(padded)).toBeGreaterThan(need(FRAME_CSS));
     });
   });
 

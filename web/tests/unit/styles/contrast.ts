@@ -739,6 +739,11 @@ export interface Occurrence {
    */
   readonly interactive: boolean;
   /**
+   * The sites of a merged pair that are controls (`interactive`), edges only. A merged pair names every site that draws
+   * it; under `R-157b` only these answer to 3:1, so a failure message points at them and not at the card edges beside.
+   */
+  controlSites?: string[];
+  /**
    * True when the element's own fill already reaches 3:1 against what is behind it.
    * A boundary is only required to identify a component when nothing else does: a
    * primary button filled `--am-accent` on `--am-surface` at 7.6:1 is identifiable
@@ -747,8 +752,13 @@ export interface Occurrence {
   readonly fillDistinguishes: boolean;
 }
 
-/** The tags HTML makes operable on their own. `details` is a container; `summary` operates it. */
-const INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary']);
+/**
+ * The controls whose boundary answers to 3:1 (`R-157b`, `STYLE-ORIG-01`): «рамки 3:1 только у полей и кнопок». A field and a
+ * button, and what stands for one: a widget role, and a link that is DRAWN as a button (`am-button`). A link that is a card, a
+ * `summary`, a focusable container and a live region are not controls in the owner's sense; their borders separate. Before
+ * `R-157b` this set was every operable tag (`a`, `summary` included) and any element with a `tabindex`.
+ */
+const CONTROL_TAGS = new Set(['button', 'input', 'select', 'textarea']);
 
 /**
  * WIDGET roles only.
@@ -762,17 +772,15 @@ const INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 
  * user OPERATES — not everything that carries an ARIA attribute.
  */
 const WIDGET_ROLES = new Set([
-  'button', 'link', 'checkbox', 'radio', 'switch', 'slider', 'spinbutton', 'textbox',
-  'searchbox', 'combobox', 'listbox', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
-  'option', 'tab', 'treeitem',
+  'button', 'checkbox', 'radio', 'switch', 'slider', 'spinbutton', 'textbox',
+  'searchbox', 'combobox', 'tab',
 ]);
 
 export function isInteractive(element: Element): boolean {
-  if (INTERACTIVE_TAGS.has(element.tag) && (element.tag !== 'a' || element.attrs.has('href'))) {
-    return true;
-  }
+  if (CONTROL_TAGS.has(element.tag)) return true;
+  if (element.tag === 'a' && element.attrs.has('href') && /(?:^|\s)am-button(?:--[\w-]+)?(?:\s|$)/.test(element.attrs.get('class') ?? '')) return true;
   const role = element.attrs.get('role');
-  return (role !== undefined && WIDGET_ROLES.has(role)) || element.attrs.has('tabindex');
+  return role !== undefined && WIDGET_ROLES.has(role);
 }
 
 export interface Screen {
@@ -887,12 +895,15 @@ export function census(
       // the guard's verdict depend on the order screens happen to render in, and it
       // silently exempted the one site that matters. The strictest classification wins:
       // interactive if ANY site is, and undistinguished-by-fill if ANY site is.
+      const controlSites = existing.controlSites ?? [];
+      if (occurrence.interactive && !controlSites.includes(occurrence.site)) controlSites.push(occurrence.site);
       out.set(key, {
         ...existing,
         interactive: existing.interactive || occurrence.interactive,
         fillDistinguishes: existing.fillDistinguishes && occurrence.fillDistinguishes,
+        controlSites,
       });
-    } else out.set(key, { ...occurrence, sites: [occurrence.site] });
+    } else out.set(key, { ...occurrence, sites: [occurrence.site], controlSites: occurrence.interactive ? [occurrence.site] : [] });
   };
 
   for (const screen of screens) {
@@ -1143,35 +1154,39 @@ export const AA_NON_TEXT = 3;
  * — the verdict dot in the decision history is the only thing that says accepted or
  * rejected in colour — is 1.4.11.
  *
- * ## `R-33`: EVERY border answers to 3:1, not only the load-bearing ones
+ * ## `R-157b`: an edge answers to 3:1 when it is a CONTROL's boundary, and to nothing otherwise
  *
- * Until wave 42 the last clause read *"a boundary is 1.4.11 only when it is the sole thing
- * identifying a control: an interactive element, per the markup, whose own fill does not
- * already separate it from what is behind it. Everything else is a separator and WCAG asks
- * nothing of it."* That was a correct reading of 1.4.11 and it is no longer the rule this
- * product holds itself to.
+ * `R-33` (2026-09-23, `D-81`) raised EVERY border to 3:1, whether or not it was the only
+ * thing identifying a control, and this function said so in one line. The owner took the
+ * other road on 2026-11-18, when the product moved to the original's visual key
+ * (`STYLE-ORIG-01`, `R-157a`/`R-157b`): «рамки 3:1 только у полей и кнопок». The rule is
+ * WCAG 1.4.11 as `W32-CONTRAST` §3 read it before wave 42, and the fields `Occurrence`
+ * kept for it (`interactive`, `fillDistinguishes`) are consulted again:
  *
- * The owner ruled on 2026-09-23 (`R-33`, `D-81`) for the **product-wide** floor over the
- * targeted one, explicitly — the option `W32-CONTRAST` §3 and `W33-THEME` had each declined
- * because it turns every rule in the product into a hard line. So the threshold for an edge
- * is no longer a question about the element it surrounds. It is 3:1, everywhere.
+ *   - a boundary of an interactive element (a field, a button, a select, a summary, a
+ *     link, a widget role) whose own fill does not already separate it from what is
+ *     behind it is 3:1: it is the only thing that says "this is a control";
+ *   - an interactive element filled enough to be seen without its border (a primary
+ *     button) answers to nothing, and so does a card edge, a divider and a table rule:
+ *     they separate, they do not identify;
+ *   - an inactive component is excepted, as 1.4.11 says in as many words.
  *
- * Two consequences worth stating, because both are the ruling and not an accident:
- *
- *   - `interactive` and `fillDistinguishes` are no longer consulted for an edge. They stay
- *     on `Occurrence` because they are measured facts about a site and the register, the
- *     report and any future ruling can still read them; nothing in the THRESHOLD reads them.
- *   - The `disabled` exception goes with them. 1.4.11 excepts an inactive component in as
- *     many words, and that exception is a floor WCAG PERMITS rather than one the owner
- *     kept: a product-wide border floor that a disabled control could sit under would be
- *     the targeted rule again, wearing the word "except".
+ * The decorative borders the 2026-11-02 census recorded as pending debt (`PENDING_PAIRS`,
+ * the `color-mix` borders) stop being debt by this ruling; the rows that no longer
+ * produce a failure leave the list, and the ratchet holds the rest.
  */
 export function thresholdFor(occurrence: Occurrence): number | null {
   if (occurrence.kind === 'text') return AA_TEXT;
-  // R-33. Every border, every state, both palettes.
-  if (occurrence.kind === 'edge') return AA_NON_TEXT;
-  // 1.4.11 excepts inactive user interface components, in as many words. It now reaches
-  // graphics alone: an edge answered above, and text answered above that.
-  if (occurrence.state === 'disabled') return null;
+  // 1.4.11 excepts inactive user interface components, in as many words: `disabled`, and `disabled:hover` of the same button.
+  const inactive = occurrence.state !== null && occurrence.state.includes('disabled');
+  if (occurrence.kind === 'edge') {
+    if (inactive) return null;
+    return occurrence.interactive && !occurrence.fillDistinguishes ? AA_NON_TEXT : null;
+  }
+  if (inactive) return null;
+  // A graphic drawn in the line scale (`--am-line`, `--am-line-soft`, `--am-grid-line`, the frame's line) is a separator, such as
+  // the guide of a timeline: under `R-157b` the line scale answers to nothing unless a control wears it, and a control's own
+  // boundary is an edge, answered above. A graphic that carries meaning is drawn in a semantic colour and keeps 1.4.11.
+  if (/^--am-(?:line|line-soft|grid-line)(?:@|$)|^--am-showcase-line(?:@|$)/.test(occurrence.foreground)) return null;
   return AA_NON_TEXT;
 }

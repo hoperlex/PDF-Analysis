@@ -351,7 +351,8 @@ describe('every pair is legible in both palettes', () => {
   });
 
   it('reads the surfaces off the stylesheet: the page is `body`, the bar is `.am-app__bar`', () => {
-    expect(surfacesUnderTheAvatar(CSS)).toEqual({ page: '--am-surface', bar: '--am-paper' });
+    // `STYLE-ORIG-01`: the bar is the flat side panel, `--am-panel` (it was the card).
+    expect(surfacesUnderTheAvatar(CSS)).toEqual({ page: '--am-surface', bar: '--am-panel' });
   });
 
   it('can fail: one value edited below each floor, in either theme', () => {

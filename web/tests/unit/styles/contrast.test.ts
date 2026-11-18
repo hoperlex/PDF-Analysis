@@ -750,7 +750,8 @@ describe('the census is taken over rendered screens, not over a list', () => {
     expect(found[0]?.selectors).toEqual([
       '[data-dashboard-showcase]', '.am-app__bar', '.am-app__utility', '.am-app__main',
     ]);
-    expect(found[0]?.alias.size).toBe(13);
+    // `STYLE-ORIG-01`: the frame no longer remaps the three decorative line tokens (`R-157b`), only the control boundary: 10.
+    expect(found[0]?.alias.size).toBe(10);
     // A screen that does not carry the frame is given the frame; one that does is left alone.
     expect(framed('<html><body><p>x</p></body></html>')).toBe(
       '<html><body><div class="am-app"><main class="am-app__main"><p>x</p></main></div></body></html>',
@@ -802,7 +803,7 @@ describe('every pair that meets on a screen clears the threshold its role asks o
           // precisely the class where a product-wide regression reads as a local one,
           // because `AppFrame` is on every screen and a reader who sees one name looks
           // at one screen.
-          where: m.occurrence.sites,
+          where: m.occurrence.kind === 'edge' ? m.occurrence.controlSites : m.occurrence.sites,
         })),
     ).sort((a, b) => a.ratio - b.ratio);
     expect(failing).toEqual([]);
@@ -862,28 +863,28 @@ describe('R-33: every border that meets on a screen clears 3:1, in both palettes
   it('names the theme, the ratio and the site of every border under the floor', () => {
     const under = THEMES.flatMap((theme) =>
       measured(theme)
-        .filter((m) => m.occurrence.kind === 'edge')
-        .filter((m) => !(m.ratio >= AA_NON_TEXT))
+        .filter((m) => m.occurrence.kind === 'edge' && m.threshold !== null)
+        .filter((m) => !(m.ratio >= (m.threshold as number)))
         .filter((m) => !isPending(m.key, theme))
         .map((m) => ({
           theme,
           pair: m.key,
           ratio: Number(m.ratio.toFixed(2)),
-          needs: AA_NON_TEXT,
+          needs: m.threshold,
           // ALL the sites, not the first. `W44-JUDGE-A` put one failing border on two
           // screens at once and the message named only `blocks`; `workers` never
           // appeared. The verdict was never wrong -- the message was -- and `D-93` is
           // precisely the class where a product-wide regression reads as a local one,
           // because `AppFrame` is on every screen and a reader who sees one name looks
           // at one screen.
-          where: m.occurrence.sites,
+          where: m.occurrence.kind === 'edge' ? m.occurrence.controlSites : m.occurrence.sites,
         })),
     ).sort((a, b) => a.ratio - b.ratio || a.pair.localeCompare(b.pair));
     expect(
       under,
-      'R-33: every border in this product clears 3:1 against the surface it is drawn on, ' +
-        'in BOTH palettes. These do not. The repair is the token, not an exemption: this ' +
-        'assertion reads no register.',
+      'R-157b: the boundary of every control (a field, a button) that nothing else identifies clears ' +
+        '3:1 against the surface it is drawn on, in BOTH palettes. These do not. The repair is the ' +
+        'token, not an exemption: this assertion reads no register.',
     ).toEqual([]);
   });
 
@@ -899,20 +900,23 @@ describe('R-33: every border that meets on a screen clears 3:1, in both palettes
     }
   });
 
-  it('asks 3:1 of a border whatever the markup around it says', () => {
-    // The ruling's own words -- "not only the load-bearing ones" -- as a property of
-    // `thresholdFor` rather than of today's census: a decorative separator, a disabled
-    // control's edge and an interactive control's sole boundary all answer to the same
-    // number now. Built from a literal occurrence so it stays true when the screens change.
+  it('asks 3:1 of a control\'s boundary and nothing of a separator (R-157b)', () => {
+    // The ruling's own words -- «рамки 3:1 только у полей и кнопок» -- as a property of
+    // `thresholdFor` rather than of today's census: an interactive element's sole boundary
+    // answers to 3:1, a decorative separator, a card edge and a control that is filled
+    // enough to be seen without its border answer to nothing, and an inactive one is
+    // excepted. Built from a literal occurrence so it stays true when the screens change.
     const edge = (over: Partial<Occurrence>): Occurrence => ({
       kind: 'edge', foreground: '--am-line', background: '--am-paper',
       state: null, pseudo: 'border', site: 'synthetic', interactive: false,
       fillDistinguishes: false, ...over,
     });
-    expect(thresholdFor(edge({}))).toBe(AA_NON_TEXT);
-    expect(thresholdFor(edge({ interactive: true, fillDistinguishes: true }))).toBe(AA_NON_TEXT);
-    expect(thresholdFor(edge({ state: 'disabled' }))).toBe(AA_NON_TEXT);
-    expect(thresholdFor(edge({ state: 'hover' }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ interactive: true }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ interactive: true, state: 'hover' }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({ interactive: true, state: 'focus-visible' }))).toBe(AA_NON_TEXT);
+    expect(thresholdFor(edge({}))).toBeNull();
+    expect(thresholdFor(edge({ interactive: true, fillDistinguishes: true }))).toBeNull();
+    expect(thresholdFor(edge({ interactive: true, state: 'disabled' }))).toBeNull();
     // Text is untouched by the ruling and still answers to 1.4.3.
     expect(thresholdFor(edge({ kind: 'text' }))).toBe(AA_TEXT);
   });
@@ -960,7 +964,7 @@ describe('the register is held to the census in both directions, and in both pal
  * 52 on 2026-11-09 (sign-in hotfix): the sign-in scene left, and with it the orbit's rings and node
  * circles -- the accent at 14/22/30 % and the line at 45/52 % over the showcase card, in both palettes.
  */
-const PENDING_PAIR_ROWS = 52;
+const PENDING_PAIR_ROWS = 2; // 52 until `STYLE-ORIG-01` (`R-157b`): the decorative borders stopped being debt; the loading shimmer, in both palettes, is what is left
 /** Likewise for the colour rules no screen reaches. */
 const PENDING_UNREACHED_ROWS = 47; // 61 at the base; `UIP-FIX-26` removed one (the dead `.projectChooser` of the old object chooser, with its row); `UIP-FIX-02` removed one (the dead pressed-state rule of the old two-button theme control, with its row); `RUN-SCREEN-01a` removed four (a seeded v3 review on the run screen reaches the extended review's `.filters`, its select rule, `.packagePanel` and `.windowList > li`); lane D5 removed one row, lane D1 three, lane P2 three (the home page at `/` joined the census loaded), lane N1 one (the catalogue's `.filters` lost its box: the form is a line, the layout carries no colour)
 
@@ -1054,17 +1058,18 @@ describe('the ink ladder says, per palette, how many levels it actually has', ()
     return { bound, luminance };
   }
 
-  it('the light palette has two visible levels and three tokens, and that is the honest form of it', () => {
+  it('the light palette has three levels since the original\'s key (R-157a): the collapsed ladder was one value nobody could move', () => {
     const tokens = palette(readFileSync(GLOBALS, 'utf8'), 'light');
+    const ink = tokens.get('--am-ink') as string;
     const soft = tokens.get('--am-ink-soft') as string;
     const muted = tokens.get('--am-ink-muted') as string;
-    // It is not `ink-muted` under another name: two tokens, two values.
+    // `W32-CONTRAST` §3.1 measured this ladder at 1.10:1 and called it two tokens, one visible level, because the darkest
+    // light surface (`--am-failed-light`) capped a compliant ink just above `--am-ink-muted`. `STYLE-ORIG-01` moved the
+    // palette, and the failure tint is lighter now: the two steps are visible, as the dark palette's are.
     expect(soft).not.toEqual(muted);
-    // But the separation it has left is not a step anybody can see, and saying so in a
-    // test is the point: if a later wave believes it has three ink levels, this fails.
-    expect(contrastRatio(soft, muted)).toBeLessThan(1.3);
-    // The reason: AA on the darkest surface it carries text over caps it just above
-    // `ink-muted`. Derived from the census, so a surface change moves both sides.
+    expect(contrastRatio(ink, muted)).toBeGreaterThanOrEqual(1.5);
+    expect(contrastRatio(muted, soft)).toBeGreaterThanOrEqual(1.5);
+    // And the quietest level is still AA on the darkest surface it carries text over.
     expect(aaBound('light', '--am-ink-soft').luminance).toBeLessThanOrEqual(aaBound('light', '--am-ink-soft').bound);
     expect(aaBound('light', '--am-ink-muted').luminance).toBeLessThan(aaBound('light', '--am-ink-muted').bound);
   });

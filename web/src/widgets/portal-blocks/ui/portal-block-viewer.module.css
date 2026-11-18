@@ -55,7 +55,7 @@
   height: 28px;
   margin: 0;
   padding: 0 var(--am-gap-xs);
-  border: 1px solid var(--am-line);
+  border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   color: var(--am-ink);
@@ -74,7 +74,7 @@
 
 .step:disabled,
 .step:disabled:hover {
-  border-color: var(--am-line);
+  border-color: var(--am-line-strong);
   background: var(--am-paper);
   color: var(--am-ink-soft);
   cursor: default;

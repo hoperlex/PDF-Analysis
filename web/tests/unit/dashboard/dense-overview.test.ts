@@ -326,7 +326,8 @@ describe('UIP-S01-03: the code badge of a section row wears the section\'s colou
     parseRules(text, 'module').flatMap((rule) => [...rule.declarations.keys()].filter((property) => property.startsWith('--')).map((property) => `${rule.selector} { ${property} }`));
 
   it('reads only tokens: the outline is the neutral token, the section\'s colour comes from the markup, and the stylesheet spells no colour and declares no token', () => {
-    expect(declarations(css, '.badge').get('border')).toBe('2px solid var(--am-inert)');
+    // `STYLE-ORIG-01`, `R-157e`: the code badge is the original's small plaque, a 1 px outline.
+    expect(declarations(css, '.badge').get('border')).toBe('1px solid var(--am-inert)');
     expect(spelledColours(css)).toEqual([]);
     expect(declaredTokens(css)).toEqual([]);
   });

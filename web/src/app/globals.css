@@ -184,7 +184,7 @@
   --am-accent: #007467;
   --am-accent-strong: #005f55;
   --am-accent-light: #d4f0eb;
-  --am-ok: #007651;
+  --am-ok: #0c7830;
   --am-ok-light: #d4f0e4;
   --am-degraded: #975900;
   --am-degraded-light: #ffeec4;
@@ -464,7 +464,7 @@
     --am-showcase-ink: #f4f7fb;
     --am-showcase-muted: #b7c3d1;
     --am-showcase-soft: #8f9cae;
-    --am-showcase-line: #586a7e;
+    --am-showcase-line: #62748a;
     --am-showcase-accent: #19d3c5;
     --am-showcase-accent-strong: #3fe3d6;
     --am-showcase-accent-soft: #0b2526;
@@ -472,7 +472,7 @@
     /* ---- lines -------------------------------------------------------------------- */
     --am-line-soft: #161f2a;
     --am-line: #1f2a36;
-    --am-line-strong: #586a7e;
+    --am-line-strong: #62748a;
     --am-grid-line: #1a2430;
 
     /* ---- semantic hues, each with a tint that can carry text ---------------------- */
@@ -563,7 +563,7 @@
   --am-showcase-ink: #f4f7fb;
   --am-showcase-muted: #b7c3d1;
   --am-showcase-soft: #8f9cae;
-  --am-showcase-line: #586a7e;
+  --am-showcase-line: #62748a;
   --am-showcase-accent: #19d3c5;
   --am-showcase-accent-strong: #3fe3d6;
   --am-showcase-accent-soft: #0b2526;
@@ -571,7 +571,7 @@
   /* ---- lines -------------------------------------------------------------------- */
   --am-line-soft: #161f2a;
   --am-line: #1f2a36;
-  --am-line-strong: #586a7e;
+  --am-line-strong: #62748a;
   --am-grid-line: #1a2430;
 
   /* ---- semantic hues, each with a tint that can carry text ---------------------- */
@@ -2286,7 +2286,7 @@ button.am-badge {
   width: 100%;
   text-align: left;
   padding: 6px 10px;
-  border: 1px solid var(--am-line);
+  border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   color: var(--am-ink);
@@ -2359,7 +2359,7 @@ button.am-badge {
 /* Page tabs are a choice among peers, so they are quiet until chosen. */
 .am-evidence__pages .am-button {
   padding: 5px 13px;
-  border: 1px solid var(--am-line);
+  border: 1px solid var(--am-line-strong);
   background: var(--am-paper);
   color: var(--am-ink-muted);
   font-family: var(--am-font-mono);
@@ -2973,7 +2973,7 @@ span.am-note {
   align-items: center;
   min-height: 28px;
   padding: var(--am-gap-2xs) var(--am-gap-md);
-  border: 1px solid var(--am-line);
+  border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   color: var(--am-ink-muted);

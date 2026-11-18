@@ -50,7 +50,7 @@
   min-width: 0;
   margin: 0;
   padding: var(--am-gap-xs);
-  border: 2px solid var(--am-line-soft);
+  border: 2px solid var(--am-line-strong);
   border-radius: var(--am-radius);
   background: var(--am-paper);
   color: var(--am-ink);

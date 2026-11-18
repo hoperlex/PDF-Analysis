@@ -18,7 +18,7 @@
 .toolbar h3, .toolbar h4, .toolbar p { margin: 0; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--am-gap); padding: var(--am-gap); border: 1px solid var(--am-line); border-radius: var(--am-radius-lg); background: var(--am-paper); }
 .filters label, .toolbar label { display: flex; flex-direction: column; align-items: stretch; gap: var(--am-gap-sm); min-width: 0; }
-.filters input, .filters select, .toolbar select { max-width: 100%; min-width: 0; padding: var(--am-gap-sm); color: inherit; background: var(--am-paper); border: 1px solid var(--am-line); border-radius: var(--am-radius-lg); font: inherit; }
+.filters input, .filters select, .toolbar select { max-width: 100%; min-width: 0; padding: var(--am-gap-sm); color: inherit; background: var(--am-paper); border: 1px solid var(--am-line-strong); border-radius: var(--am-radius-lg); font: inherit; }
 .candidatePanel, .batchPanel { min-width: 0; margin-block: var(--am-gap-lg); scroll-margin-block-start: 6rem; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; }
 .sourceButtons { display: flex; flex-wrap: wrap; gap: var(--am-gap-sm); padding: 0; list-style: none; }

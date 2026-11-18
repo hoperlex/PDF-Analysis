@@ -619,7 +619,7 @@
 
 .accountMenu :global(.am-menu__trigger) {
   padding: var(--am-gap-2xs);
-  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
+  border: 1px solid var(--am-line-strong);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }

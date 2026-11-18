@@ -300,7 +300,7 @@
   width: 100%;
   min-width: 0;
   padding: 6px 10px;
-  border: 1px solid var(--am-line-soft);
+  border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   color: var(--am-ink);

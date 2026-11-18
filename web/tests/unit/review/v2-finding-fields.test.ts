@@ -325,12 +325,15 @@ describe('the five severities are told apart by colour, in both palettes', () =>
     for (const theme of THEMES) expect(closestPair(old, theme, true).apart).toBe(0);
   });
 
-  it('reads the teal of «Эксплуатационное» from the frame’s accent, which is what makes it a colour apart from the green', () => {
-    // Inside the frame the accent is the showcase accent; outside it is the blue. The two tones that sit next to each other
-    // in hue (operational teal, recommendation green) are the nearest pair of the five, which is why they are measured.
+  it('reads the teal of «Эксплуатационное» from the accent, and keeps it a colour apart from the green', () => {
+    // `STYLE-ORIG-01` (`R-157a`): the accent is the original's teal in and out of the frame (it was a blue outside the frame, and
+    // that difference was what kept the operational teal apart from the green). The two tones that sit next to each other in
+    // hue (operational teal, recommendation green) are the nearest pair of the five, which is why they are measured; the green
+    // is the one that moved, to `#0c7830`, to stay at least 0.04 from the teal.
     for (const theme of THEMES) {
-      expect(inkOf('active', theme, true)).not.toBe(inkOf('active', theme, false));
+      expect(inkOf('active', theme, true)).toBe(inkOf('active', theme, false));
       expect(distance(inkOf('active', theme, true), inkOf('ok', theme, true))).toBeGreaterThanOrEqual(MIN_APART);
+      expect(distance(inkOf('active', theme, false), inkOf('ok', theme, false))).toBeGreaterThanOrEqual(MIN_APART);
     }
   });
 });

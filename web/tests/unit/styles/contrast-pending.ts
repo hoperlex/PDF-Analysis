@@ -81,36 +81,10 @@ export interface PendingPair {
 }
 
 export const PENDING_PAIRS: readonly PendingPair[] = [
-  { key: 'edge|--am-showcase-accent@28%|--am-showcase-bg|-|border', themes: ['light', 'dark'], floor: { light: 1.52, dark: 2.00 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-accent@28%|--am-showcase-bg|focus-visible|border', themes: ['light', 'dark'], floor: { light: 1.52, dark: 2.00 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-accent@28%|--am-showcase-bg|hover|border', themes: ['light', 'dark'], floor: { light: 1.52, dark: 2.00 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-accent@28%|--am-showcase-card|-|border-color', themes: ['light', 'dark'], floor: { light: 1.54, dark: 2.05 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-accent@28%|--am-showcase-card|focus-visible|border-color', themes: ['light', 'dark'], floor: { light: 1.54, dark: 2.05 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-accent@28%|--am-showcase-card|hover|border-color', themes: ['light', 'dark'], floor: { light: 1.54, dark: 2.05 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@24%|--am-showcase-card|-|border-top', themes: ['light', 'dark'], floor: { light: 1.31, dark: 1.36 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@25%|--am-showcase-card|-|border-bottom', themes: ['light', 'dark'], floor: { light: 1.32, dark: 1.39 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-bg|-|border', themes: ['light', 'dark'], floor: { light: 1.39, dark: 1.48 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-bg|-|border-bottom', themes: ['light', 'dark'], floor: { light: 1.39, dark: 1.48 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-bg|-|border-color', themes: ['light', 'dark'], floor: { light: 1.39, dark: 1.48 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-bg|focus-visible|border', themes: ['light', 'dark'], floor: { light: 1.39, dark: 1.48 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-bg|hover|border', themes: ['light', 'dark'], floor: { light: 1.39, dark: 1.48 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.41, dark: 1.49 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-card|focus-visible|border', themes: ['light', 'dark'], floor: { light: 1.41, dark: 1.49 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@30%|--am-showcase-card|hover|border', themes: ['light', 'dark'], floor: { light: 1.41, dark: 1.49 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@32%|--am-showcase-card|-|border-left', themes: ['light', 'dark'], floor: { light: 1.45, dark: 1.54 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@34%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.48, dark: 1.58 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@35%|--am-showcase-bg|-|border', themes: ['light', 'dark'], floor: { light: 1.46, dark: 1.61 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@36%|--am-showcase-card|-|border-top', themes: ['light', 'dark'], floor: { light: 1.52, dark: 1.63 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@40%|--am-showcase-card-alt|-|border', themes: ['light', 'dark'], floor: { light: 1.54, dark: 1.65 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|-|border', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|-|border-bottom', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|-|border-color', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|active|border-color', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|disabled|border-color', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|focus-visible|border', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|focus-visible|border-color', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
-  { key: 'graphic|--am-showcase-accent-soft|--am-showcase-card-alt|-|after', themes: ['light', 'dark'], floor: { light: 1.10, dark: 1.15 }, cause: 'loading-shimmer' },
-  { key: 'text|--am-showcase-soft|--am-showcase-accent-soft|-|-', themes: ['light'], floor: { light: 4.33 }, cause: 'soft-ink-on-tint' },
+  // `STYLE-ORIG-01` (`R-157b`, 2026-11-19): 50 of the 52 palette rows left. A decorative border answers to nothing now, and the `color-mix` borders,
+  // the line near-miss and the soft ink on the accent tint were repaired or ruled out by the new palette. What remains is the loading
+  // skeleton's moving highlight, a decoration of a state that says «Загрузка…» in text. Its floor moved with the card tint it sits on.
+  { key: 'graphic|--am-showcase-accent-soft|--am-showcase-card-alt|-|after', themes: ['light', 'dark'], floor: { light: 1.00, dark: 1.08 }, cause: 'loading-shimmer' },
 ];
 
 /**

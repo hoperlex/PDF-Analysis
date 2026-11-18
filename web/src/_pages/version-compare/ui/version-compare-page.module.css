@@ -42,7 +42,7 @@
 .tab {
   margin: 0;
   padding: 8px 14px;
-  border: 1px solid var(--am-line-soft);
+  border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius);
   background: transparent;
   color: var(--am-ink-muted);
