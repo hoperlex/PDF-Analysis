@@ -29,7 +29,7 @@ in `audit_event` (`R-146n` item 6). Facts read from the tree at `4d7b7c38` on 20
   `tests/integration/api/test_role_register.py` sweeps the served application against the register.
   Since `R-80` product data needs a role. There is no tenant, organisation or owner column in any
   migration: every active expert sees every project.
-- **Credentials.** A bearer HMAC token lives 29 400 seconds, eight hours and ten minutes (`TOKEN_LIFETIME_SECONDS`; one hour until the owner ruling of 2026-11-18, twelve hours as a stop-gap the same day). That is the sliding session's idle window of eight hours plus the ten-minute cadence at which the web tier renews a credential with `renewToken` (`POST /auth/token/renew`, behind the seam, same account, same epoch check); the session ends after eight hours without a request through the web forwarder and, whatever its activity, thirty days after sign-in (`web/src/app/bff/session/`). Each account has
+- **Credentials.** A bearer HMAC token lives 43 200 seconds, twelve hours (`TOKEN_LIFETIME_SECONDS`; one hour until the owner ruling of 2026-11-18); each account has
   a `token_epoch` (migration `0007_credential_epoch`) that a role change, an archive, a reset and a
   password change raise, which revokes every credential the account holds on its next request. Five
   failed sign-ins in 900 seconds start a 300-second cooling-off (`FAILED_SIGN_IN_ALLOWANCE`,

@@ -128,7 +128,7 @@ assert _SIGNER is not None, "the suite's own secret derives a signing key"
 #: answered ``401``: 57 reds in the 95-minute run of ``tests/integration`` that were not defects
 #: (``FIX-P02-GUARDS-01``). The signer is the suite's own, the same key as ``_SIGNER``; ``_SIGNER``
 #: itself keeps the production lifetime because ``SuiteCredentialAdapter`` mints through it and
-#: the exchange tests pin ``expires_in`` (twelve hours since 2026-11-18).
+#: the exchange tests pin ``expires_in`` (8 h 10 min, the sliding session of 2026-11-18).
 SUITE_CREDENTIAL_LIFETIME_SECONDS = 24 * 3600
 TEST_TOKEN = TokenSigner(
     derive_signing_key(DEPLOYMENT_SECRET), lifetime_seconds=SUITE_CREDENTIAL_LIFETIME_SECONDS
