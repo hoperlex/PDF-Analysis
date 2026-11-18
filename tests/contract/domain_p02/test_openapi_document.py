@@ -64,6 +64,11 @@ REQUIRED_OPERATIONS = {
     # capability, and it is listed for the same reason -- this set is the whole surface, not
     # the product part of it.
     "changePassword",
+    # `SESSION-RENEW-01` (1.60.0), owner ruling of 2026-11-18: the sliding session. A fresh credential
+    # for the account behind the one presented, so a working reviewer is not signed out. Like
+    # `changePassword` it implements no product capability and is listed because this set is the
+    # whole surface.
+    "renewToken",
     # `W45-BLOCKS`. The block index for one version, keyed by version_uid rather than by
     # run_id because page_geometry_extraction carries no model and no provider reference,
     # so its output is deterministic across every run of a version that reaches it.
@@ -1028,6 +1033,8 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
+    # `SESSION-RENEW-01` (1.60.0) adds ``renewToken``: the credential presented is the whole input, so it takes no body, no
+    # path or query parameter and declares no ``404`` or ``422``.
     # `HOSTS-SEAL-1` (1.45.0) adds ``listExecutorHosts``, ``getStageModelLayout`` and ``listModelCatalogue``: the installation's servers, layout and catalogue take no input.
     # `DECISION-MEMORY-M2` (1.44.0) adds ``getDecisionMemoryStatus``: the counts and the settings take no input.
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
@@ -1049,7 +1056,9 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
      # `CRIT-SEAL-50` (1.51.0): the state of the vectors and the settings of the Precedents programme are the installation's own, with no input.
      "getVectorControl", "listPrecedentSettings",
      # `CRIT-SEAL-53` (1.54.0): the quality table is the installation's own, with no input.
-     "getQualityTable"}
+     "getQualityTable",
+     # `SESSION-RENEW-01` (1.60.0): see the first comment of this set.
+     "renewToken"}
 )
 
 

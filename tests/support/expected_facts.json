@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 303,
+    "path_count": 304,
     "operations": [
       [
         "DELETE",
@@ -872,6 +872,11 @@
         "POST",
         "/auth/token",
         "issueToken"
+      ],
+      [
+        "POST",
+        "/auth/token/renew",
+        "renewToken"
       ],
       [
         "POST",
@@ -2498,5 +2503,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0071_run_restart",
-  "contract_version": "1.59.0"
+  "contract_version": "1.60.0"
 }
