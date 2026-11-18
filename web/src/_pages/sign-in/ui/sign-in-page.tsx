@@ -8,9 +8,18 @@
  *
  * The screen has no copy of its own (owner, 2026-11-09): the hero text and the «Демонстрация
  * сценария» panel are gone, so the card's title is the page's one `h1`. Beside the card stands a
- * wordless animated scene and behind both a drifting drawing grid — decoration only, hidden from
+ * wordless animated scene and behind both a drifting dot grid — decoration only, hidden from
  * assistive technology and animated in CSS, so the slice still ships no script. The frame's
  * inert section preview stays beside it; this slice does not draw it.
+ *
+ * Variant «B · Чертёж на тёмном» (`STYLE-ORIG-01` S4, `R-157c`): the card is a drawing sheet
+ * with a teal top edge and four crop marks, the scene is a plotter at work. Two sheets of a
+ * building (a facade, a section) stand behind as faint teal wireframes; in front, a plotter
+ * draws the floor plan in three bands, left to right, behind a teal crosshair cursor; three
+ * CAD selection boxes then pick the window in the north wall, the stair and the bath; the
+ * expert's stamp lands on the title block; a small axis symbol sits bottom-left. No word, no
+ * data. The resting state — plan drawn, boxes and stamp in place, no cursor — is the finished
+ * frame, and is what a browser asking for reduced motion sees.
  *
  * Only a guest sees this screen: the route's guard sends a browser that already holds a
  * session to `/` (`W50-PLAN.md` §3.2, decision five), and the frame's account menu carries
@@ -50,6 +59,7 @@ export function SignInPage({ refusal, next, unknownRefusal = false, reason = nul
     <section className={styles.screen} aria-labelledby="sign-in-title">
       <Backdrop />
       <div className={styles.card}>
+        <CropMarks />
         <header className={styles.header}>
           <span className={styles.signInMark} aria-hidden="true"><BrandMark /></span>
           <div>
@@ -73,88 +83,114 @@ export function SignInPage({ refusal, next, unknownRefusal = false, reason = nul
   );
 }
 
+/** The four crop marks outside the card's corners, as on a drawing sheet. Decoration only. */
+function CropMarks() {
+  return (
+    <>
+      <span className={`${styles.crop} ${styles.cropTopLeft}`} aria-hidden="true" />
+      <span className={`${styles.crop} ${styles.cropTopRight}`} aria-hidden="true" />
+      <span className={`${styles.crop} ${styles.cropBottomLeft}`} aria-hidden="true" />
+      <span className={`${styles.crop} ${styles.cropBottomRight}`} aria-hidden="true" />
+    </>
+  );
+}
+
 /**
- * The living background behind the card and the scene: a drawing grid that drifts by one major
- * cell and repeats, and two faint sheet contours that sway against it. Decoration only — hidden
- * from assistive technology, no text, every colour a showcase token of the theme, motion in CSS.
+ * The living background behind the card and the scene: a dot grid, a dot every 24 px and a
+ * faint line every 120 px, that drifts by one major cell and repeats. The CSS masks it into the
+ * page at the edges. Decoration only — hidden from assistive technology, no text, every colour
+ * a token of the theme, motion in CSS.
  */
 function Backdrop() {
   return (
     <div className={styles.backdrop} aria-hidden="true">
       <svg className={styles.backdropGrid} focusable="false">
         <defs>
-          <pattern id="sign-in-grid-minor" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path className={styles.gridMinor} d="M24 0H0V24" fill="none" />
+          <pattern id="sign-in-grid-dot" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle className={styles.gridDot} cx="1" cy="1" r="1.1" />
           </pattern>
           <pattern id="sign-in-grid-major" width="120" height="120" patternUnits="userSpaceOnUse">
-            <rect width="120" height="120" fill="url(#sign-in-grid-minor)" />
+            <rect width="120" height="120" fill="url(#sign-in-grid-dot)" />
             <path className={styles.gridMajor} d="M120 0H0V120" fill="none" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#sign-in-grid-major)" />
       </svg>
-      <svg className={styles.backdropSheets} viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" focusable="false">
-        <g className={`${styles.contour} ${styles.contourA}`}>
-          <rect x="70" y="90" width="420" height="296" rx="4" />
-          <rect x="84" y="104" width="392" height="268" />
-          <path d="M336 332H476M336 352H476M376 332V372M426 332V372" />
-        </g>
-        <g className={`${styles.contour} ${styles.contourB}`}>
-          <rect x="760" y="470" width="380" height="268" rx="4" />
-          <rect x="774" y="484" width="352" height="240" />
-          <path d="M996 684H1126M996 704H1126M1036 684V724M1082 684V724" />
-        </g>
-      </svg>
     </div>
   );
 }
 
+/** The plotter's bands: each is hidden by a paper-coloured cover that slides off behind the cursor. */
+const PLOT_BANDS = [
+  { y: 10, height: 62, cover: styles.coverA },
+  { y: 72, height: 60, cover: styles.coverB },
+  { y: 132, height: 68, cover: styles.coverC },
+] as const;
+
 /**
  * The scene beside the card: three sheets of a building's drawings. Behind, a facade and a
- * section; in front, a floor plan with its axes, openings, stair, sanitary fittings, dimension
- * chain, section cut and title block. A scan line crosses the plan and pauses on three remarks
- * — a window in the outer wall, the stair, the bath — which light up as it reaches them; the
- * expert's stamp lands on the title block; the cycle repeats. No word, no data. The resting
- * state — marks and stamp in place, no scan — is what a browser asking for reduced motion sees.
+ * section as faint wireframes; in front, a floor plan with its axes, openings, stair, sanitary
+ * fittings, dimension chain, section cut and title block. A plotter draws the plan in three
+ * bands: a cover per band slides away to the right behind a crosshair cursor (a vertical rail,
+ * a horizontal rail and a small square head). Three selection boxes then pick the window in the
+ * outer wall, the stair and the bath; the expert's stamp lands on the title block; everything
+ * clears and the cycle (10 s) repeats. The resting state — plan drawn, boxes and stamp in
+ * place, cursor hidden — is what a browser asking for reduced motion sees.
  */
 function Scene() {
   return (
     <div className={styles.scene} aria-hidden="true">
-      <svg viewBox="0 0 520 460" focusable="false">
+      <svg viewBox="0 0 560 470" focusable="false">
         <defs>
           <clipPath id="sign-in-plan-area">
-            <rect x="20" y="10" width="310" height="186" />
+            <rect x="14" y="10" width="322" height="190" />
           </clipPath>
         </defs>
-        <g transform="translate(18 34) rotate(-7 160 110)">
-          <g className={`${styles.sheet} ${styles.floatSlow}`}>
+        <g transform="translate(4 18) rotate(-5 160 110) scale(.84)">
+          <g className={`${styles.ghost} ${styles.floatSlow}`}>
             <FacadeSheet />
           </g>
         </g>
-        <g transform="translate(118 12) rotate(4 160 110)">
-          <g className={`${styles.sheet} ${styles.floatFast}`}>
+        <g transform="translate(268 0) rotate(4 160 110) scale(.84)">
+          <g className={`${styles.ghost} ${styles.floatFast}`}>
             <SectionSheet />
           </g>
         </g>
-        <g transform="translate(150 172)">
-          <PlanSheet />
+        <g transform="translate(92 140) scale(1.25)">
+          <SheetBase width={340} height={250} />
+          <g className={styles.plotLines}>
+            <PlanLines />
+          </g>
           <g clipPath="url(#sign-in-plan-area)">
-            <g className={styles.scan}>
-              <rect className={styles.scanBand} x="-30" y="10" width="30" height="186" />
-              <path className={styles.scanLine} d="M0 10V196" />
+            {PLOT_BANDS.map(({ y, height, cover }) => (
+              <rect key={y} className={`${styles.cover} ${cover ?? ''}`} x="14" y={y} width="322" height={height} />
+            ))}
+            <g className={styles.cursorV}>
+              <path className={styles.rail} d="M0 10V200" />
+            </g>
+            <g className={styles.cursorH}>
+              <path className={styles.rail} d="M14 0H336" />
+            </g>
+            <g className={styles.cursorHead}>
+              <rect className={styles.headBox} x="-5" y="-5" width="10" height="10" />
+              <path className={styles.headTick} d="M-16 0H-8M8 0H16M0 -16V-8M0 8V16" />
             </g>
           </g>
-          <RemarkMark x={98} y={40} order={styles.markA} />
-          <RemarkMark x={209} y={128} order={styles.markB} />
-          <RemarkMark x={285} y={124} order={styles.markC} />
-        </g>
-        <g transform="translate(428 394) rotate(-10)">
-          <g className={styles.stamp}>
-            <rect className={styles.stampOuter} x="-58" y="-28" width="116" height="56" rx="8" />
-            <rect className={styles.stampInner} x="-51" y="-21" width="102" height="42" rx="5" />
-            <path className={styles.stampCheck} d="M-38 0L-29 9L-12 -8" />
-            <path className={styles.stampLines} d="M-2 -8H38M-2 1H30M-2 10H34" />
+          <SelectionBox x={72} y={31} width={54} height={18} order={styles.selectionA} />
+          <SelectionBox x={193} y={100} width={32} height={58} order={styles.selectionB} />
+          <SelectionBox x={268} y={98} width={34} height={52} order={styles.selectionC} />
+          <g transform="translate(278 222) rotate(-8)">
+            <g className={styles.stamp}>
+              <rect className={styles.stampOuter} x="-56" y="-26" width="112" height="52" rx="8" />
+              <rect className={styles.stampInner} x="-49" y="-19" width="98" height="38" rx="5" />
+              <path className={styles.stampCheck} d="M-36 0L-27 9L-10 -8" />
+              <path className={styles.stampLines} d="M0 -8H38M0 1H30M0 10H34" />
+            </g>
           </g>
+        </g>
+        <g className={styles.ucs} transform="translate(30 440)">
+          <path d="M0 0H44M0 0V-44M38 -5L44 0L38 5M-5 -38L0 -44L5 -38" />
+          <rect x="-4" y="-4" width="8" height="8" />
         </g>
       </svg>
     </div>
@@ -289,11 +325,10 @@ function SectionSheet() {
   );
 }
 
-/** The plan the scan reads: axes, walls with windows, doors, a stair, a bathroom, dimensions. */
-function PlanSheet() {
+/** The plan the plotter draws, without its sheet: axes, walls with windows, doors, a stair, a bathroom, dimensions. */
+function PlanLines() {
   return (
     <>
-      <SheetBase width={340} height={250} />
       <path className={styles.axis} d="M56 26V170M150 26V170M226 26V170M300 26V170M44 40H306M44 100H306M44 160H306" />
       {[56, 150, 226, 300].map((x) => (
         <circle key={x} className={styles.bubble} cx={x} cy="20" r="5" />
@@ -326,16 +361,33 @@ function PlanSheet() {
   );
 }
 
-/** A remark on the plan: a soft halo, a ring with a dot, and a pulse that leaves it. */
-function RemarkMark({ x, y, order }: { readonly x: number; readonly y: number; readonly order: string | undefined }) {
+/** A CAD selection box on the plan: a translucent fill, a dashed outline and a square grip at each corner. */
+function SelectionBox({
+  x,
+  y,
+  width,
+  height,
+  order,
+}: {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly order: string | undefined;
+}) {
+  const corners = [
+    [x, y],
+    [x + width, y],
+    [x, y + height],
+    [x + width, y + height],
+  ] as const;
   return (
-    <g transform={`translate(${x} ${y})`}>
-      <g className={`${styles.mark} ${order ?? ''}`}>
-        <circle className={styles.markPulse} r="8" />
-        <circle className={styles.markHalo} r="13" />
-        <circle className={styles.markRing} r="8" />
-        <circle className={styles.markDot} r="3" />
-      </g>
+    <g className={`${styles.selection} ${order ?? ''}`}>
+      <rect className={styles.selectionFill} x={x} y={y} width={width} height={height} />
+      <rect className={styles.selectionLine} x={x} y={y} width={width} height={height} />
+      {corners.map(([cx, cy]) => (
+        <rect key={`${cx}-${cy}`} className={styles.selectionGrip} x={cx - 3} y={cy - 3} width="6" height="6" />
+      ))}
     </g>
   );
 }
