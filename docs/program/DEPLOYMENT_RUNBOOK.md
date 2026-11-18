@@ -355,8 +355,8 @@ Run it **from the repository root**; both builds need `src/`, `db/`, `contracts/
 
 **Since `PROD-04` the order is: build; the owner migrates (`migrate` and `release-notes` as `MIGRATOR_DATABASE_URL`);
 `apply-grants.sh` gives the application role its rights and verifies them; only then `up`** — so `api` and `worker`
-never start against a schema their role cannot read, and a table nobody classified (`[grants_unclassified]`) stops the
-deploy before anything is replaced. Section 16.
+never start against a schema their role cannot read. A table nobody classified is no longer a refusal (`R-156n`): the step
+warns (`[grants_unclassified]`), the role holds the default rights on it and the deploy goes on. Section 16.
 
 **Eight** guards answer **before docker is touched at all**, so a refusal costs nothing.
 After the build and the `up`, it asks the running stack four questions it can fail: every
@@ -1789,7 +1789,7 @@ seven days after it ends.
 | Role | Name | Url (in `alpha.env`) | Used by | Can |
 |---|---|---|---|---|
 | **migrator** (the owner) | `POSTGRES_USER` | `MIGRATOR_DATABASE_URL` | the one-shot `migrate` and `release-notes`; `apply-grants.sh`; the operator tools that need write-everything (`purge-product-data.sh` hands it to the product purge; `erase-project.sh`, section 17, to the project erase) | everything: it owns every object |
-| **application** | `ALPHA_APP_DB_USER` | `DATABASE_URL` | `api` and `worker` (and the `compose run` one-offs of `reset.sh`, `copy-serve.sh restore-db`, `readiness.sh`, which run application code) | log in; `SELECT` / `INSERT` / `UPDATE` / `DELETE`, `SELECT` + `INSERT`, or `SELECT` per table, as `scripts/recovery/grant_classification.py` says; sequences `USAGE`. **Cannot** create, alter or drop anything, **cannot** `TRUNCATE`, owns nothing, is a member of nothing, is not a superuser. An append-only table (`audit_event`, the ledgers, the immutable evidence) refuses `UPDATE` and `DELETE` by privilege **and** by trigger |
+| **application** | `ALPHA_APP_DB_USER` | `DATABASE_URL` | `api` and `worker` (and the `compose run` one-offs of `reset.sh`, `copy-serve.sh restore-db`, `readiness.sh`, which run application code) | log in; `SELECT` / `INSERT` / `UPDATE` / `DELETE`, `SELECT` + `INSERT`, or `SELECT` per table, as `scripts/recovery/grant_classification.py` says (a table it does not name yet: `SELECT` / `INSERT` / `UPDATE` / `DELETE`, with a warning); sequences `USAGE`. **Cannot** create, alter or drop anything, **cannot** `TRUNCATE`, owns nothing, is a member of nothing, is not a superuser. An append-only table (`audit_event`, the ledgers, the immutable evidence) refuses `UPDATE` and `DELETE` by privilege **and** by trigger |
 
 **The decision recorded here (decided by the lane): the migrator stays the bootstrap superuser.** The postgres image's
 `POSTGRES_USER` is a superuser, and `ADR-0021` section 3 makes it the migrator. A plain (non-superuser) owner was
@@ -1830,11 +1830,36 @@ to `migrate` and `release-notes` only (`test_the_application_gets_its_url_and_on
    -- bringing the stack up --
    ```
 
+   **When a migration has added a table, view or sequence the classification does not name yet** (`R-156n`), the same deploy
+   goes on. The step prints its warning on stderr and `deploy.sh` replays it when the step has finished (so in a merged log it
+   follows the `grants-ok` line), then says it in its own words, and a third time in the closing summary:
+
+   ```
+   apply-grants.sh: applying the grant classification to <db> for the application role '<role>' (owner: <owner>)
+   grants-ok: <role> on <db> matches the classification (2 relation(s) the classification does not name: see the [grants_unclassified] warning)
+   apply-grants.sh: WARNING [grants_unclassified] 2 relation(s) have no grant classification (scripts/recovery/grant_classification.py):
+       table public.<name>
+       sequence public.<name>_id_seq
+     The application role holds the DEFAULT rights on those in schema public (SELECT, INSERT, UPDATE and DELETE on a table or
+     view, USAGE on a sequence) and nothing on any other schema. This is not a refusal and the deploy goes on.
+     ...
+   deploy.sh: !! WARNING [grants_unclassified]: the schema holds a relation scripts/recovery/grant_classification.py does not name
+   -- bringing the stack up --
+   ...
+   deploy.sh: WARNING [grants_unclassified] stands: a relation has no grant classification and holds the default rights (see the step's output above).
+   ```
+
+   Nothing for the operator to do on the host: `deploy.sh` exits 0 and the application works with the new table at once. The
+   fix is a development one: classify the relation in `scripts/recovery/grant_classification.py` and regenerate the script
+   (`tests/integration/recovery/test_grant_classification.py` is red until it is), and the next deploy no longer warns. Until then
+   the relation holds read-and-write rights even if it should be append-only; the immutability trigger, where the table has one,
+   still refuses.
+
 4. **Check it.** Either of these, on the host:
 
    ```
    infra/deploy/readiness.sh            # the db-roles line: "api=<role> worker=<role> -- ... (f|f|f|t); apply-grants.sh --check: ..."
-   infra/deploy/apply-grants.sh --check # prints: grants-ok: <role> on <db> matches the classification   (exit 0)
+   infra/deploy/apply-grants.sh --check # prints: grants-ok: <role> on <db> matches the classification   (exit 0; a relation the classification does not name is a warning, not a difference)
    docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml exec -T postgres \
      psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select rolsuper, has_schema_privilege(rolname,'public','CREATE'), has_table_privilege(rolname,'public.audit_event','DELETE'), has_table_privilege(rolname,'public.audit_event','INSERT') from pg_roles where rolname='<ALPHA_APP_DB_USER>'"
                                          # prints: f|f|f|t   (ADR-0021 row 7)
@@ -1869,13 +1894,25 @@ there (`grants-script-present`) and the second password is set (`app-db-role-con
 | `[app_db_role_invalid]`, `[app_db_role_is_owner]` | `ALPHA_APP_DB_USER` missing or malformed, or equal to `POSTGRES_USER` |
 | `[database_urls_incoherent]` | `DATABASE_URL` / `MIGRATOR_DATABASE_URL` do not carry the roles and passwords the file names |
 | `[grants_script_missing]` | `apply-grants.sh` is not in the clone / not installed beside `copy-serve.sh` / not executable |
-| `[grants_unclassified]` | the schema holds a table, view or sequence `grant_classification.py` does not name. The role was given nothing new and the transaction rolled back. A migration that adds a table needs a classification (and `python -m scripts.recovery.grant_classification --write-script infra/deploy/apply-grants.sh`) |
-| `[grants_drift]` (exit 1 of `--check`, 4 after an apply) | the role's rights differ from the classification; the lines say how (`the role holds TRUNCATE`, `the role lacks SELECT`, `the role owns table ...`) |
+| `[grants_drift]` (exit 1 of `--check`, 4 after an apply) | the role's rights differ from the classification; the lines say how (`the role holds TRUNCATE`, `the role lacks SELECT`, `the role owns table ...`, `default privileges: the role lacks UPDATE on new tables created by <owner> in schema public`) |
+
+**A warning, not a stop (`R-156n`).** `[grants_unclassified]` is no longer a refusal: it was exit 3 and stopped the deploy before anything
+was replaced, and it is now a `WARNING` on stderr, exit 0. It means the schema holds a table, view or sequence `grant_classification.py`
+does not name (a migration added one and the classification has not caught up). The step gave it the default rights (below) and listed it
+by name; `--check` prints the same list and still exits 0. A migration that adds a table still needs a classification at development
+time: `tests/integration/recovery/test_grant_classification.py` is red until it has one, and
+`python -m scripts.recovery.grant_classification --write-script infra/deploy/apply-grants.sh` regenerates the script.
 
 ### What this does not do
 
-* **No `ALTER DEFAULT PRIVILEGES`.** A table a later migration creates gets **no** rights until it is classified; that is the
-  fail-closed half of the design, and the step refuses rather than guess.
+* **The default privileges are `SELECT, INSERT, UPDATE, DELETE` on tables and `USAGE` on sequences, and nothing more** (`R-156n`,
+  restoring `AD-02`). The step runs `ALTER DEFAULT PRIVILEGES FOR ROLE <POSTGRES_USER> IN SCHEMA public GRANT ... TO <role>` as the
+  migrator, so a table a later migration creates is usable by the application at once. There is no `TRUNCATE` and no change to the
+  schema among them. A **classified** table keeps exactly its class: the step runs after every `migrate`, so an append-only table a
+  migration creates holds `UPDATE` and `DELETE` only between the migration and the step, and loses them again at the step (`deploy.sh`
+  runs the two back to back before `up`). A relation **nobody classified** keeps the default rights and is warned about. After
+  `reset.sh` and `copy-serve.sh restore-db` (which drop schema `public` with its default privileges) the step re-creates them;
+  `--check` reports a missing, an extra or a misplaced default privilege as a difference.
 * **It does not take ownership back.** An object the application role came to own is reported by `--check`
   (`owner: the role owns ...`), not repaired.
 * **The role keeps the `PUBLIC` defaults** that every role has: it can connect to its database, create session-local

@@ -233,6 +233,43 @@ class TestTheOneShotsAndTheStepRunBeforeUp:
                    and f"--dbname {harness.DATABASE}" in line for line in execs), execs
 
 
+class TestARelationNobodyClassifiedWarnsAndTheDeployGoesOn:
+    """`R-156n`: the first build of the step refused such a relation (`[grants_unclassified]`, exit 3) and stopped the deploy. It is a
+    warning now: the step says it by name, `deploy.sh` says it again in its own words, and the stack comes up."""
+
+    WARNING = "warning|table public.zz_probe: has no grant classification\nwarning|sequence public.zz_probe_id_seq: has no grant classification\n"
+
+    def test_the_deploy_shows_the_warning_and_still_brings_the_stack_up(self, tmp_path: Path, serving: tuple[int, type]) -> None:
+        script, env_file = _ready(tmp_path, serving[0])
+        completed, log = harness._run(script, tmp_path=tmp_path, env_file=env_file, stub={"STUB_VERIFY_OUT": self.WARNING})
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert len(_ups(log)) == 1, "the stack was brought up"
+        # the step's own warning, by name ...
+        assert "WARNING [grants_unclassified] 2 relation(s) have no grant classification" in completed.stderr
+        assert "table public.zz_probe" in completed.stderr and "sequence public.zz_probe_id_seq" in completed.stderr
+        # ... then the deploy's own words, right after the step, and a reminder in the closing summary
+        assert "deploy.sh: !! WARNING [grants_unclassified]" in completed.stderr
+        assert "the deploy goes on" in completed.stderr
+        assert "deploy.sh: WARNING [grants_unclassified] stands" in completed.stdout
+        assert "grants-ok" in completed.stdout
+        assert completed.stderr.index("apply-grants.sh: WARNING [grants_unclassified]") < completed.stderr.index("deploy.sh: !! WARNING [grants_unclassified]")
+
+    def test_a_deploy_with_nothing_to_warn_about_says_nothing(self, tmp_path: Path, serving: tuple[int, type]) -> None:
+        script, env_file = _ready(tmp_path, serving[0])
+        completed, _ = harness._run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "grants_unclassified" not in completed.stdout + completed.stderr, "the warning is not a standing line of every deploy"
+
+    def test_a_difference_next_to_the_warning_is_still_a_refusal(self, tmp_path: Path, free_port: int) -> None:
+        script, env_file = _ready(tmp_path, free_port)
+        completed, log = harness._run(script, tmp_path=tmp_path, env_file=env_file,
+                                      stub={"STUB_VERIFY_OUT": self.WARNING + "drift|table audit_event: the role holds TRUNCATE\n"})
+        assert completed.returncode == REFUSED and "[grants_not_applied]" in completed.stderr and "exited 4" in completed.stderr
+        assert "the role holds TRUNCATE" in completed.stderr
+        assert _ups(log) == [], "a warning does not excuse a difference"
+        assert "deploy.sh: !! WARNING [grants_unclassified]" not in completed.stderr, "the deploy's banner is for a deploy that goes on"
+
+
 class TestAFailureBeforeUpStartsNothing:
     def test_a_failed_owner_migrate_is_a_refusal_and_nothing_is_started(self, tmp_path: Path, free_port: int) -> None:
         script, env_file = _ready(tmp_path, free_port)
@@ -252,11 +289,11 @@ class TestAFailureBeforeUpStartsNothing:
         script, env_file = _ready(tmp_path, free_port)
         completed, log = harness._run(
             script, tmp_path=tmp_path, env_file=env_file,
-            stub={"STUB_PSQL_STATUS": "3", "STUB_PSQL_ERR": "ERROR:  [grants_unclassified] no grant classification for: table public.zz\n"},
+            stub={"STUB_PSQL_STATUS": "3", "STUB_PSQL_ERR": "ERROR:  something the server refused\n"},
         )
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
-        assert "[grants_not_applied]" in completed.stderr and "exited 3" in completed.stderr
-        assert "[grants_unclassified] no grant classification for: table public.zz" in completed.stderr, "the step's own reason is shown"
+        assert "[grants_not_applied]" in completed.stderr and "could not be applied (status 3)" in completed.stderr
+        assert "something the server refused" in completed.stderr, "the step's own reason is shown"
         assert _ups(log) == [], "api and worker were neither started nor replaced"
 
     def test_a_verification_that_found_a_difference_is_a_refusal_and_nothing_is_started(self, tmp_path: Path, free_port: int) -> None:

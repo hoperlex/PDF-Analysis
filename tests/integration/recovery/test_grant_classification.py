@@ -5,8 +5,9 @@ grant_classification.py`` says. That module is built on ``schema_coverage`` -- t
 closed declaration of the schema -- and adds the one thing it does not say: which rights each table
 gets. This file is the guard that keeps the two, the catalogue and the code whole. Same discipline as
 ``test_schema_coverage.py`` and the same source of truth: a migration that adds a table, a view, a
-sequence or a function is red here until it is classified, and the step that applies the rights
-(``infra/deploy/apply-grants.sh``) refuses a relation it has no row for.
+sequence or a function is red here until it is classified. The step that applies the rights
+(``infra/deploy/apply-grants.sh``) does NOT refuse a relation it has no row for (``R-156n``: it warns, gives
+it the default rights and goes on), so THIS file is where the classification is enforced; do not weaken it.
 
 What is held, and what makes each hold fail (the mutation is in the test):
 
@@ -411,16 +412,46 @@ class TestTheScriptGoesStaleLoudly:
         assert grants.write_blocks(stale) == text
 
 
-def test_the_generated_apply_sql_grants_no_truncate_no_references_and_no_default_privileges() -> None:
+def test_the_generated_apply_sql_grants_no_truncate_no_references_and_only_the_two_default_privileges() -> None:
     sql = grants.render_sql("apply")
     assert not re.search(r"GRANT[^;]*\b(TRUNCATE|REFERENCES|TRIGGER|MAINTAIN)\b", sql), "a grant of a forbidden privilege"
-    assert "ALTER DEFAULT PRIVILEGES" not in sql
     assert not re.search(r"\bGRANT\s+ALL\b", sql)
     assert "REVOKE CREATE ON SCHEMA public FROM PUBLIC" in sql and "REVOKE CREATE ON SCHEMA public FROM :\"app_role\"" in sql
+    # `R-156n`: the default privileges are exactly two statements -- read and write in full on tables, USAGE on sequences,
+    # for the migrator (current_user), in schema public, to the application role -- and the only other statement on them
+    # takes the application role's defaults away. Nothing else may grant on a default.
+    grants_on_defaults = re.findall(
+        r"ALTER DEFAULT PRIVILEGES FOR ROLE (\S+) (IN SCHEMA public )?GRANT (.+?) ON (TABLES|SEQUENCES|FUNCTIONS|TYPES|SCHEMAS) TO (\S+)", sql)
+    assert [(g[1], g[2], g[3]) for g in grants_on_defaults] == [
+        ("IN SCHEMA public ", "SELECT, INSERT, UPDATE, DELETE", "TABLES"), ("IN SCHEMA public ", "USAGE", "SEQUENCES"),
+    ], grants_on_defaults
+    assert grants.DEFAULT_TABLE_PRIVILEGES == ("SELECT", "INSERT", "UPDATE", "DELETE") and grants.DEFAULT_SEQUENCE_PRIVILEGES == ("USAGE",)
+    assert all(g[0] == "%I" and g[4].startswith("%I") for g in grants_on_defaults), "migrator and application role come from current_user and :app_role"
+    revokes = re.findall(r"ALTER DEFAULT PRIVILEGES FOR ROLE %s%s REVOKE ALL ON %s FROM %I", sql)
+    assert len(revokes) == 1, "one statement takes every default the role holds anywhere away before the two grants"
+    assert sql.index("REVOKE ALL ON %s FROM %I") < sql.index("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES")
+
+
+def test_the_generated_apply_sql_no_longer_refuses_an_unclassified_relation_but_lists_it() -> None:
+    sql = grants.render_sql("apply")
+    assert "RAISE EXCEPTION" not in sql and "grants_unclassified" not in sql, "the step warns (the shell does) and does not refuse"
+    assert "CREATE TEMP TABLE am_unclassified" in sql
+    assert "FROM am_unclassified u WHERE u.schema_name = 'public' AND u.relkind <> 'S'" in sql, "tables and views get the default rights"
+    assert "FROM am_unclassified u WHERE u.schema_name = 'public' AND u.relkind = 'S'" in sql, "sequences get USAGE"
 
 
 def test_the_generated_check_sql_asks_about_every_privilege_postgresql_knows() -> None:
     sql = grants.render_sql("check")
     for privilege in grants.ALL_TABLE_PRIVILEGES:
         assert f"('{privilege}')" in sql, privilege
-    assert not re.search(r"\b(GRANT|REVOKE|CREATE ROLE|ALTER ROLE|DROP)\b", sql), "the verification changes nothing"
+    assert not re.search(r"\b(GRANT|REVOKE|CREATE ROLE|ALTER ROLE|DROP|ALTER)\b", sql), "the verification changes nothing"
+
+
+def test_the_generated_check_sql_expects_exactly_the_default_privileges_the_apply_sql_grants() -> None:
+    sql = grants.render_sql("check")
+    rows = re.findall(r"\('([rS])', '(?:tables|sequences)', '([A-Z]+)'\)", sql)
+    assert rows == [("r", "SELECT"), ("r", "INSERT"), ("r", "UPDATE"), ("r", "DELETE"), ("S", "USAGE")]
+    assert "FROM pg_default_acl" in sql and "aclexplode(d.defaclacl)" in sql
+    # a finding is tagged: only a relation no class names is a warning, and it is the only one
+    assert "CASE WHEN detail = 'has no grant classification' THEN 'warning' ELSE 'drift' END" in sql
+    assert sql.count("'warning'") == 1

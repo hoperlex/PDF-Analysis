@@ -9,8 +9,9 @@ and answers from the environment; it reaches no daemon.
 
 What the stub lets this file say that the real-database test (`tests/integration/db/
 test_application_role_grants.py`) cannot: the password reaches `psql` on standard input and on no command
-line; `--check` sends the verification and nothing that changes anything; a `psql` failure is exit 4 and a
-`[grants_unclassified]` raised by the SQL is exit 3; nothing the script prints contains the password.
+line; `--check` sends the verification and nothing that changes anything; a `psql` failure is exit 4; a relation the
+classification does not name (`R-156n`) is a warning on stderr and exit 0, a tagged `drift|` line or an untagged one is a
+difference, and the default privileges are in the SQL the script sends; nothing the script prints contains the password.
 """
 
 from __future__ import annotations
@@ -236,6 +237,9 @@ def test_apply_speaks_the_protocol_the_comment_promises(tmp_path: Path) -> None:
     assert stdin.startswith(f"\\set app_password '{APP_PASSWORD}'\n"), "the password is the first thing on stdin"
     assert "CREATE ROLE" in stdin and "REVOKE ALL ON ALL TABLES IN SCHEMA public" in stdin and "COMMIT;" in stdin
     assert not re.search(r"GRANT[^;\n]*\bTRUNCATE\b", stdin), "the apply SQL grants no TRUNCATE"
+    assert "ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I" in stdin
+    assert "ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE ON SEQUENCES TO %I" in stdin
+    assert "grants_unclassified" not in stdin, "the SQL no longer refuses a relation the classification does not name"
     check_stdin = str(check_call["stdin"])
     assert "app_password" not in check_stdin, "the verification never sees the password"
     assert not re.search(r"\b(GRANT|REVOKE|CREATE ROLE|ALTER ROLE|DROP)\b", check_stdin), "the verification changes nothing"
@@ -261,15 +265,58 @@ def test_a_difference_is_exit_1_for_check_and_exit_4_after_an_apply(tmp_path: Pa
     assert "grants-ok" not in applied.stdout and len(calls) == 2
 
 
-def test_an_unclassified_relation_is_a_refusal_and_not_a_failure(tmp_path: Path) -> None:
+_UNCLASSIFIED_LINES = ("warning|table public.zz: has no grant classification\n"
+                       "warning|sequence public.zz_seq: has no grant classification\n")
+
+
+def test_an_unclassified_relation_is_a_warning_and_the_step_exits_zero(tmp_path: Path) -> None:
+    """`R-156n`: the first build refused such a relation (exit 3) and stopped the deploy. It now warns, by name, and goes on."""
     staged, env_file = _stage(tmp_path)
-    stub = {"STUB_APPLY_STATUS": "3", "STUB_APPLY_ERR":
-            "ERROR:  [grants_unclassified] no grant classification for: table public.zz\nHINT:  add it\n"}
+    done, calls = _run(staged, env_file, tmp_path=tmp_path, stub={"STUB_CHECK_OUT": _UNCLASSIFIED_LINES})
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "WARNING [grants_unclassified] 2 relation(s) have no grant classification" in done.stderr
+    assert "table public.zz" in done.stderr and "sequence public.zz_seq" in done.stderr
+    assert "table public.zz: has no grant classification" not in done.stderr, "each relation is named, not echoed with the finding's text"
+    assert "the deploy goes on" in done.stderr and "DEFAULT rights" in done.stderr
+    assert "warning|" not in done.stderr and "drift|" not in done.stderr, "the tag is protocol, not message"
+    assert f"grants-ok: {APP_ROLE} on {DATABASE} matches the classification (2 relation(s)" in done.stdout
+    assert len(calls) == 2, "one apply, one verification: the warning does not skip either"
+
+
+def test_check_reports_an_unclassified_relation_as_a_warning_and_exits_zero(tmp_path: Path) -> None:
+    staged, env_file = _stage(tmp_path)
+    done, calls = _run(staged, env_file, "--check", tmp_path=tmp_path, stub={"STUB_CHECK_OUT": _UNCLASSIFIED_LINES})
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "[grants_unclassified]" in done.stderr and "table public.zz" in done.stderr and "grants-ok" in done.stdout
+    assert len(calls) == 1
+
+
+def test_an_untagged_line_is_a_difference_and_only_a_tagged_warning_is_a_warning(tmp_path: Path) -> None:
+    """Fail safe: a line the script cannot read as a warning must not be waved through as one."""
+    staged, env_file = _stage(tmp_path)
+    for output in ("table public.zz: has no grant classification\n", "drift|table public.zz: has no grant classification\n"):
+        done, _ = _run(staged, env_file, "--check", tmp_path=tmp_path, stub={"STUB_CHECK_OUT": output})
+        assert done.returncode == 1 and "[grants_drift]" in done.stderr, (output, done.returncode, done.stderr)
+        assert "WARNING" not in done.stderr and "grants-ok" not in done.stdout
+
+
+def test_a_warning_never_hides_a_difference(tmp_path: Path) -> None:
+    staged, env_file = _stage(tmp_path)
+    stub = {"STUB_CHECK_OUT": _UNCLASSIFIED_LINES + "drift|table audit_event: the role holds TRUNCATE\n"}
+    checked, _ = _run(staged, env_file, "--check", tmp_path=tmp_path, stub=stub)
+    assert checked.returncode == 1 and "[grants_unclassified]" in checked.stderr and "[grants_drift]" in checked.stderr
+    assert "  table audit_event: the role holds TRUNCATE" in checked.stderr and "drift|" not in checked.stderr
+    applied, _ = _run(staged, env_file, tmp_path=tmp_path, stub=stub)
+    assert applied.returncode == FAILED and "found a difference" in applied.stderr and "grants-ok" not in applied.stdout
+
+
+def test_the_script_no_longer_turns_an_apply_failure_into_a_refusal_for_the_old_word(tmp_path: Path) -> None:
+    """The branch that made `[grants_unclassified]` a refusal (exit 3) is gone: a psql that fails is exit 4 whatever it says."""
+    staged, env_file = _stage(tmp_path)
+    stub = {"STUB_APPLY_STATUS": "3", "STUB_APPLY_ERR": "ERROR:  [grants_unclassified] no grant classification for: table public.zz\n"}
     done, calls = _run(staged, env_file, tmp_path=tmp_path, stub=stub)
-    assert done.returncode == REFUSED, (done.stdout, done.stderr)
-    assert "[grants_unclassified] no grant classification for: table public.zz" in done.stderr
-    assert "rolled back" in done.stderr and "grants-ok" not in done.stdout
-    assert len(calls) == 1, "the verification is not asked after a refusal"
+    assert done.returncode == FAILED and "could not be applied (status 3)" in done.stderr, (done.returncode, done.stderr)
+    assert "REFUSED" not in done.stderr and len(calls) == 1
 
 
 def test_a_psql_failure_is_exit_4_and_never_echoes_a_password(tmp_path: Path) -> None:

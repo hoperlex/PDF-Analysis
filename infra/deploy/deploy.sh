@@ -61,7 +61,9 @@
 # against a schema its role cannot read. Three guards stand for it, in the order they bite: `grants-script-present`
 # and `app-db-role-configured` before anything is built (the second asks `apply-grants.sh --config-only`: a missing
 # second password is `[app_db_password_unset]`, and there is no fall-back to the owner role), and `owner-migrated`,
-# `release-notes-loaded` and `grants-applied` before `up`.
+# `release-notes-loaded` and `grants-applied` before `up`. A relation the classification does not name is NOT one of
+# the refusals (`R-156n`, restoring `AD-02`'s `ALTER DEFAULT PRIVILEGES`): the step warns (`[grants_unclassified]`), the
+# role holds the default rights on it, this script repeats the warning and goes on.
 #
 # WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
 # changes nothing" until `W23-DEPLOY` ran it twice from a clean clone, and that was false.
@@ -1475,15 +1477,29 @@ if [ "$OWNER_NOTES_STATUS" -ne 0 ]; then
            "No rights were applied and nothing was started. Its output is above."
 fi
 # <<< guard: release-notes-loaded
+# The step's stdout stays live; its stderr is kept as well as shown, so that a relation the classification does not
+# name (`[grants_unclassified]`, `R-156n`: a warning, exit 0) is said again in this script's own words below.
 GRANTS_STATUS=0
-"$GRANTS_SCRIPT" --env-file "$ENV_FILE" || GRANTS_STATUS=$?
+exec 3>&1
+GRANTS_STDERR="$("$GRANTS_SCRIPT" --env-file "$ENV_FILE" 2>&1 1>&3)" || GRANTS_STATUS=$?
+exec 3>&-
+if [ -n "$GRANTS_STDERR" ]; then printf '%s\n' "$GRANTS_STDERR" >&2; fi
 # >>> guard: grants-applied
 if [ "$GRANTS_STATUS" -ne 0 ]; then
     refuse "[grants_not_applied] apply-grants.sh exited $GRANTS_STATUS; the application role may not have its rights." \
-           "Its output is above (3 refused: a relation has no grant classification, or a setting is wrong; 4 failed)." \
+           "Its output is above (3 refused: a setting is wrong; 4 failed or the verification found a difference)." \
            "api and worker were not started or replaced by this run. Fix the cause and deploy again."
 fi
 # <<< guard: grants-applied
+GRANTS_UNCLASSIFIED=no
+if [[ "$GRANTS_STDERR" == *"[grants_unclassified]"* ]]; then
+    GRANTS_UNCLASSIFIED=yes
+    {
+        echo "deploy.sh: !! WARNING [grants_unclassified]: the schema holds a relation scripts/recovery/grant_classification.py does not name"
+        echo "deploy.sh: !! (listed above). The application role holds the DEFAULT rights on it (read and write in full, no TRUNCATE; \`R-156n\`)."
+        echo "deploy.sh: !! This is not a refusal: the deploy goes on. Classify it and regenerate apply-grants.sh before the next release."
+    } >&2
+fi
 echo
 
 # --- 2. up. `migrate` runs once here and `api` waits for it --------------------------
@@ -1895,6 +1911,9 @@ echo
 
 echo "deploy.sh: $INSTANCE is up at http://127.0.0.1:$HTTP_PORT"
 echo "deploy.sh: every service healthy, the database at head, the served schema conforming."
+if [ "$GRANTS_UNCLASSIFIED" = yes ]; then
+    echo "deploy.sh: WARNING [grants_unclassified] stands: a relation has no grant classification and holds the default rights (see the step's output above)."
+fi
 if [ "$PRESERVE_IDENTITY" = yes ]; then
     echo "deploy.sh: running it again against this tree changes nothing -- no layer"
     echo "deploy.sh: rebuilds, no data is touched, and every container keeps its id."

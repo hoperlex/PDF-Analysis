@@ -17,8 +17,11 @@ What is shown, in the order the task lists it:
 (e) a database restored from a ``pg_dump --no-owner --no-privileges`` dump, in the two shapes the repository's
     restore paths produce, has no rights until the step runs and has exactly the rights after it.
 
-Then the premise the migrator decision rests on, the end-to-end fail-closed case (a migration copy that adds
-a table), a mutation proof per kind of difference ``--check`` reports, and the password rotation.
+Then the premise the migrator decision rests on, the default privileges (``AD-02``, restored by ``R-156n``: a table a
+later migration creates is usable at once, and the step narrows a classified one back to its class), the end-to-end case
+of a migration copy that adds a table nobody classified (a warning and exit 0, not a refusal; the dev-time guard stays
+red in ``tests/integration/recovery/test_grant_classification.py``), a mutation proof per kind of difference ``--check``
+reports, and the password rotation.
 """
 
 from __future__ import annotations
@@ -185,7 +188,7 @@ def applied(stand: Stand) -> Stand:
 
 
 def _acl_snapshot(connection: psycopg.Connection, role: str) -> list[tuple[object, ...]]:
-    """Every ACL and attribute the step can touch (not the password verifier: it is re-salted by design)."""
+    """Every ACL, default ACL and attribute the step can touch (not the password verifier: it is re-salted by design)."""
     rows = connection.execute("""
         SELECT 'relation', c.relname, c.relacl::text,
                (SELECT string_agg(a.attname || '=' || a.attacl::text, ',' ORDER BY a.attnum)
@@ -198,9 +201,20 @@ def _acl_snapshot(connection: psycopg.Connection, role: str) -> list[tuple[objec
         UNION ALL SELECT 'role', rolname,
                    concat_ws(',', rolsuper, rolcreatedb, rolcreaterole, rolcanlogin, rolreplication, rolbypassrls, rolinherit,
                              rolconnlimit), NULL FROM pg_roles WHERE rolname = %s
+        UNION ALL SELECT 'default acl', d.defaclobjtype::text || ' ' || d.defaclrole::regrole::text || ' ' || d.defaclnamespace::regnamespace::text,
+                   d.defaclacl::text, NULL
+                   FROM pg_default_acl d WHERE EXISTS (SELECT 1 FROM aclexplode(d.defaclacl) x WHERE x.grantee = %s::regrole)
         ORDER BY 1, 2
-    """, (sorted(grants.CALLABLE_FUNCTIONS), role)).fetchall()
+    """, (sorted(grants.CALLABLE_FUNCTIONS), role, role)).fetchall()
     return [tuple(row) for row in rows]
+
+
+def _default_acl_kinds(connection: psycopg.Connection, role: str) -> list[str]:
+    """The kinds of default ACL (``r`` tables, ``S`` sequences, ...) in schema public that grant the role anything."""
+    rows = connection.execute(
+        "SELECT d.defaclobjtype::text FROM pg_default_acl d WHERE d.defaclnamespace = 'public'::regnamespace "
+        "AND EXISTS (SELECT 1 FROM aclexplode(d.defaclacl) x WHERE x.grantee = %s::regrole)", (role,)).fetchall()
+    return sorted(str(row[0]) for row in rows)
 
 
 # --- (a) the CRUD the contexts do ------------------------------------------------------------------
@@ -506,6 +520,9 @@ def test_the_second_run_changes_nothing(applied: Stand) -> None:
         second = _acl_snapshot(owner, applied.role)
     assert first == second
     assert len(first) > 70, "the snapshot covers every relation, the schema, the database, the helpers and the role"
+    defaults = [row for row in first if row[0] == "default acl"]
+    assert sorted(row[1].split()[0] for row in defaults) == ["S", "r"], "a default ACL for tables and one for sequences (and no other)"
+    assert all(f"{applied.role}=" in str(row[2]) for row in defaults)
     assert any(row[0] == "role" and row[2].startswith("f,f,f,t,f,f") for row in first), "no superuser, createdb, createrole; login; no replication, bypassrls"
 
 
@@ -517,6 +534,8 @@ def test_the_snapshot_would_see_a_change(applied: Stand) -> None:
         assert _acl_snapshot(owner, applied.role) != before
         owner.execute(f'ALTER ROLE "{applied.role}" CREATEDB')
         assert [r for r in _acl_snapshot(owner, applied.role) if r[0] == "role"] != [r for r in before if r[0] == "role"]
+        owner.execute(f'ALTER DEFAULT PRIVILEGES FOR ROLE "{applied.cluster.username}" IN SCHEMA public GRANT TRUNCATE ON TABLES TO "{applied.role}"')
+        assert [r for r in _acl_snapshot(owner, applied.role) if r[0] == "default acl"] != [r for r in before if r[0] == "default acl"]
 
 
 def test_the_step_repairs_whatever_was_changed_by_hand(applied: Stand) -> None:
@@ -524,7 +543,9 @@ def test_the_step_repairs_whatever_was_changed_by_hand(applied: Stand) -> None:
         before = _acl_snapshot(owner, applied.role)
         for sql in (f'GRANT TRUNCATE ON audit_event TO "{applied.role}"', f'GRANT ALL ON schema public TO "{applied.role}"',
                     f'ALTER ROLE "{applied.role}" SUPERUSER', f'REVOKE SELECT ON job FROM "{applied.role}"',
-                    f'GRANT pg_read_all_data TO "{applied.role}"'):
+                    f'GRANT pg_read_all_data TO "{applied.role}"',
+                    f'ALTER DEFAULT PRIVILEGES FOR ROLE "{applied.cluster.username}" IN SCHEMA public GRANT TRUNCATE ON TABLES TO "{applied.role}"',
+                    f'ALTER DEFAULT PRIVILEGES FOR ROLE "{applied.cluster.username}" GRANT ALL ON FUNCTIONS TO "{applied.role}"'):
             owner.execute(sql)
     assert applied.run("--check").returncode == 1
     applied.apply()
@@ -569,29 +590,38 @@ _TAMPERING = {
                            "owner: the role owns function am_is_ascending_page_list"),
     "a lost helper": ("REVOKE EXECUTE ON FUNCTION am_is_ascending_page_list(integer[], integer) FROM {role}, PUBLIC",
                       "function am_is_ascending_page_list: the role cannot EXECUTE it"),
-    "a table nobody classified": ("CREATE TABLE zz_unclassified (a int)", "relation public.zz_unclassified: has no grant classification"),
-    "a sequence nobody classified": ("CREATE SEQUENCE zz_unclassified_seq", "relation public.zz_unclassified_seq: has no grant classification"),
-    "a view nobody classified": ("CREATE VIEW zz_unclassified_view AS SELECT 1", "relation public.zz_unclassified_view: has no grant classification"),
-    "a relation in another schema": ("CREATE SCHEMA zz_other; CREATE TABLE zz_other.t (a int)", "relation zz_other.t: has no grant classification"),
+    # `R-156n`: the default privileges the step sets (`AD-02`): exactly SELECT, INSERT, UPDATE, DELETE on new tables and USAGE on new sequences
+    # created by the migrator in schema public -- a missing one, an extra one and one in another scope are each a difference.
+    "a lost default on tables": ('ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public REVOKE UPDATE ON TABLES FROM {role}',
+                                 "default privileges: the role lacks UPDATE on new tables created by"),
+    "a lost default on sequences": ('ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public REVOKE USAGE ON SEQUENCES FROM {role}',
+                                    "default privileges: the role lacks USAGE on new sequences created by"),
+    "no default at all": ('ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public REVOKE ALL ON TABLES FROM {role}; '
+                          'ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public REVOKE ALL ON SEQUENCES FROM {role}',
+                          "default privileges: the role lacks SELECT on new tables created by"),
+    "a TRUNCATE by default": ('ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public GRANT TRUNCATE ON TABLES TO {role}',
+                              "default privileges: the role holds TRUNCATE on new tables created by"),
+    "a default on every schema": ('ALTER DEFAULT PRIVILEGES FOR ROLE {owner} GRANT SELECT ON TABLES TO {role}',
+                                  "in any schema"),
+    "a default on functions": ('ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO {role}',
+                               "default privileges: the role holds EXECUTE on new functions created by"),
 }
 
 
 @pytest.mark.parametrize("tampering", sorted(_TAMPERING))
 def test_check_reports_each_kind_of_difference_and_the_step_repairs_it(applied: Stand, tampering: str) -> None:
     sql, expected = _TAMPERING[tampering]
-    unclassified = tampering.endswith("nobody classified") or "another schema" in tampering
     ownership = tampering.endswith("it owns")
     with applied.owner() as owner:
-        for part in sql.format(role=f'"{applied.role}"', database=f'"{applied.database}"').split("; "):
+        for part in sql.format(role=f'"{applied.role}"', database=f'"{applied.database}"',
+                               owner=f'"{applied.cluster.username}"').split("; "):
             owner.execute(part)
     found = applied.run("--check")
     assert found.returncode == 1, (found.stdout, found.stderr)
     assert expected in found.stderr, found.stderr
     assert "grants-ok" not in found.stdout
-    if unclassified:
-        refused = applied.run()
-        assert refused.returncode == 3 and "[grants_unclassified]" in refused.stderr, refused.stderr
-    elif ownership:
+    assert "[grants_drift]" in found.stderr and "[grants_unclassified]" not in found.stderr
+    if ownership:
         # The step grants and revokes; it does not take ownership back. It must SAY so, loudly, and not exit 0.
         refused = applied.run()
         assert refused.returncode == 4 and "owns" in refused.stderr, (refused.returncode, refused.stderr)
@@ -601,8 +631,30 @@ def test_check_reports_each_kind_of_difference_and_the_step_repairs_it(applied: 
         applied.apply()
     else:
         applied.apply()
-    if not unclassified:
+    assert applied.run("--check").returncode == 0
+
+
+def test_a_default_set_up_for_another_creator_is_reported_and_taken_away(applied: Stand) -> None:
+    """The default privileges the application role holds are looked at in every scope, not only the migrator's own:
+    a default that would give the role rights on tables ANOTHER role creates is a difference, and the step removes it."""
+    creator = f"prod04_creator_{secrets.token_hex(4)}"
+    _CREATED_ROLES.append(creator)
+    try:
+        with applied.owner() as owner:
+            owner.execute(f'CREATE ROLE "{creator}" NOLOGIN')
+            owner.execute(f'ALTER DEFAULT PRIVILEGES FOR ROLE "{creator}" IN SCHEMA public GRANT SELECT ON TABLES TO "{applied.role}"')
+        found = applied.run("--check")
+        assert found.returncode == 1, (found.stdout, found.stderr)
+        assert f"default privileges: the role holds SELECT on new tables created by {creator} in schema public" in found.stderr
+        applied.apply()
         assert applied.run("--check").returncode == 0
+        with applied.owner() as owner:
+            assert owner.execute("SELECT count(*) FROM pg_default_acl d WHERE d.defaclrole = %s::regrole", (creator,)).fetchone() == (0,)
+    finally:
+        with applied.owner() as owner:
+            owner.execute(f'DROP OWNED BY "{creator}"')
+            owner.execute(f'DROP ROLE IF EXISTS "{creator}"')
+        _CREATED_ROLES.remove(creator)
 
 
 # --- (e) a restored database --------------------------------------------------------------------------------
@@ -652,10 +704,16 @@ def test_a_database_restored_from_a_no_privileges_dump_has_no_rights_until_the_s
         with pytest.raises(errors.InsufficientPrivilege):
             connection.execute("SELECT version_num FROM public.alembic_version")
     assert applied.run("--check").returncode == 1
+    with applied.owner(database=target) as owner:
+        assert _default_acl_kinds(owner, applied.role) == [], "a dump carries no default privilege either (--no-privileges)"
     applied.apply()
     assert applied.run("--check").returncode == 0
+    with applied.owner(database=target) as owner:
+        assert _default_acl_kinds(owner, applied.role) == ["S", "r"], "the step re-creates the default privileges (R-156n)"
+        owner.execute("CREATE TABLE zz_later_after_restore (a int)")  # what a later migration does
     with applied.app(database=target, autocommit=True) as connection:
         assert connection.execute("SELECT count(*) FROM project").fetchone() == (0,)
+        connection.execute("INSERT INTO zz_later_after_restore VALUES (1)")  # usable at once, no second run
         with pytest.raises(errors.InsufficientPrivilege):
             connection.execute("TRUNCATE TABLE project")
         with pytest.raises(errors.InsufficientPrivilege):
@@ -673,16 +731,117 @@ def test_the_copy_serve_restore_shape_drop_schema_create_schema_then_restore(app
         with pytest.raises(errors.InsufficientPrivilege, match="schema public"):
             connection.execute("SELECT count(*) FROM public.project")
     assert applied.run("--check").returncode == 1
+    with applied.owner() as owner:
+        assert _default_acl_kinds(owner, applied.role) == [], "DROP SCHEMA public CASCADE took the schema-scoped default privileges with it"
     applied.apply()
     assert applied.run("--check").returncode == 0
+    with applied.owner() as owner:
+        assert _default_acl_kinds(owner, applied.role) == ["S", "r"], "the step re-creates the default privileges (R-156n)"
+        owner.execute("CREATE TABLE zz_later_after_restore (a int)")  # what a later migration does
     with applied.app(autocommit=True) as connection:
         assert connection.execute("SELECT count(*) FROM project").fetchone() == (0,)
         assert connection.execute("SELECT nextval('audit_event_sequence_no_seq') > 0").fetchone() == (True,)
+        connection.execute("INSERT INTO zz_later_after_restore VALUES (1)")  # usable at once, no second run
         with pytest.raises(errors.InsufficientPrivilege):
             connection.execute("DELETE FROM audit_event")
 
 
-# --- the fail-closed case: a migration that adds a table -----------------------------------------------------
+# --- the default privileges (`AD-02`, restored by `R-156n`) -----------------------------------------------------
+
+
+def test_a_table_the_migrator_creates_later_is_usable_by_the_application_role_at_once(applied: Stand) -> None:
+    """No second run of the step: the default privileges the first run set are what makes a later table usable."""
+    with applied.owner() as owner:
+        owner.execute("CREATE TABLE zz_later (id serial PRIMARY KEY, note text)")
+        owner.execute("CREATE VIEW zz_later_view AS SELECT id, note FROM zz_later")
+        owner.execute("CREATE SEQUENCE zz_later_seq")
+    with applied.app(autocommit=True) as connection:
+        connection.execute("INSERT INTO zz_later (note) VALUES ('a')")  # the serial default calls nextval: USAGE by default
+        assert connection.execute("SELECT note FROM zz_later").fetchall() == [("a",)]
+        connection.execute("UPDATE zz_later SET note = 'b'")
+        assert connection.execute("SELECT note FROM zz_later_view").fetchall() == [("b",)]
+        assert connection.execute("SELECT nextval('zz_later_seq') > 0").fetchone() == (True,)
+        connection.execute("DELETE FROM zz_later")
+        # read and write in full -- and nothing else: no TRUNCATE, no change to the schema, no setval
+        for statement in ("TRUNCATE TABLE zz_later", "DROP TABLE zz_later", "ALTER TABLE zz_later ADD COLUMN zz int",
+                          "CREATE INDEX zz_later_index ON zz_later (note)", "SELECT setval('zz_later_seq', 1)",
+                          "ALTER SEQUENCE zz_later_seq RESTART", "CREATE TABLE zz_new (a int)"):
+            with pytest.raises(errors.InsufficientPrivilege):
+                connection.execute(statement)
+    with applied.owner() as owner:
+        held = {privilege for privilege in grants.ALL_TABLE_PRIVILEGES if owner.execute(
+            "SELECT has_table_privilege(%s::name, 'public.zz_later'::regclass, %s)", (applied.role, privilege)).fetchone() == (True,)}
+        assert held == {"SELECT", "INSERT", "UPDATE", "DELETE"}, "the default grants exactly the four, never TRUNCATE"
+
+
+def test_a_classified_table_a_later_migration_creates_is_narrowed_to_its_class_by_the_next_run(applied: Stand) -> None:
+    """`audit_run_deletion` is append-only (SELECT, INSERT). Recreated under its name -- what a migration does -- it gets the
+    default rights until the step runs, which is after every `migrate`, and then it is exactly its class again."""
+    table = "audit_run_deletion"
+    assert grants.table_privileges(table) == ("SELECT", "INSERT")
+    with applied.owner() as owner:
+        owner.execute(f"ALTER TABLE {table} RENAME TO zz_old_{table}")
+        owner.execute(f"CREATE TABLE {table} (LIKE zz_old_{table})")
+
+        def held() -> set[str]:
+            return {p for p in grants.ALL_TABLE_PRIVILEGES if owner.execute(
+                "SELECT has_table_privilege(%s::name, %s::regclass, %s)", (applied.role, f"public.{table}", p)).fetchone() == (True,)}
+
+        assert held() == {"SELECT", "INSERT", "UPDATE", "DELETE"}, "until the step runs, a new table has the default rights"
+        done = applied.run()
+        assert done.returncode == 0 and f"zz_old_{table}" in done.stderr, (done.returncode, done.stderr)
+        assert held() == {"SELECT", "INSERT"}, "the step narrows a classified table back to its class"
+        column = _first_column(owner, table)
+    with applied.app(autocommit=True) as connection:
+        for statement in (f'UPDATE {table} SET "{column}" = "{column}"', f"DELETE FROM {table}"):
+            with pytest.raises(errors.InsufficientPrivilege):
+                connection.execute(statement)
+
+
+def test_an_unclassified_relation_is_a_warning_and_not_a_refusal(applied: Stand) -> None:
+    """`R-156n`: the first build refused it (exit 3) and stopped the deploy. It now warns, by name, gives it the default rights
+    and exits 0; the append-only tables that ARE classified keep refusing `UPDATE` and `DELETE` by privilege."""
+    with applied.owner() as owner:
+        owner.execute("CREATE TABLE zz_unclassified (id serial PRIMARY KEY, note text)")
+        owner.execute("CREATE VIEW zz_unclassified_view AS SELECT id, note FROM zz_unclassified")
+        owner.execute("CREATE SEQUENCE zz_unclassified_seq")
+        owner.execute("CREATE SCHEMA zz_other")
+        owner.execute("CREATE TABLE zz_other.t (a int)")
+    named = ("table public.zz_unclassified", "view public.zz_unclassified_view", "sequence public.zz_unclassified_seq",
+             "sequence public.zz_unclassified_id_seq", "table zz_other.t")
+    found = applied.run("--check")
+    assert found.returncode == 0, (found.stdout, found.stderr)
+    assert "[grants_unclassified]" in found.stderr and "[grants_drift]" not in found.stderr
+    for name in named:
+        assert name in found.stderr, (name, found.stderr)
+    assert f"grants-ok: {applied.role} on {applied.database} matches the classification (5 relation(s)" in found.stdout
+    done = applied.run()
+    assert done.returncode == 0, (done.returncode, done.stdout, done.stderr)
+    assert "WARNING [grants_unclassified] 5 relation(s)" in done.stderr and "the deploy goes on" in done.stderr
+    assert "REFUSED" not in done.stderr and "grants-ok" in done.stdout
+    with applied.app(autocommit=True) as connection:
+        connection.execute("INSERT INTO zz_unclassified (note) VALUES ('a')")
+        connection.execute("UPDATE zz_unclassified SET note = 'b'")
+        assert connection.execute("SELECT note FROM zz_unclassified_view").fetchall() == [("b",)]
+        assert connection.execute("SELECT nextval('zz_unclassified_seq') > 0").fetchone() == (True,)
+        connection.execute("DELETE FROM zz_unclassified")
+        with pytest.raises(errors.InsufficientPrivilege):
+            connection.execute("TRUNCATE TABLE zz_unclassified")
+        with pytest.raises(errors.InsufficientPrivilege):
+            connection.execute("SELECT count(*) FROM zz_other.t")  # another schema: no USAGE, so nothing
+    with applied.owner() as owner:
+        for table in sorted(grants.APPEND_ONLY):
+            for privilege in ("UPDATE", "DELETE"):
+                assert owner.execute("SELECT has_table_privilege(%s::name, %s::regclass, %s)",
+                                     (applied.role, f"public.{table}", privilege)).fetchone() == (False,), (table, privilege)
+        assert owner.execute("SELECT has_schema_privilege(%s::name, 'zz_other', 'USAGE')", (applied.role,)).fetchone() == (False,)
+    with applied.app(autocommit=True) as connection:
+        for statement in ("UPDATE audit_event SET event_type = event_type", "DELETE FROM audit_event",
+                          "UPDATE model_call SET model_call_id = model_call_id", "DELETE FROM model_call"):
+            with pytest.raises(errors.InsufficientPrivilege):
+                connection.execute(statement)
+    assert applied.run("--check").returncode == 0, "a second look says the same: a warning, not a difference"
+
 
 _NEW_MIGRATION = '''"""A test-only revision: a table nobody classified."""
 from alembic import op
@@ -702,9 +861,12 @@ def downgrade() -> None:
 '''
 
 
-def test_a_migration_that_adds_a_table_is_refused_by_the_step_and_by_the_guard(applied: Stand, tmp_path: Path) -> None:
-    """The literal mutation: a COPY of the migrations gains one revision that creates a table, the clone is
-    migrated with it, and (1) the step refuses with nothing granted, (2) the classification guard goes red."""
+def test_a_migration_that_adds_a_table_is_usable_at_once_warned_about_by_the_step_and_refused_by_the_guard(
+    applied: Stand, tmp_path: Path,
+) -> None:
+    """The literal mutation: a COPY of the migrations gains one revision that creates a table, the clone is migrated with it,
+    and (1) the application role can use the table before the step runs again, (2) the step warns by name and exits 0, with
+    the rights it already held intact, (3) the classification guard goes red."""
     from sqlalchemy.orm import Session
 
     from auditmanager.shared.db.engine import create_database_engine
@@ -719,17 +881,20 @@ def test_a_migration_that_adds_a_table_is_refused_by_the_step_and_by_the_guard(a
         cwd=ROOT, env=dict(os.environ, PYTHONPATH="src", DATABASE_URL=url), capture_output=True, text=True, timeout=120, check=False,
     )
     assert done.returncode == 0, done.stderr
-    refused = applied.run()
-    assert refused.returncode == 3, (refused.stdout, refused.stderr)
-    assert "[grants_unclassified]" in refused.stderr and "zz_prod04_probe" in refused.stderr
-    # fail closed: the rights the role already had are untouched (the transaction was rolled back) ...
+    with applied.app(autocommit=True) as connection:  # (1) no second run of the step
+        connection.execute("INSERT INTO zz_prod04_probe (id) VALUES ('a')")
+        assert connection.execute("SELECT count(*) FROM zz_prod04_probe").fetchone() == (1,)
+    stepped = applied.run()  # (2)
+    assert stepped.returncode == 0, (stepped.stdout, stepped.stderr)
+    assert "[grants_unclassified]" in stepped.stderr and "table public.zz_prod04_probe" in stepped.stderr
+    assert "grants-ok" in stepped.stdout
     with applied.app(autocommit=True) as connection:
-        assert connection.execute("SELECT count(*) FROM project").fetchone() == (0,)
-        # ... and the new table got nothing
+        assert connection.execute("SELECT count(*) FROM project").fetchone() == (0,)  # what it already held is untouched
+        connection.execute("UPDATE zz_prod04_probe SET id = 'b'")  # and the new table keeps the default rights
         with pytest.raises(errors.InsufficientPrivilege):
-            connection.execute("SELECT count(*) FROM zz_prod04_probe")
+            connection.execute("TRUNCATE TABLE zz_prod04_probe")
     engine = create_database_engine(DatabaseSettings(url=applied.cluster.set(database=applied.database)))
-    try:
+    try:  # (3) the dev-time guard is where the classification is enforced, and it did not move
         with Session(engine) as session, pytest.raises(grants.GrantClassificationRefused, match="zz_prod04_probe"):
             grants.audit_grant_classification(session)
     finally:

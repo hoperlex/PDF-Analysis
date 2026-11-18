@@ -15,9 +15,9 @@ declaration of the schema at head -- and does **not** keep a second list of the 
   ``tests/integration/recovery/test_schema_coverage.py`` until that declaration is extended;
 * this module adds the one decision schema_coverage does not make, *which rights* each table gets,
   as four disjoint sets that must partition ``schema_coverage.TABLES`` exactly. A table with no
-  decision here is a red test (``test_grant_classification.py``), and at run time the step REFUSES a
-  relation it has no row for (fail closed: no rights, and a typed refusal that stops the deploy
-  before ``api`` starts).
+  decision here is a red test (``test_grant_classification.py``); at run time (``R-156n``) the step does
+  NOT refuse a relation it has no row for: it applies everything it knows, gives that relation the
+  default rights (below), prints a warning that names it (``[grants_unclassified]``) and exits 0.
 
 The four classes (``ADR-0021`` section 3 names the first two; the other two are the lane's):
 
@@ -47,9 +47,15 @@ two plain SQL helpers in :data:`CALLABLE_FUNCTIONS` get ``EXECUTE`` (a ``CHECK``
 index expression call them with the *invoker's* rights), and the functions an extension installs
 (pgvector) keep the ``PUBLIC`` default.
 
-No ``ALTER DEFAULT PRIVILEGES``: a table a later migration creates gets **no** rights until it is
-classified here. That is the fail-closed half of the guard; the discipline is the same as
-``schema_coverage``'s.
+Default privileges (``AD-02``, restored by ``R-156n``). The step also runs, as the migrator,
+``ALTER DEFAULT PRIVILEGES FOR ROLE <migrator> IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON
+TABLES`` and ``GRANT USAGE ON SEQUENCES`` to the application role (:data:`DEFAULT_TABLE_PRIVILEGES`,
+:data:`DEFAULT_SEQUENCE_PRIVILEGES`; never ``TRUNCATE``, never anything else), so a table or sequence a
+later migration creates is usable at once. The next run of the step narrows each *classified* one to
+its class (it runs after every ``migrate``); a relation in ``public`` that no class names keeps the
+default rights -- the step grants them explicitly, so a restore does not lose them -- and the step
+warns about it by name instead of refusing. The dev-time guard is unchanged and is where the
+classification is enforced: a table with no row is a red ``test_grant_classification.py``.
 
 Evidence. The ``append-only`` and ``read-only`` decisions that are not the schema's own are derived
 from the repository's code, not guessed: :func:`observed_statements` reads every SQL string in
@@ -80,6 +86,11 @@ READ_WRITE_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE")
 APPEND_ONLY_PRIVILEGES = ("SELECT", "INSERT")
 READ_ONLY_PRIVILEGES = ("SELECT",)
 NO_PRIVILEGES: tuple[str, ...] = ()
+
+#: What a table, view or sequence that no class names -- and every table a later migration creates, until the step
+#: narrows it -- gives the application role (`R-156n`): "read and write in full", and not ``TRUNCATE``.
+DEFAULT_TABLE_PRIVILEGES = READ_WRITE_PRIVILEGES
+DEFAULT_SEQUENCE_PRIVILEGES = ("USAGE",)
 
 CLASS_PRIVILEGES = {
     "read-write": READ_WRITE_PRIVILEGES,
@@ -631,13 +642,10 @@ INSERT INTO am_class (name, kind, privs, lock_only) VALUES
 CREATE TEMP TABLE am_callable (name text PRIMARY KEY) ON COMMIT DROP;
 INSERT INTO am_callable (name) VALUES
 @CALLABLE_ROWS@;
--- 0. fail closed: a relation the classification does not name is refused before any right is granted.
-DO $am$
-DECLARE unknown text;
-BEGIN
-  SELECT string_agg(format('%s %I.%I', CASE c.relkind WHEN 'S' THEN 'sequence' WHEN 'v' THEN 'view' ELSE 'table' END,
-                           n.nspname, c.relname), ', ' ORDER BY n.nspname, c.relname)
-    INTO unknown
+-- 0. what the classification does not name. Not refused (`R-156n`): step 3 gives it the default rights and the check
+--    reports it as a warning, by name, so a deploy that adds a table the classification has not caught up with goes on.
+CREATE TEMP TABLE am_unclassified ON COMMIT DROP AS
+  SELECT n.nspname AS schema_name, c.relname AS name, c.relkind::text AS relkind
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname <> 'information_schema' AND n.nspname !~ '^pg_'
      AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
@@ -649,12 +657,6 @@ BEGIN
                 JOIN am_class k ON k.name = t.relname AND k.kind = 'table'
                WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.refclassid = 'pg_class'::regclass
                  AND d.deptype IN ('a', 'i') AND t.relnamespace = 'public'::regnamespace))));
-  IF unknown IS NOT NULL THEN
-    RAISE EXCEPTION '[grants_unclassified] no grant classification for: %', unknown
-      USING HINT = 'add it to scripts/recovery/grant_classification.py and regenerate infra/deploy/apply-grants.sh';
-  END IF;
-END
-$am$;
 -- 1. the role: created if absent, its attributes and password set every time (a rotated password lands here).
 SELECT format('CREATE ROLE %I', :'app_role') WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role') \gexec
 ALTER ROLE :"app_role" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'app_password';
@@ -685,6 +687,25 @@ SELECT format('GRANT USAGE ON SEQUENCE public.%I TO %I', s.relname, :'app_role')
 SELECT format('GRANT EXECUTE ON FUNCTION %s TO %I', p.oid::regprocedure, :'app_role')
   FROM pg_proc p JOIN am_callable f ON f.name = p.proname
  WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' ORDER BY p.proname \gexec
+-- 3b. a relation of schema public that no class names holds the default rights (what step 4 gives a new one): @DEFAULT_TABLE_PRIVILEGES@ on a
+--     table or view, USAGE on a sequence. A relation of another schema gets nothing: the role has no USAGE on that schema.
+SELECT format('GRANT @DEFAULT_TABLE_PRIVILEGES@ ON TABLE public.%I TO %I', u.name, :'app_role')
+  FROM am_unclassified u WHERE u.schema_name = 'public' AND u.relkind <> 'S' ORDER BY u.name \gexec
+SELECT format('GRANT @DEFAULT_SEQUENCE_PRIVILEGES@ ON SEQUENCE public.%I TO %I', u.name, :'app_role')
+  FROM am_unclassified u WHERE u.schema_name = 'public' AND u.relkind = 'S' ORDER BY u.name \gexec
+-- 4. default privileges (`AD-02`, `R-156n`): a table or sequence a LATER migration creates, as this owner role, is usable by the application role
+--    at once. Every default privilege the role holds anywhere is taken away first, so the step leaves exactly these two and no other.
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %s%s REVOKE ALL ON %s FROM %I',
+              d.defaclrole::regrole,
+              CASE WHEN d.defaclnamespace = 0 THEN '' ELSE ' IN SCHEMA ' || d.defaclnamespace::regnamespace::text END,
+              CASE d.defaclobjtype WHEN 'r' THEN 'TABLES' WHEN 'S' THEN 'SEQUENCES' WHEN 'f' THEN 'FUNCTIONS' WHEN 'T' THEN 'TYPES' WHEN 'n' THEN 'SCHEMAS' END,
+              :'app_role')
+  FROM pg_default_acl d
+ WHERE d.defaclobjtype IN ('r', 'S', 'f', 'T', 'n')
+   AND EXISTS (SELECT 1 FROM aclexplode(d.defaclacl) x WHERE x.grantee = (SELECT oid FROM pg_roles WHERE rolname = :'app_role'))
+ ORDER BY d.defaclrole::regrole::text, d.defaclnamespace, d.defaclobjtype \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT @DEFAULT_TABLE_PRIVILEGES@ ON TABLES TO %I', current_user, :'app_role') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT @DEFAULT_SEQUENCE_PRIVILEGES@ ON SEQUENCES TO %I', current_user, :'app_role') \gexec
 COMMIT;
 """
 
@@ -696,7 +717,14 @@ cls (name, kind, privs, lock_only) AS (VALUES
 callable (name) AS (VALUES
 @CALLABLE_ROWS@),
 role AS (SELECT oid, rolname FROM pg_roles WHERE rolname = :'app_role'),
+migrator AS (SELECT oid FROM pg_roles WHERE rolname = current_user),
 privileges (privilege) AS (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')),
+want_default (objtype, label, privilege) AS (VALUES
+@DEFAULT_ROWS@),
+held_default AS (
+  SELECT d.defaclrole, d.defaclnamespace, d.defaclobjtype AS objtype, x.privilege_type AS privilege
+    FROM pg_default_acl d CROSS JOIN role CROSS JOIN LATERAL aclexplode(d.defaclacl) x
+   WHERE x.grantee = role.oid),
 problems (object, detail) AS (
   SELECT 'role', 'does not exist' WHERE NOT EXISTS (SELECT 1 FROM role)
   UNION ALL SELECT 'role', 'has an attribute it must not have (superuser, createdb, createrole, replication, bypassrls) or cannot log in'
@@ -717,7 +745,9 @@ problems (object, detail) AS (
   UNION ALL SELECT 'owner', 'the role owns function ' || p.proname FROM pg_proc p JOIN role ON role.oid = p.proowner
   UNION ALL SELECT 'owner', 'the role owns schema ' || n.nspname FROM pg_namespace n JOIN role ON role.oid = n.nspowner
   UNION ALL SELECT 'owner', 'the role owns database ' || d.datname FROM pg_database d JOIN role ON role.oid = d.datdba
-  UNION ALL SELECT 'relation ' || n.nspname || '.' || c.relname, 'has no grant classification'
+  UNION ALL SELECT CASE c.relkind WHEN 'S' THEN 'sequence' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view'
+                                  WHEN 'f' THEN 'foreign table' ELSE 'table' END || ' ' || n.nspname || '.' || c.relname,
+         'has no grant classification'
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname <> 'information_schema' AND n.nspname !~ '^pg_' AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
      AND NOT (n.nspname = 'public' AND (
@@ -759,8 +789,25 @@ problems (object, detail) AS (
   UNION ALL SELECT 'function ' || p.proname, 'the role cannot EXECUTE it'
     FROM pg_proc p JOIN callable f ON f.name = p.proname CROSS JOIN role
    WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' AND NOT has_function_privilege(role.oid, p.oid, 'EXECUTE')
+  UNION ALL SELECT 'default privileges', 'the role lacks ' || w.privilege || ' on new ' || w.label || ' created by ' || current_user || ' in schema public'
+    FROM want_default w CROSS JOIN role
+   WHERE NOT EXISTS (SELECT 1 FROM held_default h
+                      WHERE h.defaclrole = (SELECT oid FROM migrator) AND h.defaclnamespace = 'public'::regnamespace
+                        AND h.objtype = w.objtype AND h.privilege = w.privilege)
+  UNION ALL SELECT 'default privileges',
+         'the role holds ' || h.privilege || ' on new '
+         || CASE h.objtype WHEN 'r' THEN 'tables' WHEN 'S' THEN 'sequences' WHEN 'f' THEN 'functions' WHEN 'T' THEN 'types'
+                           WHEN 'n' THEN 'schemas' ELSE 'objects of kind ' || h.objtype::text END
+         || ' created by ' || h.defaclrole::regrole::text
+         || CASE WHEN h.defaclnamespace = 0 THEN ' in any schema' ELSE ' in schema ' || h.defaclnamespace::regnamespace::text END
+    FROM held_default h
+   WHERE NOT EXISTS (SELECT 1 FROM want_default w
+                      WHERE w.objtype = h.objtype AND w.privilege = h.privilege
+                        AND h.defaclrole = (SELECT oid FROM migrator) AND h.defaclnamespace = 'public'::regnamespace)
 )
-SELECT object || ': ' || detail FROM problems ORDER BY object, detail;
+-- one line per finding, tagged: a relation the classification does not name is a `warning` (`R-156n`), everything else a `drift`.
+SELECT CASE WHEN detail = 'has no grant classification' THEN 'warning' ELSE 'drift' END || '|' || object || ': ' || detail
+  FROM problems ORDER BY object, detail;
 """
 
 
@@ -783,12 +830,25 @@ def _callable_rows() -> str:
     return _rows(f"  ('{name}')" for name in sorted(CALLABLE_FUNCTIONS))
 
 
+def _default_rows() -> str:
+    """``(objtype, label, privilege)`` rows of the default privileges the check expects (``r`` tables, ``S`` sequences)."""
+    rows = [f"  ('r', 'tables', '{privilege}')" for privilege in DEFAULT_TABLE_PRIVILEGES]
+    rows += [f"  ('S', 'sequences', '{privilege}')" for privilege in DEFAULT_SEQUENCE_PRIVILEGES]
+    return _rows(rows)
+
+
 def render_sql(kind: str) -> str:
     """The psql script for ``apply`` or ``check``; it expects ``:app_role`` (and, for apply, ``:app_password``)."""
     template = {"apply": _APPLY, "check": _CHECK}.get(kind)
     if template is None:
         raise GrantClassificationRefused(f"unknown SQL kind {kind!r}; expected apply or check")
-    body = template.replace("@CLASS_ROWS@", _class_rows()).replace("@CALLABLE_ROWS@", _callable_rows())
+    body = (
+        template.replace("@CLASS_ROWS@", _class_rows())
+        .replace("@CALLABLE_ROWS@", _callable_rows())
+        .replace("@DEFAULT_ROWS@", _default_rows())
+        .replace("@DEFAULT_TABLE_PRIVILEGES@", ", ".join(DEFAULT_TABLE_PRIVILEGES))
+        .replace("@DEFAULT_SEQUENCE_PRIVILEGES@", ", ".join(DEFAULT_SEQUENCE_PRIVILEGES))
+    )
     return f"{_SOURCE_NOTE}\n{body.strip()}\n"
 
 
@@ -941,7 +1001,8 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "ALL_TABLE_PRIVILEGES", "APPEND_ONLY", "APPEND_ONLY_BY_CODE_EVIDENCE", "CALLABLE_FUNCTIONS", "CLASS_PRIVILEGES", "DYNAMIC_WRITES", "GrantClassificationRefused",
+    "ALL_TABLE_PRIVILEGES", "APPEND_ONLY", "APPEND_ONLY_BY_CODE_EVIDENCE", "CALLABLE_FUNCTIONS", "CLASS_PRIVILEGES",
+    "DEFAULT_SEQUENCE_PRIVILEGES", "DEFAULT_TABLE_PRIVILEGES", "DYNAMIC_WRITES", "GrantClassificationRefused",
     "LOCK_ONLY_UPDATE", "NONE", "Observed", "READ_ONLY", "READ_WRITE", "TRIGGER_FUNCTIONS",
     "audit_grant_classification", "block_markers", "classification_problems", "dynamic_write_problems", "evidence_problems",
     "extract_block", "immutable_tables", "observed_statements", "render_block", "render_sql",

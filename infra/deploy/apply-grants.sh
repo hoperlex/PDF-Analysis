@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `PROD-04-DB-ROLES-01` (`R-146n` item 1, `AD-02`, `ADR-0021` section 3) -- give the APPLICATION role exactly
-# the rights the classification says, and nothing else. One idempotent step; every path that makes or
-# replaces the schema ends in it.
+# the rights the classification says, and nothing else, plus the default rights below for what the classification
+# does not name yet. One idempotent step; every path that makes or replaces the schema ends in it.
 #
 #   infra/deploy/apply-grants.sh [--env-file <path>]            apply, then verify what was applied
 #   infra/deploy/apply-grants.sh [--env-file <path>] --check    verify only; changes nothing
@@ -32,19 +32,26 @@
 # Its password is `ALPHA_APP_DB_PASSWORD`, the second password: the owner writes it on the host, the repository
 # holds no value for it, and an unset one is a refusal here and in `deploy.sh`, never a fall-back to the owner.
 #
-# FAIL CLOSED. A table, view or sequence the classification does not name gets NO rights and stops the step
-# with `[grants_unclassified]` (exit 3) before any right is granted; there is no `ALTER DEFAULT PRIVILEGES`. A
-# migration that adds a table is red in `tests/integration/recovery/test_grant_classification.py` until the
-# table is classified, and `python -m scripts.recovery.grant_classification --write-script
-# infra/deploy/apply-grants.sh` regenerates the two blocks below.
+# DEFAULT PRIVILEGES, AND A RELATION THE CLASSIFICATION DOES NOT NAME (`AD-02` restored by `R-156n`; the first build
+# of this step refused such a relation with `[grants_unclassified]`, exit 3, and stopped the deploy). The step now
+# also runs, as the migrator, `ALTER DEFAULT PRIVILEGES FOR ROLE <migrator> IN SCHEMA public GRANT SELECT, INSERT,
+# UPDATE, DELETE ON TABLES` and `GRANT USAGE ON SEQUENCES` to the application role -- nothing else, no TRUNCATE -- so
+# a table or sequence a later migration creates is usable at once. Because the step runs after every `migrate`, it
+# narrows each CLASSIFIED relation to its class (an append-only table loses UPDATE and DELETE again); a relation of
+# schema public that no class names keeps the default rights (granted explicitly, so a restore does not lose them)
+# and is WARNED about by name: `[grants_unclassified]` on stderr, exit 0, the deploy goes on. The classification is
+# still required at development time: a migration that adds a table is red in
+# `tests/integration/recovery/test_grant_classification.py` until the table is classified, and `python -m
+# scripts.recovery.grant_classification --write-script infra/deploy/apply-grants.sh` regenerates the two blocks below.
 #
 # THE PASSWORD NEVER APPEARS IN A COMMAND LINE. It is read from the environment file as data (never sourced),
 # restricted to characters that need no quoting, and written to `psql`'s standard input; `docker compose exec -T`
 # carries stdin into the container. Nothing is echoed back.
 #
-# EXIT CODES: 0 applied and verified (or, with --check, nothing differs); 1 --check found a difference;
-# 2 usage; 3 REFUSED (a setting is missing or malformed, or the schema holds a relation with no classification;
-# nothing was granted); 4 FAILED (docker or psql could not do it; the message says which).
+# EXIT CODES: 0 applied and verified (or, with --check, nothing differs); a relation the classification does not
+# name is a WARNING and does not change it; 1 --check found a difference (a right, an owner, a role attribute or a
+# default privilege); 2 usage; 3 REFUSED (a setting is missing or malformed; nothing was granted); 4 FAILED (docker
+# or psql could not do it, or the verification after an apply found a difference; the message says which).
 #
 # GUARDS ARE DELIMITED BY MARKERS -- `# >>> guard: <name>` / `# <<< guard: <name>`.
 # `tests/integration/composition/test_apply_grants_script.py` deletes ONE guard block from a copy of this file and
@@ -79,8 +86,9 @@ usage: apply-grants.sh [--env-file <path>] [--compose-file <path>] [--check | --
 
   --env-file <path>      default: infra/deploy/env/alpha.env
   --compose-file <path>  default: compose.server.yml beside this script
-  --check             verify the application role's rights against the classification; change nothing.
-                      Exit 0: nothing differs. Exit 1: a difference (printed, one per line).
+  --check             verify the application role's rights and default privileges against the classification;
+                      change nothing. Exit 0: nothing differs (a relation the classification does not name is
+                      a warning on stderr, token [grants_unclassified]). Exit 1: a difference (printed, one per line).
   --config-only       judge ALPHA_APP_DB_USER, ALPHA_APP_DB_PASSWORD and the two database URLs only.
                       Touches no docker and no database. Exit 0 or 3.
 USAGE
@@ -423,13 +431,10 @@ INSERT INTO am_callable (name) VALUES
   ('am_is_ascending_page_list'),
   ('am_stage_profile_in_pair'),
   ('norm_designation_tokens');
--- 0. fail closed: a relation the classification does not name is refused before any right is granted.
-DO $am$
-DECLARE unknown text;
-BEGIN
-  SELECT string_agg(format('%s %I.%I', CASE c.relkind WHEN 'S' THEN 'sequence' WHEN 'v' THEN 'view' ELSE 'table' END,
-                           n.nspname, c.relname), ', ' ORDER BY n.nspname, c.relname)
-    INTO unknown
+-- 0. what the classification does not name. Not refused (`R-156n`): step 3 gives it the default rights and the check
+--    reports it as a warning, by name, so a deploy that adds a table the classification has not caught up with goes on.
+CREATE TEMP TABLE am_unclassified ON COMMIT DROP AS
+  SELECT n.nspname AS schema_name, c.relname AS name, c.relkind::text AS relkind
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname <> 'information_schema' AND n.nspname !~ '^pg_'
      AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
@@ -441,12 +446,6 @@ BEGIN
                 JOIN am_class k ON k.name = t.relname AND k.kind = 'table'
                WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.refclassid = 'pg_class'::regclass
                  AND d.deptype IN ('a', 'i') AND t.relnamespace = 'public'::regnamespace))));
-  IF unknown IS NOT NULL THEN
-    RAISE EXCEPTION '[grants_unclassified] no grant classification for: %', unknown
-      USING HINT = 'add it to scripts/recovery/grant_classification.py and regenerate infra/deploy/apply-grants.sh';
-  END IF;
-END
-$am$;
 -- 1. the role: created if absent, its attributes and password set every time (a rotated password lands here).
 SELECT format('CREATE ROLE %I', :'app_role') WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role') \gexec
 ALTER ROLE :"app_role" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'app_password';
@@ -477,6 +476,25 @@ SELECT format('GRANT USAGE ON SEQUENCE public.%I TO %I', s.relname, :'app_role')
 SELECT format('GRANT EXECUTE ON FUNCTION %s TO %I', p.oid::regprocedure, :'app_role')
   FROM pg_proc p JOIN am_callable f ON f.name = p.proname
  WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' ORDER BY p.proname \gexec
+-- 3b. a relation of schema public that no class names holds the default rights (what step 4 gives a new one): SELECT, INSERT, UPDATE, DELETE on a
+--     table or view, USAGE on a sequence. A relation of another schema gets nothing: the role has no USAGE on that schema.
+SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO %I', u.name, :'app_role')
+  FROM am_unclassified u WHERE u.schema_name = 'public' AND u.relkind <> 'S' ORDER BY u.name \gexec
+SELECT format('GRANT USAGE ON SEQUENCE public.%I TO %I', u.name, :'app_role')
+  FROM am_unclassified u WHERE u.schema_name = 'public' AND u.relkind = 'S' ORDER BY u.name \gexec
+-- 4. default privileges (`AD-02`, `R-156n`): a table or sequence a LATER migration creates, as this owner role, is usable by the application role
+--    at once. Every default privilege the role holds anywhere is taken away first, so the step leaves exactly these two and no other.
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %s%s REVOKE ALL ON %s FROM %I',
+              d.defaclrole::regrole,
+              CASE WHEN d.defaclnamespace = 0 THEN '' ELSE ' IN SCHEMA ' || d.defaclnamespace::regnamespace::text END,
+              CASE d.defaclobjtype WHEN 'r' THEN 'TABLES' WHEN 'S' THEN 'SEQUENCES' WHEN 'f' THEN 'FUNCTIONS' WHEN 'T' THEN 'TYPES' WHEN 'n' THEN 'SCHEMAS' END,
+              :'app_role')
+  FROM pg_default_acl d
+ WHERE d.defaclobjtype IN ('r', 'S', 'f', 'T', 'n')
+   AND EXISTS (SELECT 1 FROM aclexplode(d.defaclacl) x WHERE x.grantee = (SELECT oid FROM pg_roles WHERE rolname = :'app_role'))
+ ORDER BY d.defaclrole::regrole::text, d.defaclnamespace, d.defaclobjtype \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', current_user, :'app_role') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE ON SEQUENCES TO %I', current_user, :'app_role') \gexec
 COMMIT;
 AM_GRANTS_SQL
 )"
@@ -670,7 +688,18 @@ callable (name) AS (VALUES
   ('am_stage_profile_in_pair'),
   ('norm_designation_tokens')),
 role AS (SELECT oid, rolname FROM pg_roles WHERE rolname = :'app_role'),
+migrator AS (SELECT oid FROM pg_roles WHERE rolname = current_user),
 privileges (privilege) AS (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')),
+want_default (objtype, label, privilege) AS (VALUES
+  ('r', 'tables', 'SELECT'),
+  ('r', 'tables', 'INSERT'),
+  ('r', 'tables', 'UPDATE'),
+  ('r', 'tables', 'DELETE'),
+  ('S', 'sequences', 'USAGE')),
+held_default AS (
+  SELECT d.defaclrole, d.defaclnamespace, d.defaclobjtype AS objtype, x.privilege_type AS privilege
+    FROM pg_default_acl d CROSS JOIN role CROSS JOIN LATERAL aclexplode(d.defaclacl) x
+   WHERE x.grantee = role.oid),
 problems (object, detail) AS (
   SELECT 'role', 'does not exist' WHERE NOT EXISTS (SELECT 1 FROM role)
   UNION ALL SELECT 'role', 'has an attribute it must not have (superuser, createdb, createrole, replication, bypassrls) or cannot log in'
@@ -691,7 +720,9 @@ problems (object, detail) AS (
   UNION ALL SELECT 'owner', 'the role owns function ' || p.proname FROM pg_proc p JOIN role ON role.oid = p.proowner
   UNION ALL SELECT 'owner', 'the role owns schema ' || n.nspname FROM pg_namespace n JOIN role ON role.oid = n.nspowner
   UNION ALL SELECT 'owner', 'the role owns database ' || d.datname FROM pg_database d JOIN role ON role.oid = d.datdba
-  UNION ALL SELECT 'relation ' || n.nspname || '.' || c.relname, 'has no grant classification'
+  UNION ALL SELECT CASE c.relkind WHEN 'S' THEN 'sequence' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view'
+                                  WHEN 'f' THEN 'foreign table' ELSE 'table' END || ' ' || n.nspname || '.' || c.relname,
+         'has no grant classification'
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname <> 'information_schema' AND n.nspname !~ '^pg_' AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
      AND NOT (n.nspname = 'public' AND (
@@ -733,8 +764,25 @@ problems (object, detail) AS (
   UNION ALL SELECT 'function ' || p.proname, 'the role cannot EXECUTE it'
     FROM pg_proc p JOIN callable f ON f.name = p.proname CROSS JOIN role
    WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' AND NOT has_function_privilege(role.oid, p.oid, 'EXECUTE')
+  UNION ALL SELECT 'default privileges', 'the role lacks ' || w.privilege || ' on new ' || w.label || ' created by ' || current_user || ' in schema public'
+    FROM want_default w CROSS JOIN role
+   WHERE NOT EXISTS (SELECT 1 FROM held_default h
+                      WHERE h.defaclrole = (SELECT oid FROM migrator) AND h.defaclnamespace = 'public'::regnamespace
+                        AND h.objtype = w.objtype AND h.privilege = w.privilege)
+  UNION ALL SELECT 'default privileges',
+         'the role holds ' || h.privilege || ' on new '
+         || CASE h.objtype WHEN 'r' THEN 'tables' WHEN 'S' THEN 'sequences' WHEN 'f' THEN 'functions' WHEN 'T' THEN 'types'
+                           WHEN 'n' THEN 'schemas' ELSE 'objects of kind ' || h.objtype::text END
+         || ' created by ' || h.defaclrole::regrole::text
+         || CASE WHEN h.defaclnamespace = 0 THEN ' in any schema' ELSE ' in schema ' || h.defaclnamespace::regnamespace::text END
+    FROM held_default h
+   WHERE NOT EXISTS (SELECT 1 FROM want_default w
+                      WHERE w.objtype = h.objtype AND w.privilege = h.privilege
+                        AND h.defaclrole = (SELECT oid FROM migrator) AND h.defaclnamespace = 'public'::regnamespace)
 )
-SELECT object || ': ' || detail FROM problems ORDER BY object, detail;
+-- one line per finding, tagged: a relation the classification does not name is a `warning` (`R-156n`), everything else a `drift`.
+SELECT CASE WHEN detail = 'has no grant classification' THEN 'warning' ELSE 'drift' END || '|' || object || ': ' || detail
+  FROM problems ORDER BY object, detail;
 AM_GRANTS_SQL
 )"
 # <<< generated: check-sql
@@ -754,8 +802,14 @@ SQL_ERR="$(mktemp)"
 SQL_IN="$(mktemp)"
 trap 'rm -f "$SQL_ERR" "$SQL_IN"' EXIT
 
+# The verification prints one tagged line per finding (`drift|...` or `warning|...`; see the generated check SQL). A
+# line that does not say it is a warning is a difference: only a relation the classification does not name is one.
+DRIFT=()
+UNCLASSIFIED=()
 verify() {
-    local out status=0
+    local out status=0 line
+    DRIFT=()
+    UNCLASSIFIED=()
     printf '%s\n' "$CHECK_SQL" > "$SQL_IN"
     out="$(psql_owner < "$SQL_IN" 2>"$SQL_ERR")" || status=$?
     if [ "$status" -ne 0 ]; then
@@ -763,17 +817,50 @@ verify() {
         fail "the verification could not be run (status $status)." \
              "Is the postgres service of the stack running? docker compose --env-file $ENV_FILE --file $COMPOSE_FILE ps postgres"
     fi
-    if [ -n "$out" ]; then
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case "$line" in
+            warning\|*) UNCLASSIFIED+=("${line#warning|}") ;;
+            drift\|*) DRIFT+=("${line#drift|}") ;;
+            *) DRIFT+=("$line") ;;
+        esac
+    done <<<"$out"
+    if [ "${#UNCLASSIFIED[@]}" -gt 0 ]; then
+        warn_unclassified
+    fi
+    if [ "${#DRIFT[@]}" -gt 0 ]; then
         printf 'apply-grants.sh: [grants_drift] the application role %s differs from the classification:\n' "$APP_ROLE" >&2
-        printf '%s\n' "$out" | sed 's/^/  /' >&2
+        printf '  %s\n' "${DRIFT[@]}" >&2
         return 1
     fi
     return 0
 }
 
+# `R-156n`: not a refusal. The deploy goes on, and `deploy.sh` repeats this block in its own output.
+warn_unclassified() {
+    {
+        printf 'apply-grants.sh: WARNING [grants_unclassified] %s relation(s) have no grant classification (scripts/recovery/grant_classification.py):\n' \
+            "${#UNCLASSIFIED[@]}"
+        printf '    %s\n' "${UNCLASSIFIED[@]%: has no grant classification}"
+        printf '  %s\n' \
+            "The application role holds the DEFAULT rights on those in schema public (SELECT, INSERT, UPDATE and DELETE on a table or" \
+            "view, USAGE on a sequence) and nothing on any other schema. This is not a refusal and the deploy goes on." \
+            "Classify them in scripts/recovery/grant_classification.py (tests/integration/recovery/test_grant_classification.py is red" \
+            "until then) and regenerate this script from it (the header of this script says how)."
+    } >&2
+}
+
+grants_ok() {
+    local note=""
+    if [ "${#UNCLASSIFIED[@]}" -gt 0 ]; then
+        note=" (${#UNCLASSIFIED[@]} relation(s) the classification does not name: see the [grants_unclassified] warning)"
+    fi
+    echo "grants-ok: $APP_ROLE on $PG_DB matches the classification$note"
+}
+
 if [ "$MODE" = check ]; then
     verify || exit 1
-    echo "grants-ok: $APP_ROLE on $PG_DB matches the classification"
+    grants_ok
     exit 0
 fi
 
@@ -787,13 +874,8 @@ psql_owner < "$SQL_IN" >/dev/null 2>"$SQL_ERR" || STATUS=$?
 if [ "$STATUS" -ne 0 ]; then
     # The SQL may quote nothing secret on failure, but a server message can echo a statement: print only the
     # lines that name the reason, never the whole stream.
-    if grep -q '\[grants_unclassified\]' "$SQL_ERR"; then
-        refuse "$(grep -m1 '\[grants_unclassified\]' "$SQL_ERR" | sed 's/^.*\(\[grants_unclassified\]\)/\1/')" \
-               "The schema holds a relation scripts/recovery/grant_classification.py does not name, so the application role" \
-               "was given nothing and the transaction was rolled back. Classify it, regenerate this script, deploy again."
-    fi
     grep -v -i 'password' "$SQL_ERR" >&2 || true
     fail "the grants could not be applied (status $STATUS); the transaction was rolled back."
 fi
 verify || fail "the rights were applied and the verification found a difference (above)."
-echo "grants-ok: $APP_ROLE on $PG_DB matches the classification"
+grants_ok

@@ -2067,14 +2067,15 @@ restart only, the confirm-only carryover of `W59-DECISION-CARRYOVER-01`.
 | R-155h | Second poll, the window of one model call: «Как в оригинале». | A call's window is its stage row's window (`ROW_TIMEOUT_SECONDS`: text and blocks 1800 s, cross-check 3600 s, norms, critic and correction 600 s), not the ~540 s the stall window cuts it to today. |
 | R-155i | Second poll, the release order: «Всё вместе». | The time limits and the restart ship as one minor version. |
 
-## 3.57 — R-156a…R-156l, the ADR optimisation before the fork and the fork server (owner's statements and polls, 2026-11-18)
+## 3.57 — R-156a…R-156n, the ADR optimisation before the fork and the fork server, and two later poll answers (owner's statements and polls, 2026-11-18)
 
 The occasion: the owner is preparing a fork of this project for a new server. He asked to optimise the ADRs before the hand-over
 and stated the new server's premises. `R-156a` is a one-time exception to the rule that an ADR is amended, never rewritten; the rule
 stays for every later change. `R-156b`…`R-156e` apply to the fork's server; the current production VPS is unchanged until the owner
 decides otherwise. `R-156f`…`R-156l` are the owner's answers to the polls of session `pdf-analysis-16` (the fork's storage plan),
 relayed verbatim by that session. They are recorded in `ADR-0020` decision 7, `ADR-0021` section 11, `ADR-0029` (decisions 4
-and 8, temporary decision 2) and in fork notes of `ADR-0006` and `ADR-0022`.
+and 8, temporary decision 2) and in fork notes of `ADR-0006` and `ADR-0022`. `R-156m` and `R-156n` are the owner's later poll answers of the
+same day (the second to lane `AD02-DEFAULT-PRIVILEGES-01`); they do not concern the fork.
 
 | Ruling | Owner's answer | Consequence |
 | --- | --- | --- |
@@ -2090,3 +2091,5 @@ and 8, temporary decision 2) and in fork notes of `ADR-0006` and `ADR-0022`.
 | R-156j | How the embedding model is chosen: «Giga-Embrending но после независимого иследования (проведу сам, отчет предоставлю от тебя только промт с вариантами которые надо сравнивать)». | Giga-Embeddings is the leading candidate; the owner chooses after his own independent study. Model name and dimension stay open until then. |
 | R-156k | Where the code is written: «В форке». | The storage and embedding code of these decisions is written in the fork, not in this repository. |
 | R-156l | The fork's storage thesis plan r2: «Утвердить с правками. Правки возможны после решения по модели векторизации.» | The plan of `pdf-analysis-16` (r2; kept outside git at `.local/plans/fork-storage-2026-11-18/00-PLAN.md`; its points are recorded in the ADR texts named above) is approved; its memory and CPU figures are a thesis that a measurement on the fork server fixes; it may change after the model decision. |
+| R-156m | Poll, the contradiction between `ADR-0029` decision 14 (the veto of `R-153ae` applies to the deterministic critic of plan v2) and `src/auditmanager/precedents/run_pass/critic_input.py` (it never vetoes): «Отложить». | The contradiction stays recorded on `ADR-0029`'s «Open» line, awaiting the owner's decision; no code and no text changes. |
+| R-156n | Poll, the database rights of a table a later migration creates (`ADR-0021` decision 3, `AD-02` as `R-146w` confirmed it): «Вернуть ALTER DEFAULT PRIVILEGES»; and which rights: «Чтение и запись целиком». | The recorded departure of `PROD-04-DB-ROLES-01` (a relation the classification does not name gets no rights and stops the deploy) is reversed. `apply-grants.sh` also runs `ALTER DEFAULT PRIVILEGES FOR ROLE <migrator> IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES` and `GRANT USAGE ON SEQUENCES` to the application role (no `TRUNCATE`, nothing else); an unclassified relation is a warning (`[grants_unclassified]`, exit 0, the deploy goes on) and keeps those rights; a classified one keeps exactly its class; `--check` verifies the default privileges; the dev-time guard `test_grant_classification.py` stays. Recorded in `ADR-0021` decision 3, `PROD-04-DB-ROLES-01.md` section 9 and `DEPLOYMENT_RUNBOOK.md` section 16. |
