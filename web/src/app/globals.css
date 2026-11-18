@@ -46,22 +46,31 @@
  * ================================================================================== */
 
 @font-face {
-  font-family: 'Ubuntu Sans';
-  src: url('/fonts/UbuntuSans-variable.ttf') format('truetype');
+  font-family: 'Onest';
+  src: url('/fonts/Onest-variable.ttf') format('truetype');
   font-style: normal;
-  font-weight: 300 800;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 800;
   font-display: swap;
 }
 
 :root {
   /* ---- typeface ---------------------------------------------------------------- */
-  --am-font: 'Ubuntu Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --am-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --am-font: 'Onest', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --am-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   /* ---- type scale -------------------------------------------------------------- */
-  --am-text-xs: 11.5px;
-  --am-text-sm: 12.5px;
-  --am-text-md: 13.5px;
+  --am-text-2xs: 10px;
+  --am-text-xs: 11px;
+  --am-text-sm: 12px;
+  --am-text-md: 13px;
   --am-text-base: 14px;
   --am-text-lg: 16px;
   --am-text-xl: 19px;
@@ -98,28 +107,29 @@
    * `W31-STYLE` built; it is a redesign, not a repair, and it is the owner's call.
    * `docs/program/W32-CONTRAST.md` §3 carries the arithmetic.
    */
-  --am-ink: #16191d;
-  --am-ink-muted: #5b6470;
+  --am-ink: #0e1622;
+  --am-ink-muted: #344157;
   /* was #8a929d — 2.68 on failed-light, 2.91 on surface, 3.14 on paper. Now ≥ 4.65. */
-  --am-ink-soft: #646a73;
+  --am-ink-soft: #536176;
   --am-ink-inverse: #ffffff;
 
   /* ---- surfaces ---------------------------------------------------------------- */
   --am-paper: #ffffff;
-  --am-surface: #f5f6f8;
-  --am-surface-sunken: #eef0f4;
+  --am-surface: #eef1f6;
+  --am-panel: #ffffff;
+  --am-surface-sunken: #e6ebf2;
 
 /* Presentation shell and dashboard share these light/dark surfaces. */
-  --am-showcase-bg: #edf4f2;
-  --am-showcase-card: #fdfefe;
-  --am-showcase-card-alt: #e6f0ef;
-  --am-showcase-ink: #122529;
-  --am-showcase-muted: #3f5b60;
-  --am-showcase-soft: #526d72;
-  --am-showcase-line: #698487;
-  --am-showcase-accent: #006a6c;
-  --am-showcase-accent-strong: #005458;
-  --am-showcase-accent-soft: #c7ebe4;
+  --am-showcase-bg: #eef1f6;
+  --am-showcase-card: #ffffff;
+  --am-showcase-card-alt: #e6ebf2;
+  --am-showcase-ink: #0e1622;
+  --am-showcase-muted: #344157;
+  --am-showcase-soft: #536176;
+  --am-showcase-line: #78859a;
+  --am-showcase-accent: #007467;
+  --am-showcase-accent-strong: #005f55;
+  --am-showcase-accent-soft: #d4f0eb;
 
   /*
    * ---- lines -------------------------------------------------------------------
@@ -158,27 +168,27 @@
    * `R-33: every border that meets on a screen clears 3:1`, which reads no register.
    */
   /* was #ebedf1 — 1.17 on paper, 1.08 on surface. Now ≥ 3.08 on every surface. */
-  --am-line-soft: #818790;
+  --am-line-soft: #e3e8ef;
   /* was #d9dde3 — 1.36 on paper, 1.26 on surface, 1.20 on sunken. Now ≥ 4.07. */
-  --am-line: #6e737b;
+  --am-line: #d3dae4;
   /* was #838891 (and #b4bcc7 before W32) — 3.04 at worst. Now ≥ 5.00. */
-  --am-line-strong: #60656d;
+  --am-line-strong: #78859a;
   /* was #e6e9ed — 1.13 on surface. Now ≥ 3.39. */
-  --am-grid-line: #7a8089;
+  --am-grid-line: #dde3eb;
 
   /* ---- semantic hues, each with a tint that can carry text --------------------- */
-  --am-accent: #1f4f8b;
-  --am-accent-strong: #163a67;
-  --am-accent-light: #e8eef8;
-  --am-ok: #1c6b45;
-  --am-ok-light: #e4f1ea;
-  --am-degraded: #8a5b00;
-  --am-degraded-light: #fbf0dc;
-  --am-failed: #a02020;
-  --am-failed-light: #fae9e9;
+  --am-accent: #007467;
+  --am-accent-strong: #005f55;
+  --am-accent-light: #d4f0eb;
+  --am-ok: #007651;
+  --am-ok-light: #d4f0e4;
+  --am-degraded: #975900;
+  --am-degraded-light: #ffeec4;
+  --am-failed: #c91737;
+  --am-failed-light: #ffe0e5;
   /* was #6b7280 — 4.23 on its own tint, in the `pending` badge's label. Now 4.61. */
-  --am-inert: #666c7a;
-  --am-inert-light: #eef0f3;
+  --am-inert: #536176;
+  --am-inert-light: #e8ecf2;
 
   /*
    * ---- the avatar palette (`W50-SHELL-UI`, `R-57`; `AVATAR-PALETTE-01`) -----------
@@ -290,11 +300,11 @@
 
   /* ---- elevation --------------------------------------------------------------- */
   --am-shadow-0: none;
-  --am-shadow-1: 0 1px 2px rgba(22, 25, 29, 0.06);
-  --am-shadow-2: 0 2px 6px rgba(22, 25, 29, 0.08), 0 1px 2px rgba(22, 25, 29, 0.04);
-  --am-shadow-3: 0 10px 28px rgba(22, 25, 29, 0.12), 0 2px 6px rgba(22, 25, 29, 0.06);
-  --am-shadow-inset: inset 0 1px 3px rgba(22, 25, 29, 0.06);
-  --am-ring: 0 0 0 3px rgba(31, 79, 139, 0.22);
+  --am-shadow-1: 0 1px 2px rgba(14, 22, 34, 0.05);
+  --am-shadow-2: 0 1px 3px rgba(14, 22, 34, 0.07);
+  --am-shadow-3: 0 8px 24px rgba(14, 22, 34, 0.13), 0 1px 3px rgba(14, 22, 34, 0.06);
+  --am-shadow-inset: inset 0 1px 3px rgba(14, 22, 34, 0.06);
+  --am-ring: 0 0 0 3px rgba(0, 116, 103, 0.25);
 
   /* ---- motion ------------------------------------------------------------------ */
   --am-motion-fast: 90ms;
@@ -304,8 +314,8 @@
 
   /* ---- radius ------------------------------------------------------------------ */
   --am-radius-sm: 8px;
-  --am-radius: 12px;
-  --am-radius-lg: 20px;
+  --am-radius: 10px;
+  --am-radius-lg: 14px;
   --am-radius-pill: 999px;
 
   /* ---- spacing ----------------------------------------------------------------- */
@@ -430,45 +440,46 @@
    */
   :root:not([data-theme='light']) {
     /* ---- ink ---------------------------------------------------------------------- */
-    --am-ink: #e2e8f0;
-    --am-ink-muted: #abb6c5;
-    --am-ink-soft: #838d9c;
-    --am-ink-inverse: #0d1219;
+    --am-ink: #f4f7fb;
+    --am-ink-muted: #b7c3d1;
+    --am-ink-soft: #8f9cae;
+    --am-ink-inverse: #05080c;
 
     /* ---- surfaces ----------------------------------------------------------------- */
-    --am-paper: #151d28;
-    --am-surface: #0d1219;
-    --am-surface-sunken: #0a0f16;
+    --am-paper: #0d131b;
+    --am-surface: #05080c;
+  --am-panel: #0a0f15;
+    --am-surface-sunken: #121a24;
 
-    --am-showcase-bg: #0d1118;
-    --am-showcase-card: #1a2029;
-    --am-showcase-card-alt: #23303a;
-    --am-showcase-ink: #eaf7f5;
-    --am-showcase-muted: #b7caca;
-    --am-showcase-soft: #a2bbbb;
-    --am-showcase-line: #6d8588;
-    --am-showcase-accent: #69e4d1;
-    --am-showcase-accent-strong: #a3fff1;
-    --am-showcase-accent-soft: #103e42;
+    --am-showcase-bg: #05080c;
+    --am-showcase-card: #0d131b;
+    --am-showcase-card-alt: #121a24;
+    --am-showcase-ink: #f4f7fb;
+    --am-showcase-muted: #b7c3d1;
+    --am-showcase-soft: #8f9cae;
+    --am-showcase-line: #586a7e;
+    --am-showcase-accent: #19d3c5;
+    --am-showcase-accent-strong: #3fe3d6;
+    --am-showcase-accent-soft: #0b2526;
 
     /* ---- lines -------------------------------------------------------------------- */
-    --am-line-soft: #616f80;
-    --am-line: #748295;
-    --am-line-strong: #8491a1;
-    --am-grid-line: #667587;
+    --am-line-soft: #161f2a;
+    --am-line: #1f2a36;
+    --am-line-strong: #586a7e;
+    --am-grid-line: #1a2430;
 
     /* ---- semantic hues, each with a tint that can carry text ---------------------- */
-    --am-accent: #7aa9e0;
-    --am-accent-strong: #9cc2f0;
-    --am-accent-light: #142234;
-    --am-ok: #5fd39a;
-    --am-ok-light: #0e2419;
-    --am-degraded: #e0b050;
-    --am-degraded-light: #241b07;
-    --am-failed: #f08b8b;
-    --am-failed-light: #2a1316;
-    --am-inert: #98a2b3;
-    --am-inert-light: #182029;
+    --am-accent: #19d3c5;
+    --am-accent-strong: #3fe3d6;
+    --am-accent-light: #0b2526;
+    --am-ok: #22d38a;
+    --am-ok-light: #102c29;
+    --am-degraded: #f5a623;
+    --am-degraded-light: #2b261c;
+    --am-failed: #ff4d6d;
+    --am-failed-light: #2c1b26;
+    --am-inert: #8f9cae;
+    --am-inert-light: #141b25;
 
     /* ---- the avatar palette: the same twelve hues at lightness 0.75, near-black ink --- */
     --am-avatar-01: #f58a93;
@@ -518,52 +529,53 @@
     --am-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
     --am-shadow-3: 0 10px 28px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
     --am-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
-    --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
+    --am-ring: 0 0 0 3px rgba(25, 211, 197, 0.35);
   }
 }
 
 /* An explicit choice. Same specificity as the block above, and later, so it wins. */
 :root[data-theme='dark'] {
   /* ---- ink ---------------------------------------------------------------------- */
-  --am-ink: #e2e8f0;
-  --am-ink-muted: #abb6c5;
-  --am-ink-soft: #838d9c;
-  --am-ink-inverse: #0d1219;
+  --am-ink: #f4f7fb;
+  --am-ink-muted: #b7c3d1;
+  --am-ink-soft: #8f9cae;
+  --am-ink-inverse: #05080c;
 
   /* ---- surfaces ----------------------------------------------------------------- */
-  --am-paper: #151d28;
-  --am-surface: #0d1219;
-  --am-surface-sunken: #0a0f16;
+  --am-paper: #0d131b;
+  --am-surface: #05080c;
+  --am-panel: #0a0f15;
+  --am-surface-sunken: #121a24;
 
-  --am-showcase-bg: #0d1118;
-  --am-showcase-card: #1a2029;
-  --am-showcase-card-alt: #23303a;
-  --am-showcase-ink: #eaf7f5;
-  --am-showcase-muted: #b7caca;
-  --am-showcase-soft: #a2bbbb;
-  --am-showcase-line: #6d8588;
-  --am-showcase-accent: #69e4d1;
-  --am-showcase-accent-strong: #a3fff1;
-  --am-showcase-accent-soft: #103e42;
+  --am-showcase-bg: #05080c;
+  --am-showcase-card: #0d131b;
+  --am-showcase-card-alt: #121a24;
+  --am-showcase-ink: #f4f7fb;
+  --am-showcase-muted: #b7c3d1;
+  --am-showcase-soft: #8f9cae;
+  --am-showcase-line: #586a7e;
+  --am-showcase-accent: #19d3c5;
+  --am-showcase-accent-strong: #3fe3d6;
+  --am-showcase-accent-soft: #0b2526;
 
   /* ---- lines -------------------------------------------------------------------- */
-  --am-line-soft: #616f80;
-  --am-line: #748295;
-  --am-line-strong: #8491a1;
-  --am-grid-line: #667587;
+  --am-line-soft: #161f2a;
+  --am-line: #1f2a36;
+  --am-line-strong: #586a7e;
+  --am-grid-line: #1a2430;
 
   /* ---- semantic hues, each with a tint that can carry text ---------------------- */
-  --am-accent: #7aa9e0;
-  --am-accent-strong: #9cc2f0;
-  --am-accent-light: #142234;
-  --am-ok: #5fd39a;
-  --am-ok-light: #0e2419;
-  --am-degraded: #e0b050;
-  --am-degraded-light: #241b07;
-  --am-failed: #f08b8b;
-  --am-failed-light: #2a1316;
-  --am-inert: #98a2b3;
-  --am-inert-light: #182029;
+  --am-accent: #19d3c5;
+  --am-accent-strong: #3fe3d6;
+  --am-accent-light: #0b2526;
+  --am-ok: #22d38a;
+  --am-ok-light: #102c29;
+  --am-degraded: #f5a623;
+  --am-degraded-light: #2b261c;
+  --am-failed: #ff4d6d;
+  --am-failed-light: #2c1b26;
+  --am-inert: #8f9cae;
+  --am-inert-light: #141b25;
 
   /* ---- the avatar palette: the same twelve hues at lightness 0.75, near-black ink --- */
   --am-avatar-01: #f58a93;
@@ -613,7 +625,7 @@
   --am-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
   --am-shadow-3: 0 10px 28px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
   --am-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
-  --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
+  --am-ring: 0 0 0 3px rgba(25, 211, 197, 0.35);
 }
 
 /* The completed shell and future screen slices inherit one two-theme presentation palette. */
@@ -627,10 +639,7 @@
   --am-ink: var(--am-showcase-ink);
   --am-ink-muted: var(--am-showcase-muted);
   --am-ink-soft: var(--am-showcase-soft);
-  --am-line: var(--am-showcase-line);
-  --am-line-soft: var(--am-showcase-line);
   --am-line-strong: var(--am-showcase-line);
-  --am-grid-line: var(--am-showcase-line);
   --am-accent: var(--am-showcase-accent);
   --am-accent-strong: var(--am-showcase-accent-strong);
   --am-accent-light: var(--am-showcase-accent-soft);
@@ -1058,29 +1067,43 @@ input[type='file']::file-selector-button:hover {
 
 .am-app__bar {
   position: sticky;
-  top: var(--am-gap-sm);
+  top: 0;
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--am-gap-md);
-  width: 200px;
-  height: calc(100vh - 16px);
+  gap: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   min-height: 0;
-  margin: var(--am-gap-sm) 0 var(--am-gap-sm) var(--am-gap-sm);
-  padding: var(--am-gap-md) var(--am-gap-sm) var(--am-gap-sm);
-  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 38%, transparent);
-  border-radius: var(--am-radius);
-  background: radial-gradient(circle at 10% 0%, var(--am-accent-light), transparent 36%), var(--am-paper);
-  box-shadow: var(--am-shadow-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--am-line);
+  border-radius: 0;
+  background: var(--am-panel);
+  box-shadow: none;
   transition: width var(--am-motion-base) var(--am-ease), padding var(--am-motion-base) var(--am-ease), margin var(--am-motion-base) var(--am-ease);
 }
 
 .am-app[data-sidebar='compact'] .am-app__bar {
-  width: 56px;
-  height: calc(100vh - 16px);
-  margin: var(--am-gap-sm) 6px;
-  padding: var(--am-gap-md) 5px var(--am-gap-sm);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* `R-157d`: the teal line across the top of every window; the frame is the one every screen shares. */
+.am-app::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 30;
+  height: 3px;
+  background: var(--am-accent);
+  pointer-events: none;
 }
 
 .am-app__brand {
@@ -1170,8 +1193,8 @@ input[type='file']::file-selector-button:hover {
   min-height: var(--am-strip-height);
   min-width: 0;
   padding: var(--am-gap-xs) var(--am-gap-lg);
-  border-bottom: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
-  background: var(--am-showcase-bg);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-panel);
 }
 
 /*
@@ -1185,8 +1208,8 @@ input[type='file']::file-selector-button:hover {
   margin-left: auto;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-pill);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
   background: var(--am-surface);
 }
 
@@ -1198,7 +1221,7 @@ input[type='file']::file-selector-button:hover {
 .am-theme__option {
   padding: 3px 10px;
   border: 0;
-  border-radius: var(--am-radius-pill);
+  border-radius: var(--am-radius-sm);
   background: none;
   color: var(--am-ink-muted);
   font: inherit;
@@ -1906,12 +1929,12 @@ li.am-state .am-state__detail {
   display: inline-flex;
   align-items: baseline;
   max-width: 100%;
-  gap: 6px;
-  padding: 1px var(--am-gap-sm);
-  border-radius: var(--am-radius-pill);
+  gap: 5px;
+  padding: 1px 6px;
+  border-radius: 4px;
   border: 1px solid transparent;
-  font-size: var(--am-text-xs);
-  font-family: var(--am-font-mono);
+  font-size: var(--am-text-2xs);
+  font-weight: 700;
   line-height: 1.5;
   white-space: nowrap;
   vertical-align: baseline;

@@ -174,12 +174,12 @@ a.rowLink {
   align-items: center;
   min-width: 40px;
   padding: 2px 4px;
-  border: 2px solid var(--am-inert);
-  border-radius: var(--am-radius-sm);
+  border: 1px solid var(--am-inert);
+  border-radius: 5px;
   background: var(--am-surface-sunken);
   color: var(--am-ink);
-  font-size: var(--am-text-xs);
-  font-weight: 800;
+  font-size: var(--am-text-2xs);
+  font-weight: 700;
 }
 
 .name {
