@@ -24,7 +24,7 @@ and no external identity provider in 1.0 (`R-146d`). A deployment is not success
   `issueToken`, `changePassword` and `getMe`; an incomplete profile; then `OPERATION_ROLES`. An
   operation named in no register is refused to everyone
   (`tests/integration/api/test_role_register.py`). Since `R-80` product data needs a role.
-- **Credentials.** A bearer HMAC token lives 43 200 seconds, twelve hours (`TOKEN_LIFETIME_SECONDS`; one hour until the owner ruling of 2026-11-18); each account has
+- **Credentials.** A bearer HMAC token lives 29 400 seconds, eight hours and ten minutes (`TOKEN_LIFETIME_SECONDS`; one hour until the owner ruling of 2026-11-18, twelve hours as a stop-gap the same day): the sliding session's idle window of eight hours plus the ten-minute cadence at which the web tier renews a held credential (`renewToken`, `POST /auth/token/renew`); a session ends after eight hours without a request or thirty days after sign-in. Each account has
   a `token_epoch` (migration `0007_credential_epoch`) that a role change, an archive, a reset and a
   password change raise, which revokes every credential the account holds on its next request. Five
   failed sign-ins in 900 seconds start a 300-second cooling-off
@@ -63,7 +63,7 @@ provider; the retention half is `ADR-0022`; the legal-hold authority stays open.
 
 ### 2. Sessions and cookies (`R-146a`)
 
-No change to the credential: lifetime 3600 seconds, `token_epoch` revocation, the lockout, the edge
+No change to the credential (lifetime as in «Credentials» above), `token_epoch` revocation, the lockout, the edge
 limits and the password policy stay as measured above. What changes is the transport. Once TLS is
 terminated by the stack (`ADR-0021` `AD-01`) the proxy forwards `https` and the session cookie carries
 `Secure`; HSTS is sent on every TLS answer (checks: `ADR-0021` rows 3 and 4). The cookie rules, in
@@ -170,7 +170,7 @@ its event cannot commit. Retention: forever; the 1.0 purge keeps these events, a
 - Positive: the 1.0 scope stays small: no tenant model, no second factor, no provider.
 - Cost: every expert sees every project; a client who cannot accept that cannot be served by this
   version.
-- Cost: a password-only product with a one-hour token and a lockout; a stolen password is a full
+- Cost: a password-only product with a short-lived token (sliding session, «Credentials») and a lockout; a stolen password is a full
   account until the person or an administrator changes it.
 - Cost: every deploy and restore that finds the published pair valid closes the outside door; the only
   way back is loopback, so the operator must be able to reach the host over SSH. A temporary password

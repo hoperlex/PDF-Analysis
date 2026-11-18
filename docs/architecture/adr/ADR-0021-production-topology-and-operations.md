@@ -238,7 +238,7 @@ The host must provide: `bash`, `docker` with the compose v2 plugin, `curl`, `sed
 (`DEPLOYMENT_RUNBOOK.md` section 1); inbound 80 and 443 and SSH for the deploy user; a DNS name for the
 certificate; outbound HTTPS to the ACME service and to the model provider; disk for the database, the
 bucket, the images and the dumps, all on one filesystem (size open); a synchronised clock (assumption:
-ACME validation and the one-hour token lifetime depend on it).
+ACME validation and the token lifetime of `ADR-0023` depend on it).
 
 The host does not provide, and this programme does not build: high availability or failover; a
 maintained or scheduled off-host copy of the database or the bucket; metrics, alerts or log shipping; a
