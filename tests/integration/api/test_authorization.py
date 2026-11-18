@@ -108,6 +108,10 @@ GUARDED = (
     # credentials without holding one. The request below carries no body on purpose --
     # authorization must refuse it before the body model is ever parsed.
     ("changePassword", "POST", "/auth/password"),
+    # `SESSION-RENEW-01`, owner ruling of 2026-11-18. The sliding session's renewal is behind the seam
+    # like the password change: a request with no credential must be refused before the port is
+    # reached, or anybody could be handed a credential.
+    ("renewToken", "POST", "/auth/token/renew"),
     # `W45-BLOCKS`. The block index for one version, behind the same seam as
     # `getDocumentVersion` and `streamDocumentVersionContent` -- it hangs off the same
     # `version_uid` and carries no capability those two do not already have.
@@ -969,7 +973,7 @@ def test_the_exchange_answers_without_a_credential(router: Surface) -> None:
     body = json.loads(answer.body)
     assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     assert isinstance(body["token"], str) and body["token"]
-    assert body["expires_in"] == 12 * 3600, body
+    assert body["expires_in"] == 8 * 3600 + 600, body
     assert answer.header("X-Correlation-Id"), answer.headers
 
 
@@ -1570,7 +1574,9 @@ def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> N
     :data:`~auditmanager.api.security.OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES` by somebody
     deciding that it should be reachable. There is no third place for it to be.
     """
-    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {"issueToken", "changePassword", "getMe"}
+    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {
+        "issueToken", "changePassword", "getMe", "renewToken",
+    }
     assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES <= router.operation_ids
     _on_a_default_credential(router)
 

@@ -478,6 +478,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     # `UIP-G-05` (1.56.0): the account's own choice of an object (any complete account).
     "setMyLastProject": ("PUT", "/me/last-project"),
     "changePassword": ("POST", "/auth/password"),
+    # `SESSION-RENEW-01`: the sliding session's renewal.
+    "renewToken": ("POST", "/auth/token/renew"),
     "getMe": ("GET", "/me"),
     "updateMyProfile": ("PATCH", "/me"),
     "listRegistrations": ("GET", "/registrations"),
@@ -771,6 +773,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getMe": _ANY,
     "updateMyProfile": _ANY,
     "changePassword": _ANY,
+    # `SESSION-RENEW-01`: any complete account, roles or none, like the rest of the account's own operations.
+    "renewToken": _ANY,
     "createProject": _EXPERT,
     "uploadDocument": _EXPERT,
     # `W59-VERSION-UPLOAD-01`: the next version takes exactly the first upload's roles.
@@ -882,9 +886,9 @@ def _expected(
     operation: str, *, roles: frozenset[str], complete: bool, default: bool
 ) -> str | None:
     """Section 3.2, restated: the capability the seam must name, or ``None`` for served."""
-    if default and operation not in {"issueToken", "changePassword", "getMe"}:
+    if default and operation not in {"issueToken", "changePassword", "getMe", "renewToken"}:
         return "password_changed"
-    if not complete and operation not in {"getMe", "updateMyProfile", "changePassword"}:
+    if not complete and operation not in {"getMe", "updateMyProfile", "changePassword", "renewToken"}:
         return "profile_completed"
     required = EXPECTED_ROLES[operation]
     if required and not (required & roles):
@@ -921,11 +925,14 @@ def test_the_registers_are_the_ruled_ones() -> None:
         "downloadAgentPackage",
     }
     assert ENROLLMENT_OPERATIONS == {"redeemExecutorEnrollment"}
-    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {"issueToken", "changePassword", "getMe"}
+    assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {
+        "issueToken", "changePassword", "getMe", "renewToken",
+    }
     assert OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES == {
         "getMe",
         "updateMyProfile",
         "changePassword",
+        "renewToken",
     }
     assert dict(OPERATION_ROLES) == EXPECTED_ROLES
     assert ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION == frozenset()
