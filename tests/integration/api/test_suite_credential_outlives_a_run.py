@@ -26,8 +26,11 @@ from w13_api_driver import (
 from auditmanager.api.security import API_TOKEN_VARIABLE, TOKEN_LIFETIME_SECONDS, build_signer
 
 #: Longer than the longest complete run of ``tests/integration`` measured so far (5740 s), with
-#: room for a slower host.
-A_LONG_RUN_SECONDS = 6 * 3600
+#: room for a slower host -- and longer than the production lifetime, which is the property the first
+#: test pins. Six hours was longer than the one-hour lifetime this test was written under, and not
+#: longer than the twelve-hour stop-gap of 2026-11-18 or the 8 h 10 min of the sliding session, so the
+#: figure moved with the lifetime: ten hours, still well inside the suite credential's 24.
+A_LONG_RUN_SECONDS = 10 * 3600
 
 #: The most the suite credential may live: a week is a lifetime for a test token already.
 A_BOUND_SECONDS = 7 * 24 * 3600

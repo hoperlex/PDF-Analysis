@@ -106,6 +106,29 @@ def _remove(session_factory: sessionmaker[Session], login: str) -> None:
         session.commit()
 
 
+#: The accounts that archived somebody in this module, removed after the account they archived: the
+#: archived row's ``archived_by`` points at its actor (``fk_app_user_archived_by``), so the actor cannot
+#: be deleted first.
+_ACTORS: list[str] = []
+
+
+def _archive(session_factory: sessionmaker[Session], record: UserRecord) -> None:
+    """Archive ``record`` through the access boundary's own operation, as another account.
+
+    A direct ``UPDATE ... archived_at`` is refused by ``ck_app_user_archive_pair`` (an archive names
+    who did it), and the real operation also raises the credential epoch, which is what an archive
+    does in a deployment.
+    """
+    login = f"renew1118-actor-{secrets.token_hex(4)}"
+    with session_factory() as session:
+        actor = str(UserRepository().create_user(session, login, PASSWORD).user_uid)
+        session.commit()
+    _ACTORS.append(login)
+    with session_factory() as session:
+        AccountRepository().archive_account(session, actor_uid=actor, user_uid=str(record.user_uid))
+        session.commit()
+
+
 @pytest.fixture
 def user(
     app_user_table: object, session_factory: sessionmaker[Session]
@@ -115,6 +138,8 @@ def user(
         yield record
     finally:
         _remove(session_factory, record.login)
+        while _ACTORS:
+            _remove(session_factory, _ACTORS.pop())
 
 
 def _credential(client: TestClient, record: UserRecord) -> str:
@@ -192,12 +217,7 @@ def test_an_archived_account_is_refused(
     client: TestClient, user: UserRecord, session_factory: sessionmaker[Session]
 ) -> None:
     held = _credential(client, user)
-    with session_factory() as session:
-        session.execute(
-            text("UPDATE app_user SET archived_at = now() WHERE login = :login"),
-            {"login": user.login},
-        )
-        session.commit()
+    _archive(session_factory, user)
     response = _renew(client, held)
     assert response.status_code == 401, response.text
     assert response.json()["error_code"] == "authentication_required"
@@ -277,6 +297,23 @@ def test_the_adapter_compares_the_epoch_again_at_the_moment_of_minting(
         session.commit()
     assert adapter.renew(user_uid=str(user.user_uid), token_epoch=user.token_epoch) is None
     assert adapter.renew(user_uid=str(user.user_uid), token_epoch=user.token_epoch + 1) is not None
+
+
+def test_the_adapter_refuses_an_archived_account_itself(
+    adapter: CredentialAdapter, user: UserRecord, session_factory: sessionmaker[Session]
+) -> None:
+    """The seam refuses an archived account first; the adapter does not rely on that, because the
+    row can be archived between the seam's read and this one.
+
+    An archive also raises the epoch, so the credential's own epoch would be refused by the epoch
+    comparison and hide the archive check. The call is made with the epoch the **row holds now**, so
+    that the only thing left to refuse it is the archive."""
+    assert adapter.renew(user_uid=str(user.user_uid), token_epoch=user.token_epoch) is not None
+    _archive(session_factory, user)
+    standing = adapter.standing_of(str(user.user_uid))
+    assert standing is not None and standing.archived is True
+    assert standing.token_epoch == user.token_epoch + 1
+    assert adapter.renew(user_uid=str(user.user_uid), token_epoch=standing.token_epoch) is None
 
 
 def test_the_adapter_refuses_an_account_that_does_not_exist(adapter: CredentialAdapter) -> None:
