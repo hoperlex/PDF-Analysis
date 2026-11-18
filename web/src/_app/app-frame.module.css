@@ -658,8 +658,9 @@
   :global(.am-app[data-sidebar='compact']) .guestPreviewIcon svg { width: 18px; height: 18px; }
   :global(.am-app[data-sidebar='compact']) .brandRow {
     flex-direction: column;
+    justify-content: center;
     gap: var(--am-gap-sm);
-    padding: 0 0 var(--am-gap-md);
+    padding: var(--am-gap-md) 0;
   }
 
   :global(.am-app[data-sidebar='compact']) .brandMark {
