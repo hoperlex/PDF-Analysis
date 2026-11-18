@@ -1,19 +1,23 @@
 /*
- * `/login` (owner, 2026-11-09): the credentials card and, beside it, a wordless animated scene —
- * drawing sheets, a scan across a floor plan, remark marks, the expert's stamp — over a drawing
- * grid that drifts behind both. One screen, no scroll, both themes through `--am-showcase-*`.
+ * `/login`, variant «B · Чертёж на тёмном» (`STYLE-ORIG-01` S4, `R-157c`; owner, 2026-11-09 for the
+ * screen itself): the credentials card as a drawing sheet — square-ish corners, a teal top edge,
+ * four crop marks outside the corners, the brand mark in a teal outline — and, beside it, a wordless
+ * animated scene: a plotter draws a floor plan behind a teal crosshair cursor, three selection
+ * boxes pick a window, the stair and the bath, the expert's stamp lands on the title block. Behind
+ * both a dot grid drifts by one major cell and fades into the page at the edges. One screen, no
+ * scroll, both themes through `--am-showcase-*`, `--am-failed*` and `--am-shadow-*`.
  *
- * Motion (the landing-page skill's B7): transform and opacity only, on
- * cubic-bezier(0.22, 1, 0.36, 1) for arrivals. Every loop lives inside
- * `prefers-reduced-motion: no-preference`; outside it the scene rests in its finished state
- * (marks and stamp in place, no scan) and the arrival is a plain fade. CSS only: this slice ships
- * no client script (`C-22`). The SVG paints with `stroke`/`fill`, which carry no text and no edge.
+ * Motion (the landing-page skill's B7): transform and opacity only. Every loop lives inside
+ * `prefers-reduced-motion: no-preference`; outside it the scene rests in its finished frame
+ * (plan drawn, boxes and stamp in place, cursor hidden) and the arrival is a plain fade. CSS only:
+ * this slice ships no client script (`C-22`). The SVG paints with `stroke`/`fill`, which carry no
+ * text and no edge.
  */
 .screen {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 420px) minmax(360px, 540px);
+  grid-template-columns: minmax(0, 420px) minmax(360px, 560px);
   justify-content: center;
   align-items: center;
   gap: var(--am-gap-xl);
@@ -25,17 +29,25 @@
   color: var(--am-showcase-ink);
 }
 .card {
+  position: relative;
   box-sizing: border-box;
   width: min(100%, 420px);
-  padding: var(--am-gap);
-  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 35%, transparent);
-  border-radius: var(--am-radius-lg);
+  padding: var(--am-gap-lg) calc(var(--am-gap-lg) + var(--am-gap-xs));
+  border: 1px solid var(--am-showcase-line);
+  border-top: 3px solid var(--am-showcase-accent);
+  border-radius: var(--am-radius-sm);
   background: var(--am-showcase-card);
   box-shadow: var(--am-shadow-3);
 }
+/* Crop marks: an L of two 2 px teal sides at each corner, ten pixels outside the card. */
+.crop { position: absolute; width: 16px; height: 16px; border: 0 solid var(--am-showcase-accent); pointer-events: none; }
+.cropTopLeft { top: -12px; left: -10px; border-top-width: 2px; border-left-width: 2px; }
+.cropTopRight { top: -12px; right: -10px; border-top-width: 2px; border-right-width: 2px; }
+.cropBottomLeft { bottom: -10px; left: -10px; border-bottom-width: 2px; border-left-width: 2px; }
+.cropBottomRight { bottom: -10px; right: -10px; border-bottom-width: 2px; border-right-width: 2px; }
 .header { display: flex; align-items: center; gap: var(--am-gap-md); }
-.signInMark { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: var(--am-radius-sm); color: var(--am-showcase-accent-strong); background: var(--am-showcase-accent-soft); }
-.signInMark svg { width: 20px; height: 20px; }
+.signInMark { display: grid; flex: 0 0 40px; place-items: center; width: 40px; height: 40px; box-sizing: border-box; border: 1.5px solid var(--am-showcase-accent); border-radius: var(--am-radius-sm); color: var(--am-showcase-accent-strong); }
+.signInMark svg { width: 24px; height: 24px; }
 .cardEyebrow {
   margin: 0;
   color: var(--am-showcase-accent-strong);
@@ -55,7 +67,7 @@
 .register a:focus-visible { outline: 2px solid var(--am-showcase-accent); outline-offset: 3px; border-radius: 2px; }
 .accessNote { margin: var(--am-gap-md) 0 0; padding-top: var(--am-gap-sm); border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 36%, transparent); color: var(--am-showcase-soft); font-size: var(--am-text-xs); }
 
-/* ---- the living background: a drawing grid one major cell larger than the screen each way */
+/* ---- the living background: a dot grid one major cell larger than the screen each way */
 /* The mask only fades the grid into the page at its edges; it paints nothing (alpha of a token). */
 .backdrop {
   position: absolute;
@@ -63,25 +75,19 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  mask-image: radial-gradient(ellipse 72% 68% at 50% 50%, var(--am-showcase-ink) 52%, transparent 100%);
+  mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, var(--am-showcase-ink) 62%, transparent 100%);
 }
 .backdropGrid { position: absolute; top: -120px; left: -120px; width: calc(100% + 240px); height: calc(100% + 240px); }
-.gridMinor { stroke: color-mix(in srgb, var(--am-showcase-line) 16%, transparent); stroke-width: 1; }
-.gridMajor { stroke: color-mix(in srgb, var(--am-showcase-line) 30%, transparent); stroke-width: 1; }
-.backdropSheets { position: absolute; inset: 0; width: 100%; height: 100%; }
-.contour { fill: none; stroke: color-mix(in srgb, var(--am-showcase-accent) 24%, transparent); stroke-width: 1.5; }
+.gridDot { fill: color-mix(in srgb, var(--am-showcase-accent) 32%, transparent); }
+.gridMajor { stroke: color-mix(in srgb, var(--am-showcase-ink) 7%, transparent); stroke-width: 1; }
 
 /* ---- the scene */
 .scene { min-width: 0; }
 .scene svg { display: block; width: 100%; height: auto; overflow: visible; }
-.sheet, .mark, .stamp, .markPulse { transform-box: fill-box; transform-origin: center; }
-.paper {
-  fill: var(--am-showcase-card);
-  stroke: color-mix(in srgb, var(--am-showcase-line) 45%, transparent);
-  stroke-width: 1;
-  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--am-showcase-ink) 14%, transparent));
-}
-.frame { fill: none; stroke: color-mix(in srgb, var(--am-showcase-line) 60%, transparent); stroke-width: 1; }
+.selection, .stamp { transform-box: fill-box; transform-origin: center; }
+/* The paper, the frame and the drawing lines of a sheet; the helpers in the page draw every sheet with the same names. */
+.paper { fill: var(--am-showcase-card); stroke: color-mix(in srgb, var(--am-showcase-line) 60%, transparent); stroke-width: 1; }
+.frame { fill: none; stroke: var(--am-showcase-line); stroke-width: 1; }
 .ink { fill: none; stroke: var(--am-showcase-muted); stroke-width: 1.6; stroke-linecap: round; }
 .inkThin { fill: none; stroke: var(--am-showcase-soft); stroke-width: 1; stroke-linecap: round; }
 .wall { fill: none; stroke: var(--am-showcase-ink); stroke-width: 5; stroke-linejoin: miter; }
@@ -89,68 +95,100 @@
 .slab { fill: none; stroke: var(--am-showcase-ink); stroke-width: 4; }
 .ground { fill: none; stroke: var(--am-showcase-muted); stroke-width: 2.2; }
 .windowGap { fill: var(--am-showcase-card); stroke: none; }
-.axis { fill: none; stroke: color-mix(in srgb, var(--am-showcase-accent) 55%, transparent); stroke-width: 0.8; stroke-dasharray: 10 2 2 2; }
+.axis { fill: none; stroke: var(--am-showcase-accent); stroke-width: 0.9; stroke-dasharray: 10 2 2 2; }
 .bubble { fill: var(--am-showcase-card); stroke: var(--am-showcase-soft); stroke-width: 1; }
 .levelMark { fill: var(--am-showcase-soft); stroke: none; }
 .cut { fill: none; stroke: var(--am-showcase-ink); stroke-width: 2.5; }
-.scan { opacity: 0; }
-.scanBand { fill: color-mix(in srgb, var(--am-showcase-accent) 18%, transparent); }
-.scanLine { fill: none; stroke: var(--am-showcase-accent); stroke-width: 2; }
-.markHalo { fill: color-mix(in srgb, var(--am-showcase-accent) 20%, transparent); }
-.markRing { fill: var(--am-showcase-card); stroke: var(--am-showcase-accent-strong); stroke-width: 2; }
-.markDot { fill: var(--am-showcase-accent-strong); }
-.markPulse { fill: none; stroke: var(--am-showcase-accent); stroke-width: 1.5; opacity: 0; }
-.stampOuter { fill: color-mix(in srgb, var(--am-showcase-accent-soft) 90%, transparent); stroke: var(--am-showcase-accent-strong); stroke-width: 2.5; }
-.stampInner { fill: none; stroke: var(--am-showcase-accent); stroke-width: 1; }
+/* The facade and the section behind: the same sheets as faint teal wireframes — no paper, every line one translucent teal. */
+.ghost .paper, .ghost .frame, .ghost .ink, .ghost .inkThin, .ghost .wall, .ghost .partition, .ghost .slab, .ghost .ground, .ghost .axis, .ghost .bubble {
+  stroke: color-mix(in srgb, var(--am-showcase-accent) 42%, transparent);
+}
+.ghost .paper, .ghost .windowGap, .ghost .bubble { fill: none; }
+.ghost .levelMark { fill: color-mix(in srgb, var(--am-showcase-accent) 42%, transparent); }
+.ghost .wall, .ghost .slab { stroke-width: 2; }
+/* The plotter. Each cover is paper-coloured and rests slid off to the right (322 px), so the finished plan shows. */
+.cover { fill: var(--am-showcase-card); transform: translateX(322px); }
+.cover, .cursorV, .cursorH, .cursorHead { transform-box: view-box; transform-origin: 0 0; }
+.cursorV, .cursorH, .cursorHead { opacity: 0; }
+.rail { fill: none; stroke: var(--am-showcase-accent); stroke-width: 0.8; stroke-dasharray: 3 3; opacity: 0.8; }
+.headBox, .headTick { fill: none; stroke: var(--am-showcase-accent); stroke-width: 1.6; }
+/* The selection boxes: translucent remark-red fill, dashed outline, a square grip at each corner. */
+.selectionFill { fill: var(--am-failed-light); opacity: 0.55; }
+.selectionLine { fill: none; stroke: var(--am-failed); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.selectionGrip { fill: var(--am-failed); }
+.stampOuter { fill: var(--am-showcase-accent-soft); stroke: var(--am-showcase-accent-strong); stroke-width: 2.6; }
+.stampInner { fill: none; stroke: var(--am-showcase-accent-strong); stroke-width: 1; }
 .stampCheck { fill: none; stroke: var(--am-showcase-accent-strong); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-.stampLines { fill: none; stroke: var(--am-showcase-accent); stroke-width: 2.5; stroke-linecap: round; }
+.stampLines { fill: none; stroke: var(--am-showcase-accent-strong); stroke-width: 2.6; stroke-linecap: round; }
+.ucs { fill: none; stroke: var(--am-showcase-accent); stroke-width: 1.6; opacity: 0.7; }
 
 /*
- * One cycle of the scene is 9 s. The scan crosses the plan in the first 42 %, easing into each
- * remark and out of it: it stands on A (x 98, a window) at 14 %, on B (x 209, the stair) at 26 %
- * and on C (x 285, the bath) at 35 %, and each mark lights as the line arrives. The stamp lands on
- * the title block at 52–62 %; everything clears at 90–97 % and the cycle starts again.
+ * One cycle of the scene is 10 s. The plotter draws the plan in three bands, each in 14 % of the
+ * cycle: a cover slides off to the right while the cursor's vertical rail runs the band's width
+ * (band 1 at 6–20 %, band 2 at 21–35 %, band 3 at 36–50 %), the horizontal rail and the head
+ * ride on the band's centre line, and the cursor fades out at 50–53 %. The selection boxes pop
+ * in at 54, 60 and 66 % (a window, the stair, the bath, each overshooting to 1.18 before it
+ * settles); the stamp lands on the title block at 74–81 %; everything clears at 90–97 % and the
+ * cycle starts again, with the covers back in place.
  */
-@keyframes signInRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes signInRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes signInAppear { from { opacity: 0; } to { opacity: 1; } }
 @keyframes gridDrift { from { transform: translate(0, 0); } to { transform: translate(120px, 120px); } }
-@keyframes contourSway { from { transform: translate(0, 0); } to { transform: translate(-36px, 18px); } }
 @keyframes sheetFloat { from { transform: translateY(0); } to { transform: translateY(-8px); } }
-@keyframes planScan {
-  0% { opacity: 0; transform: translateX(20px); }
-  4% { opacity: 1; transform: translateX(20px); }
-  14% { transform: translateX(98px); }
-  26% { transform: translateX(209px); }
-  35% { transform: translateX(285px); }
-  42% { opacity: 1; transform: translateX(336px); }
-  46%, 100% { opacity: 0; transform: translateX(336px); }
+@keyframes coverSlideA { 0%, 6% { transform: translateX(0); } 20%, 100% { transform: translateX(322px); } }
+@keyframes coverSlideB { 0%, 21% { transform: translateX(0); } 35%, 100% { transform: translateX(322px); } }
+@keyframes coverSlideC { 0%, 36% { transform: translateX(0); } 50%, 100% { transform: translateX(322px); } }
+@keyframes cursorSweepV {
+  0%, 6% { opacity: 0; transform: translateX(14px); }
+  7% { opacity: 1; transform: translateX(14px); }
+  20% { opacity: 1; transform: translateX(336px); }
+  21% { opacity: 1; transform: translateX(14px); }
+  35% { opacity: 1; transform: translateX(336px); }
+  36% { opacity: 1; transform: translateX(14px); }
+  50% { opacity: 1; transform: translateX(336px); }
+  53%, 100% { opacity: 0; transform: translateX(336px); }
 }
-@keyframes markInA { 0%, 14% { opacity: 0; transform: scale(0.4); } 18%, 90% { opacity: 1; transform: scale(1); } 97%, 100% { opacity: 0; transform: scale(1); } }
-@keyframes markInB { 0%, 26% { opacity: 0; transform: scale(0.4); } 30%, 90% { opacity: 1; transform: scale(1); } 97%, 100% { opacity: 0; transform: scale(1); } }
-@keyframes markInC { 0%, 35% { opacity: 0; transform: scale(0.4); } 39%, 90% { opacity: 1; transform: scale(1); } 97%, 100% { opacity: 0; transform: scale(1); } }
-@keyframes markPulse { 0% { opacity: 0.7; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(2.2); } }
-@keyframes stampPress {
-  0%, 52% { opacity: 0; transform: scale(1.4); }
-  58% { opacity: 1; transform: scale(0.95); }
-  62%, 90% { opacity: 1; transform: scale(1); }
-  97%, 100% { opacity: 0; transform: scale(1); }
+@keyframes cursorRowH {
+  0%, 6% { opacity: 0; transform: translateY(41px); }
+  7%, 20% { opacity: 1; transform: translateY(41px); }
+  21%, 35% { opacity: 1; transform: translateY(102px); }
+  36%, 50% { opacity: 1; transform: translateY(166px); }
+  53%, 100% { opacity: 0; transform: translateY(166px); }
 }
+@keyframes cursorHeadMove {
+  0%, 6% { opacity: 0; transform: translate(14px, 41px); }
+  7% { opacity: 1; transform: translate(14px, 41px); }
+  20% { opacity: 1; transform: translate(336px, 41px); }
+  21% { opacity: 1; transform: translate(14px, 102px); }
+  35% { opacity: 1; transform: translate(336px, 102px); }
+  36% { opacity: 1; transform: translate(14px, 166px); }
+  50% { opacity: 1; transform: translate(336px, 166px); }
+  53%, 100% { opacity: 0; transform: translate(336px, 166px); }
+}
+@keyframes plotLinesClear { 0%, 92% { opacity: 1; } 97%, 100% { opacity: 0; } }
+@keyframes selectionPopA { 0%, 54% { opacity: 0; transform: scale(0.3); } 57% { opacity: 1; transform: scale(1.18); } 60%, 90% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes selectionPopB { 0%, 60% { opacity: 0; transform: scale(0.3); } 63% { opacity: 1; transform: scale(1.18); } 66%, 90% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes selectionPopC { 0%, 66% { opacity: 0; transform: scale(0.3); } 69% { opacity: 1; transform: scale(1.18); } 72%, 90% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes stampLand { 0%, 74% { opacity: 0; transform: scale(1.5); } 78% { opacity: 1; transform: scale(0.93); } 81%, 90% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; transform: scale(1); } }
 
 @media (prefers-reduced-motion: no-preference) {
-  .card { animation: signInRise 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  .scene { animation: signInRise 500ms cubic-bezier(0.22, 1, 0.36, 1) 100ms both; }
+  .card { animation: signInRise 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .scene { animation: signInRise 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both; }
   .backdrop { animation: signInAppear 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  .backdropGrid { animation: gridDrift 36s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
-  .contourA { animation: contourSway 22s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-  .contourB { animation: contourSway 26s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate-reverse; }
-  .floatSlow { animation: sheetFloat 8s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
-  .floatFast { animation: sheetFloat 6s cubic-bezier(0.37, 0, 0.63, 1) -2s infinite alternate; }
-  .scan { animation: planScan 9s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite; }
-  .markA { animation: markInA 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-  .markB { animation: markInB 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-  .markC { animation: markInC 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-  .markPulse { animation: markPulse 2250ms cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-  .stamp { animation: stampPress 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .backdropGrid { animation: gridDrift 60s linear infinite; }
+  .floatSlow { animation: sheetFloat 8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate; }
+  .floatFast { animation: sheetFloat 6s cubic-bezier(0.45, 0.05, 0.55, 0.95) -2s infinite alternate; }
+  .coverA { animation: coverSlideA 10s linear infinite; }
+  .coverB { animation: coverSlideB 10s linear infinite; }
+  .coverC { animation: coverSlideC 10s linear infinite; }
+  .cursorV { animation: cursorSweepV 10s linear infinite; }
+  .cursorH { animation: cursorRowH 10s linear infinite; }
+  .cursorHead { animation: cursorHeadMove 10s linear infinite; }
+  .plotLines { animation: plotLinesClear 10s linear infinite; }
+  .selectionA { animation: selectionPopA 10s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .selectionB { animation: selectionPopB 10s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .selectionC { animation: selectionPopC 10s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .stamp { animation: stampLand 10s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
 }
 /* Reduced motion: the card, the scene and the grid arrive by opacity alone, and nothing loops. */
 @media (prefers-reduced-motion: reduce) {
@@ -162,8 +200,8 @@
   .screen { grid-template-columns: minmax(0, 420px); }
   .scene { display: none; }
 }
-/* Phone: the card starts at the top, so the fields and «Войти» stay above the on-screen keyboard. */
+/* Phone: the card starts at the top, so the fields and «Войти» stay above the on-screen keyboard. The crop marks sit 10 px outside the card, inside the frame's 12 px side gutter. */
 @media (max-width: 640px) {
   .screen { align-items: start; min-height: 0; padding: var(--am-gap-sm) 0 var(--am-gap); }
-  .card { border-radius: var(--am-radius); }
+  .card { padding: var(--am-gap) calc(var(--am-gap) + var(--am-gap-xs)); }
 }

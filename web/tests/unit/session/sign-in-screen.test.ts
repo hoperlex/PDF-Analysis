@@ -67,6 +67,23 @@ function withoutBlock(css: string, prelude: string): string {
   return css.slice(0, start);
 }
 
+/** The properties every `@keyframes` block in `css` animates, whatever its stops. */
+function keyframeProperties(css: string): string[] {
+  const found = new Set<string>();
+  for (const match of css.matchAll(/@keyframes\s+[\w-]+\s*\{/g)) {
+    let depth = 0;
+    const start = (match.index ?? 0) + match[0].length - 1;
+    for (let at = start; at < css.length; at += 1) {
+      if (css[at] === '{') depth += 1;
+      else if (css[at] === '}' && (depth -= 1) === 0) {
+        for (const property of css.slice(start, at).matchAll(/([a-z-]+)\s*:/g)) found.add(property[1] as string);
+        break;
+      }
+    }
+  }
+  return [...found].sort();
+}
+
 function latinIn(markup: string): string[] {
   return [...new Set(visibleText(markup).flatMap((text) => text.match(/[A-Za-z]+/g) ?? []))].sort();
 }
@@ -93,6 +110,30 @@ describe('the screen offers a credentials form and nothing that holds a credenti
     expect(outside, 'a loop declared outside the no-preference block').not.toMatch(/\binfinite\b/);
     // Can fail: the same reading of a sheet that loops in the open is refused.
     expect(withoutBlock('.a { animation: x 1s infinite; }', '@media (prefers-reduced-motion: no-preference)')).toMatch(/\binfinite\b/);
+  });
+
+  it('draws variant B as decoration: four crop marks, three selection boxes and one stamp, all inside the hidden shapes', () => {
+    // `STYLE-ORIG-01` S4 (`R-157c`): the card's crop marks are empty hidden spans; the scene carries
+    // the three selection boxes (a rectangle, an outline and four grips each) and the stamp.
+    expect(markup.match(/<span class="[^"]*crop[^"]*" aria-hidden="true"><\/span>/g)?.length, 'crop marks').toBe(4);
+    const scene = /<div class="[^"]*scene[^"]*" aria-hidden="true">([\s\S]*?)<\/svg><\/div>/.exec(markup)?.[1] ?? '';
+    expect(scene.match(/class="[^"]*selectionLine/g)?.length, 'selection outlines').toBe(3);
+    expect(scene.match(/class="[^"]*selectionGrip/g)?.length, 'selection grips').toBe(12);
+    expect(scene.match(/class="[^"]*stampOuter/g)?.length, 'stamps').toBe(1);
+    expect(scene.match(/class="[^"]*cover[ABC]/g)?.length, 'plotter covers').toBe(3);
+  });
+
+  it('rests as the finished frame and animates transform and opacity only', () => {
+    const css = readFileSync(join(WEB_ROOT, 'src/_pages/sign-in/ui/sign-in-page.module.css'), 'utf8');
+    // Outside any motion block the covers are slid off the plan and the cursor is hidden, so the
+    // frame a reduced-motion browser (and a screenshot) sees is the finished plan.
+    expect(css).toMatch(/\.cover\s*\{[^}]*transform:\s*translateX\(322px\)/);
+    expect(css).toMatch(/\.cursorV,\s*\.cursorH,\s*\.cursorHead\s*\{[^}]*opacity:\s*0\s*;/);
+    const outside = withoutBlock(css, '@media (prefers-reduced-motion: no-preference)');
+    expect(outside, 'a plotter or selection animation outside the motion block').not.toMatch(/animation:\s*(cover|cursor|plot|selection|stamp)/);
+    expect(keyframeProperties(css), 'a keyframe that animates more than transform and opacity').toEqual(['opacity', 'transform']);
+    // Can fail: the same reading of a keyframe that animates a layout property is refused.
+    expect(keyframeProperties('@keyframes a { from { width: 1px; } to { opacity: 1; } }')).toEqual(['opacity', 'width']);
   });
 
   it('is the credentials card and its scene: no hero copy, no former panel (owner, 2026-11-09)', () => {
