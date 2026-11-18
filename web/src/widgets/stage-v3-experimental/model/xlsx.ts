@@ -1,4 +1,5 @@
 import type { StageChainRun, StageChangeCard } from '@/shared/api';
+import { LONG_TEXT_SUMMARY_ROW, moveLongCells, splitUtf16, xlsxColumn } from '@/shared/lib/xlsx-long-cells';
 import { parameterRows, reportCoverage, reportGlobalConsolidation, reportSnapshot, reportSources, v3Cards } from './report';
 
 /** ZIP STORE/CRC32/OOXML writer copied and adapted from this repository's
@@ -8,7 +9,6 @@ import { parameterRows, reportCoverage, reportGlobalConsolidation, reportSnapsho
 type RecordValue = Record<string, unknown>;
 type Row = readonly unknown[];
 interface Table { readonly name: string; readonly rows: Row[] }
-const MAX_CELL = 32_767;
 const RAW_CHUNK = 32_000;
 const MAX_PACKAGE = 64 * 1024 * 1024;
 const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
@@ -24,21 +24,7 @@ function spreadsheetText(value: string): string {
   const literal = value.replace(/_x[0-9a-f]{4}_/gi, (match) => `_x005F_${match.slice(1)}`);
   return escapeXml(literal).replace(/\r/g, '&#13;');
 }
-function column(index: number): string {
-  let value = index + 1; let result = '';
-  while (value > 0) { const digit = (value - 1) % 26; result = String.fromCharCode(65 + digit) + result; value = Math.floor((value - 1) / 26); }
-  return result;
-}
-function rawChunks(value: string): string[] {
-  const chunks: string[] = [];
-  for (let start = 0; start < value.length;) {
-    let end = Math.min(start + RAW_CHUNK, value.length);
-    const last = value.charCodeAt(end - 1); const next = value.charCodeAt(end);
-    if (end < value.length && last >= 0xD800 && last <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) end -= 1;
-    chunks.push(value.slice(start, end)); start = end;
-  }
-  return chunks;
-}
+function rawChunks(value: string): string[] { return splitUtf16(value, RAW_CHUNK); }
 
 function tables(runId: string, cards: readonly StageChangeCard[], run: StageChainRun | undefined): Table[] {
   const snapshot = reportSnapshot(runId, cards, run);
@@ -142,9 +128,8 @@ function archive(parts: readonly { readonly name: string; readonly content: stri
 
 export function formatStageV3Xlsx(runId: string, cards: readonly StageChangeCard[], run: StageChainRun | undefined): { readonly content: ArrayBuffer; readonly mediaType: string; readonly fileName: string } {
   let replacementCount = 0;
-  const clean = (value: unknown, sheet: string): string => {
+  const clean = (value: unknown): string => {
     const source = cell(value);
-    if (source.length > MAX_CELL) throw new Error(`Технический XLSX: ячейка листа ${sheet} превышает 32767 символов. Текст не усечён; используйте полную выгрузку JSON.`);
     let cleaned = '';
     for (const character of source) {
       const point = character.codePointAt(0) ?? 0;
@@ -153,8 +138,11 @@ export function formatStageV3Xlsx(runId: string, cards: readonly StageChangeCard
     }
     return cleaned;
   };
-  const cleaned = tables(runId, cards, run).map((table) => ({ name: table.name, rows: table.rows.map((row) => row.map((value) => clean(value, table.name))) }));
+  // A value over Excel's cell limit keeps its beginning and a key; the whole value is on «LongText».
+  const { tables: fitted, longText } = moveLongCells(tables(runId, cards, run).map((table) => ({ name: table.name, rows: table.rows.map((row) => row.map(clean)) })));
+  const cleaned = longText === null ? fitted : [...fitted, longText];
   cleaned[0]?.rows.push(['Замены недопустимых для XML символов в представлении', String(replacementCount)], ['Исходные значения', 'RawJSONchunks сохраняет исходный JSON; замены относятся только к табличному представлению.']);
+  if (longText !== null) cleaned[0]?.rows.push([...LONG_TEXT_SUMMARY_ROW]);
   const parts: { name: string; content: string }[] = [];
   const sheetNodes: string[] = []; const relationships: string[] = []; const overrides: string[] = [];
   cleaned.forEach((table, index) => {
@@ -163,7 +151,7 @@ export function formatStageV3Xlsx(runId: string, cards: readonly StageChangeCard
     sheetNodes.push(`<sheet name="${escapeXml(table.name)}" sheetId="${id}" r:id="rId${id}"/>`);
     relationships.push(`<Relationship Id="rId${id}" Type="${OFFICE_REL}/worksheet" Target="worksheets/sheet${id}.xml"/>`);
     overrides.push(`<Override PartName="/xl/worksheets/sheet${id}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`);
-    const rows = table.rows.map((row, number) => `<row r="${number + 1}">${row.map((value, cellIndex) => `<c r="${column(cellIndex)}${number + 1}" t="inlineStr"><is><t xml:space="preserve">${spreadsheetText(value)}</t></is></c>`).join('')}</row>`).join('');
+    const rows = table.rows.map((row, number) => `<row r="${number + 1}">${row.map((value, cellIndex) => `<c r="${xlsxColumn(cellIndex)}${number + 1}" t="inlineStr"><is><t xml:space="preserve">${spreadsheetText(value)}</t></is></c>`).join('')}</row>`).join('');
     parts.push({ name: `xl/worksheets/sheet${id}.xml`, content: `${XML_HEAD}<worksheet xmlns="${MAIN}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rows}</sheetData></worksheet>` });
   });
   parts.push({ name: '[Content_Types].xml', content: `${XML_HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides.join('')}</Types>` });
