@@ -229,7 +229,7 @@ describe('the common ZIP', () => {
 
   it('carries the correlation id of the document’s refusal, and lets a cancellation through as it is', async () => {
     const withId = new ApiError(503, {
-      contract_version: '1.59.0', error_code: 'dependency_unavailable', message: 'English.', correlation_id: 'cid-bulk-1', retryable: false,
+      contract_version: '1.60.0', error_code: 'dependency_unavailable', message: 'English.', correlation_id: 'cid-bulk-1', retryable: false,
     }, 'cid-bulk-1');
     const failed = await buildAuditPackages({
       documents: [asDocument(A)], fileName: 'x.zip', signal: signal(), deps: { buildPackage: recorder({ [runOf('A')]: withId }).buildPackage, bundle: buildEvidenceBundle },

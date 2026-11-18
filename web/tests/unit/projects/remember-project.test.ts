@@ -44,7 +44,7 @@ const account = (lastProject: string | null | undefined): Account =>
 
 function refusal(status: number, code: ErrorEnvelope['error_code']): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.59.0',
+    contract_version: '1.60.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-remember-404',

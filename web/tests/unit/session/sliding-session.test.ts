@@ -393,6 +393,8 @@ describe('the absolute cap: thirty days from sign-in, however active', () => {
   it('counts the cap down: the cookie of a password change is the remaining cap, not a lifetime', () => {
     const id = openSession(ACCOUNT, 'held', API_LIFETIME_SECONDS, T0);
     expect(remainingCapSeconds(id, T0)).toBe(30 * 24 * 3600);
+    // A few milliseconds later it still says the whole cap: the cookie is not a function of the clock.
+    expect(remainingCapSeconds(id, T0 + 3)).toBe(30 * 24 * 3600);
     expect(remainingCapSeconds(id, T0 + 5 * HOUR)).toBe(30 * 24 * 3600 - 5 * 3600);
     expect(remainingCapSeconds('0'.repeat(64), T0)).toBe(0); // no such session: delete the cookie
   });

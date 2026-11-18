@@ -14,7 +14,7 @@ import {
 } from '@/features/restart-run';
 
 const refusal = (status: number, code: string, details: Record<string, string>) => new ApiError(status, {
-  contract_version: '1.59.0', error_code: code as never, message: 'x', correlation_id: 'c', retryable: false, details,
+  contract_version: '1.60.0', error_code: code as never, message: 'x', correlation_id: 'c', retryable: false, details,
 }, 'c');
 const invalid = (details: Record<string, string>) => refusal(422, 'analysis_input_invalid', details);
 

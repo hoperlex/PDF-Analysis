@@ -234,8 +234,12 @@ interface Registry {
 interface PersistedRegister {
   readonly version: typeof REGISTER_FORMAT_VERSION;
   readonly sessions: readonly (HeldSession & { readonly id: string })[];
-  /** Optional, and ignored by the code before the sliding session: see {@link Registry.lapsed}. */
-  readonly lapsed: readonly { readonly id: string; readonly at: number }[];
+  /**
+   * Optional, present only while there is an id to remember, and ignored by the code before the
+   * sliding session: see {@link Registry.lapsed}. An empty register is still exactly
+   * `{ version, sessions: [] }`, as it always was.
+   */
+  readonly lapsed?: readonly { readonly id: string; readonly at: number }[];
 }
 
 /** One row as it comes off the disk: nothing is trusted until {@link heldSessionFrom} checks it. */
@@ -486,7 +490,7 @@ function persist(): void {
   const snapshot: PersistedRegister = {
     version: REGISTER_FORMAT_VERSION,
     sessions: [...held.rows].map(([id, row]) => ({ id, ...row })),
-    lapsed: [...held.lapsed].map(([id, at]) => ({ id, at })),
+    ...(held.lapsed.size === 0 ? {} : { lapsed: [...held.lapsed].map(([id, at]) => ({ id, at })) }),
   };
   const temporary = `${path}.writing-${String(process.pid)}`;
   try {
@@ -866,8 +870,11 @@ export function replaceCredential(
 }
 
 /**
- * Seconds left until this session's **absolute cap**, rounded down: what the session cookie's
- * `Max-Age` is, and what the `open` note adds its grace to. Not the credential's lifetime -- a
+ * Seconds left until this session's **absolute cap**, rounded **up**: what the session cookie's
+ * `Max-Age` is, and what the `open` note adds its grace to. Rounded up so that a sign-in a few
+ * milliseconds old still says the whole cap and not a second less, which would make the cookie a
+ * function of the clock; the cookie may then outlive the row by under a second, never the reverse,
+ * and the register is what ends a session. Not the credential's lifetime -- a
  * credential is renewed, the cap is not. `0` for an unknown or ended session, which a cookie
  * reads as "delete me": the truthful rendering of there being no session to hold.
  */
@@ -876,7 +883,7 @@ export function remainingCapSeconds(id: string | null, now: number = Date.now())
   sweep(now);
   const row = register().get(id);
   if (row === undefined) return 0;
-  return Math.max(0, Math.floor((row.openedAt + SESSION_ABSOLUTE_CAP_SECONDS * 1000 - now) / 1000));
+  return Math.max(0, Math.ceil((row.openedAt + SESSION_ABSOLUTE_CAP_SECONDS * 1000 - now) / 1000));
 }
 
 /**
