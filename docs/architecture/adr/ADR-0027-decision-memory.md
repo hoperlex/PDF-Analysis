@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-09; revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: accepted in the autonomous window 2026-11-09 (phase M1); **revisable by the repository owner** (a dated addendum). The owner was unreachable: every answer in «Answers recorded in this window» is the design's recommendation (`docs/program/DECISION-MEMORY-01.md` section 9). The owner's goal of 2026-11-07 (`ROADMAP.md`, items 2 and 3); the polls `R-153q`…`R-153ar` of 2026-11-10 as built into `ADR-0029`.
+- Basis: accepted in the autonomous window 2026-11-09 (phase M1); **revisable by the repository owner** (a dated addendum). The owner was unreachable: every answer in «Answers recorded in this window» is the design's recommendation (`docs/program/DECISION-MEMORY-01.md` section 9). The owner's goal of 2026-11-07 (`docs/program/ROADMAP.md`, «Owner goals of 2026-11-07», items 2 and 3); the polls `R-153q`…`R-153ar` of 2026-11-10 as built into `ADR-0029`.
 - Amends (for the case content only): `ADR-0012` (the similar-case index is a rebuildable projection), owner ruling `R-16` («never a source of truth») and, for what an erase leaves, `R-146o` / `ADR-0022` section 3. · Amended by: `ADR-0029` (refines decisions 2, 3 and 6 and the answers to Q4 and Q8).
 - Related: `ADR-0006`, `ADR-0012`, `ADR-0020`, `ADR-0022`, `ADR-0026`. Design: `docs/program/DECISION-MEMORY-01.md`.
 
@@ -63,3 +63,4 @@ The owner revises any answer in the table (a dated addendum); one of the open qu
 - 2026-11-10 — addendum `ADR-0029` (`R-153q`…`R-153ar`: core reads the memory, derived-state tables `PRODUCT`, comments captured, Q4 closed) folded into decisions 2, 3 and 6 and the answers table.
 - 2026-11-18 — compressed (ADR-OPTIMISE-01); the full earlier text: git show fb6c2203e:docs/architecture/adr/ADR-0027-decision-memory.md
 - 2026-11-18 — status statements updated to dev fb6c2203e: `D-390` is closed (the `data_class` setting exists, `scripts/recovery/memory_setting.py`); the hints are delivered by `ADR-0029` (`src/auditmanager/precedents/hints.py`); the export is still not built (no `decision_memory_export` table or export tool in the tree).
+- 2026-11-18 — Alternatives, Verification and Revisit trigger written from the decisions (the original had none).
