@@ -117,6 +117,10 @@
   --am-paper: #ffffff;
   --am-surface: #eef1f6;
   --am-panel: #ffffff;
+  /* The sign-in screen's drawing (`R-157c`): the card's outline, a sheet's edge, the dots of the grid. Edges, not text: no AA pair. */
+  --am-card-edge: #0e1622;
+  --am-sheet-edge: #0e1622;
+  --am-grid-dot: #b8bec8;
   --am-surface-sunken: #e6ebf2;
 
 /* Presentation shell and dashboard share these light/dark surfaces. */
@@ -449,6 +453,9 @@
     --am-paper: #0d131b;
     --am-surface: #05080c;
   --am-panel: #0a0f15;
+  --am-card-edge: #1f5754;
+  --am-sheet-edge: #2b3c4e;
+  --am-grid-dot: #0c4d4b;
     --am-surface-sunken: #121a24;
 
     --am-showcase-bg: #05080c;
@@ -545,6 +552,9 @@
   --am-paper: #0d131b;
   --am-surface: #05080c;
   --am-panel: #0a0f15;
+  --am-card-edge: #1f5754;
+  --am-sheet-edge: #2b3c4e;
+  --am-grid-dot: #0c4d4b;
   --am-surface-sunken: #121a24;
 
   --am-showcase-bg: #05080c;

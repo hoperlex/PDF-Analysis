@@ -33,7 +33,7 @@
   box-sizing: border-box;
   width: min(100%, 420px);
   padding: var(--am-gap-lg) calc(var(--am-gap-lg) + var(--am-gap-xs));
-  border: 1px solid var(--am-showcase-line);
+  border: 1px solid var(--am-card-edge);
   border-top: 3px solid var(--am-showcase-accent);
   border-radius: var(--am-radius-sm);
   background: var(--am-showcase-card);
@@ -78,7 +78,7 @@
   mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, var(--am-showcase-ink) 62%, transparent 100%);
 }
 .backdropGrid { position: absolute; top: -120px; left: -120px; width: calc(100% + 240px); height: calc(100% + 240px); }
-.gridDot { fill: color-mix(in srgb, var(--am-showcase-accent) 32%, transparent); }
+.gridDot { fill: var(--am-grid-dot); }
 .gridMajor { stroke: color-mix(in srgb, var(--am-showcase-ink) 7%, transparent); stroke-width: 1; }
 
 /* ---- the scene */
@@ -86,7 +86,7 @@
 .scene svg { display: block; width: 100%; height: auto; overflow: visible; }
 .selection, .stamp { transform-box: fill-box; transform-origin: center; }
 /* The paper, the frame and the drawing lines of a sheet; the helpers in the page draw every sheet with the same names. */
-.paper { fill: var(--am-showcase-card); stroke: color-mix(in srgb, var(--am-showcase-line) 60%, transparent); stroke-width: 1; }
+.paper { fill: var(--am-showcase-card); stroke: var(--am-sheet-edge); stroke-width: 1; }
 .frame { fill: none; stroke: var(--am-showcase-line); stroke-width: 1; }
 .ink { fill: none; stroke: var(--am-showcase-muted); stroke-width: 1.6; stroke-linecap: round; }
 .inkThin { fill: none; stroke: var(--am-showcase-soft); stroke-width: 1; stroke-linecap: round; }
