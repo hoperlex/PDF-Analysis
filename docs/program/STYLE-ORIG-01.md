@@ -43,6 +43,9 @@ The task owns the web style layer as one slot, in the order below; one lane owns
 - `web/src/**/*.module.css`
 - `web/tests/unit/styles/**`
 - `web/tests/unit/session/sign-in-screen.test.ts`
+- `web/tests/unit/shell/navigation-fit.test.ts`
+- `web/tests/unit/dashboard/dense-overview.test.ts`
+- `web/tests/unit/review/v2-finding-fields.test.ts`
 - `release-notes/0.32.0.json`
 - `release-notes/dictionary.json`
 - `VERSION`
@@ -110,3 +113,20 @@ Not applicable: styles are values and rules, and a revert of the integration mer
 ## Handoff
 
 Kept in `.local/handoff/style-orig-2026-11-19.md` by the integrator (branch `integration/style-orig`, lanes, previews, checks).
+
+## Result (2026-11-19, integrator pdf-analysis-aa)
+
+Branch `integration/style-orig`, published to `origin/dev` only (`R-157g`, `R-157h`).
+
+- S1–S4 as listed above. Three tokens were added for the sign-in drawing (`--am-card-edge`, `--am-sheet-edge`, `--am-grid-dot`), plus `--am-panel` and
+  `--am-text-2xs`. The showcase tokens were NOT folded into the shared palette: their values now equal the root ones, the frame's remap keeps only the
+  control boundary, and the fold is a later cleanup.
+- S5: `contrast.ts` answers an edge with 3:1 only for a control (`R-157b`); 24 modules moved their controls' borders to `--am-line-strong`; 52 pending rows
+  left the list (one stays); `--am-ok` is `#0c7830`; `navigation-fit` was re-measured in Onest. Three guard files outside the first path list were
+  edited (`navigation-fit`, `dense-overview`, `v2-finding-fields`) because they pinned the old values; they are listed above now.
+- Checks: `vitest` on `tests/unit/styles`, `tests/unit/shell`, `tests/unit/dashboard`, the sign-in screen, `executor-density-n2`, `sheet-chips` and
+  `v2-finding-fields`: 38 files, 655 tests, all green; `tsc --noEmit` clean; `eslint` on the changed test files clean; `next build` exit 0;
+  `pytest tests/contract/release_notes` 30/30. Static renders of 10 census screens in AppFrame at 1440, 1100 and 390 px in both themes: no horizontal overflow.
+- Not run: `make gate`, the whole web unit battery, the 186-shot sweep (reduced to 60 shots above), `tests/integration/releases/test_release_loader.py` (needs a
+  database; its version-set pin was moved by hand).
+- Debt: the owner's OK on the previews P1 and P2 (`R-157f` lifted by `R-157h`); `.local/reports/style-orig/`. A rejected look is a revert of the integration merge.
