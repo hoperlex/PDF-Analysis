@@ -1,4 +1,4 @@
-"""``issueToken`` and ``changePassword`` -- the credential exchange, and taking one back.
+"""``issueToken``, ``changePassword`` and ``renewToken`` -- the credential exchange, taking one back, and extending one.
 
 Three things here are not the shape the other six router modules have, and each is the
 contract's doing rather than a liberty:
@@ -60,6 +60,33 @@ that fails the mechanical bounds, is ``validation_failed``: that is a statement 
 request and not about whether the caller is who they say, and it is only ever reported to a
 caller who has already proved the current password. No error code is added to the catalog:
 `D-18`, and neither refusal needs one that is not already there.
+
+``renewToken``, the sliding session (owner ruling of 2026-11-18)
+----------------------------------------------------------------
+**It is the credential, not a password, that proves who is asking.** The web tier holds a
+reviewer's credential server-side and presents it with every request; before it expires, the
+tier asks for another for the same account and swaps it into the same session row. The
+operation takes no body, names no account (the subject comes from
+:data:`~auditmanager.api.security.CurrentSubject`, as ``changePassword``'s does) and answers
+with the same ``IssueTokenResponse`` as the exchange, so a client reads one shape for "here is
+a credential and its lifetime".
+
+**It is behind the seam like any other operation, and that is what makes it safe.** A
+credential the seam refuses -- revoked by an administrator's reset or a password change,
+belonging to an archived or deleted account, expired, forged -- is refused here as
+``authentication_required``, so renewal cannot be used to keep alive what revocation ended.
+The port compares the epoch **again** at the moment of minting (``CredentialPort.renew``), so a
+revocation that lands between the seam's read and the mint is refused too rather than undone.
+
+**It stays reachable for an account on a default credential and for one with an incomplete
+profile** (it is in both registers in :mod:`auditmanager.api.security`), because the web tier
+renews the credential of every session it holds and the reviewer on their way to the change
+screen is one of them. It hands back the row's own ``is_default_credential``, so renewing
+does not launder the flag.
+
+**No ``Idempotency-Key``, no body, no write.** Nothing is created and nothing is changed: a
+repeat is a second, equally valid credential, and the older one stays valid until its own
+``exp`` or the next revocation, exactly as two sign-ins would leave two.
 """
 
 from __future__ import annotations
@@ -273,6 +300,49 @@ def build_auth_routes(router: APIRouter, credentials: CredentialPort) -> None:
                     # reports what came back rather than writing the constant it expects --
                     # a constant would still read `false` on the day the write stopped
                     # clearing it.
+                    "is_default_credential": issued.is_default_credential,
+                }
+            ),
+        )
+
+    @router.post(
+        "/auth/token/renew",
+        operation_id="renewToken",
+        tags=["auth"],
+        status_code=200,
+        response_model=IssueTokenResponse,
+        responses={
+            **success(
+                200,
+                "A new credential for the same account, with a new lifetime. The credential "
+                "presented stays valid until its own expiry or the next revocation.",
+            ),
+            # 401 covers every credential the seam refuses and the epoch comparison at the
+            # moment of minting: revoked, archived, deleted, expired, forged and absent are
+            # one answer, as on the exchange. 403 is declared for the reason
+            # ``changePassword`` declares it (every authorized operation does); the seam does
+            # not raise it for this one, which is in both the default-credential and the
+            # incomplete-profile register and needs no role. No 422 (there is no body), no
+            # 409 (nothing is idempotent) and no 404 (the path addresses no aggregate).
+            **envelope_responses(401, 403, 500, 503),
+        },
+        summary="Exchange the presented credential for a new one with a new lifetime.",
+    )
+    def renew_token(subject: CurrentSubject) -> WireResponse:
+        # `subject.user_uid` and `subject.token_epoch` and never anything the caller sent: the
+        # account is the one the seam verified, and the epoch is the one its credential
+        # carries, which the port compares with the row again.
+        issued = credentials.renew(user_uid=subject.user_uid, token_epoch=subject.token_epoch)
+        if issued is None:
+            raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+        return json_response(
+            200,
+            encode_json(
+                {
+                    "token": issued.token,
+                    "expires_in": issued.expires_in,
+                    # `R-50`. The row's answer, passed through: renewing must not launder the
+                    # flag, and this router neither decides nor defaults it.
                     "is_default_credential": issued.is_default_credential,
                 }
             ),

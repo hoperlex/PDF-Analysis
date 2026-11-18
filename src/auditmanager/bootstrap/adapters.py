@@ -3993,6 +3993,43 @@ class CredentialAdapter(_SessionHolder):
             is_default_credential=record.is_default_credential,
         )
 
+    def renew(self, *, user_uid: str, token_epoch: int) -> IssuedCredential | None:
+        """Mint a credential for an account the seam has just proven, under the row as it is now.
+
+        The sliding session (owner ruling of 2026-11-18). A **read**: nothing is written, so no
+        transaction is committed and no row is left behind, and the same one statement the seam
+        reads on every guarded request (``get_account``) answers every field minted here -- the
+        epoch, the login, the label and the default-credential flag.
+
+        **``None`` is a refusal, and there are three ways to it**, all of them the seam's own
+        ``authentication_required`` once the router has turned them: no such account, an
+        **archived** one, or an epoch that is not the one the presented credential carries.
+        The third is the one that matters. The seam compared the credential's epoch with the
+        row a moment before this read; an administrator's reset or an archive in between raises
+        the epoch, and minting "under the current epoch" without comparing again would give the
+        holder of a revoked credential a live one. Comparing here closes that window instead of
+        narrowing it.
+
+        The label is the row's (``display_label``), not the presented credential's: a profile
+        completed since the credential was minted shows in the one this returns, which is what
+        the issue and password-change paths already do.
+        """
+        account = self._read(lambda session: self._accounts.get_account(session, user_uid))
+        if account is None:
+            return None
+        record = account.record
+        if record.archived or record.token_epoch != token_epoch:
+            return None
+        return self._signer.issue(
+            Subject(
+                user_uid=str(record.user_uid),
+                login=record.login,
+                token_epoch=record.token_epoch,
+                display_label=record.display_label,
+            ),
+            is_default_credential=record.is_default_credential,
+        )
+
     def standing_of(self, user_uid: str) -> AccountStanding | None:
         """The account's standing, for the seam to decide this request against.
 
