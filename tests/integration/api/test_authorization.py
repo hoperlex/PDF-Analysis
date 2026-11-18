@@ -39,6 +39,7 @@ from auditmanager.api.security import (
     OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES,
     SCHEME_NAME,
     ENROLLMENT_OPERATIONS,
+    TOKEN_LIFETIME_SECONDS,
     RUNNER_OPERATIONS,
     UNAUTHENTICATED_OPERATIONS,
     Subject,
@@ -647,10 +648,10 @@ def _another_deployments_credential() -> str:
 
 
 def _an_expired_credential() -> str:
-    """One this deployment really minted, an hour and a second ago."""
+    """One this deployment really minted, one credential lifetime and a second ago."""
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
-    issued = signer.issue(TEST_SUBJECT, now=time.time() - 3601, is_default_credential=False)
+    issued = signer.issue(TEST_SUBJECT, now=time.time() - TOKEN_LIFETIME_SECONDS - 1, is_default_credential=False)
     assert signer.verify(issued.token) is None, (
         "this case is only a case if the credential really has expired"
     )
@@ -968,7 +969,7 @@ def test_the_exchange_answers_without_a_credential(router: Surface) -> None:
     body = json.loads(answer.body)
     assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
     assert isinstance(body["token"], str) and body["token"]
-    assert body["expires_in"] == 3600, body
+    assert body["expires_in"] == 12 * 3600, body
     assert answer.header("X-Correlation-Id"), answer.headers
 
 

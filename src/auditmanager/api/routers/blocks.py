@@ -37,9 +37,10 @@ __all__ = ["build_block_routes"]
 _PNG: Final[str] = "image/png"
 
 #: How long a browser may keep a crop without asking again (`W55B-FIX`, X-4). ``private``: it
-#: is behind the seam and no shared cache may hold it. An hour is the credential's own lifetime
-#: (``security.TOKEN_LIFETIME_SECONDS``): a crop is the deterministic render of an immutable
-#: version's block, content-addressed, and changes only when a later run renders it otherwise.
+#: is behind the seam and no shared cache may hold it. An hour, the credential lifetime when this
+#: was written (``security.TOKEN_LIFETIME_SECONDS`` is longer since 2026-11-18; a browser cache
+#: needs no more): a crop is the deterministic render of an immutable version's block,
+#: content-addressed, and changes only when a later run renders it otherwise.
 CROP_MAX_AGE_SECONDS: Final[int] = 3600
 
 #: ``page, ordinal, id`` made comparable as text. The cursor carries a tuple of strings and

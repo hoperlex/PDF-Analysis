@@ -842,7 +842,15 @@ def role_capability(required: frozenset[str]) -> str:
 #: caller what to do about it.
 PASSWORD_CHANGED_CAPABILITY: Final[str] = "password_changed"
 
-#: How long a minted credential stays valid, in seconds. One hour.
+#: How long a minted credential stays valid, in seconds. Twelve hours.
+#:
+#: Owner ruling of 2026-11-18: one hour signed every reviewer out in the middle of work,
+#: because nothing renews a credential yet; twelve hours is the stop-gap until the web tier
+#: renews it (a sliding session). Revocation is unchanged: ``token_epoch`` is read on every
+#: guarded request, so an archive, a role change or a password change still ends a
+#: credential on its next request, whatever its remaining lifetime. Twelve hours is also
+#: the longest lifetime the web tier will hold (``MAX_LIFETIME_SECONDS`` in
+#: ``web/src/app/bff/session/store.ts``).
 #:
 #: A constant rather than a configured value: it is a property of this implementation, and
 #: the contract already tells every caller the lifetime in the response it just received
@@ -850,7 +858,7 @@ PASSWORD_CHANGED_CAPABILITY: Final[str] = "password_changed"
 #: line and the answer changes with it. A configuration name would have to be added to the
 #: deploy script and the runbook, which this session does not own, to express something no
 #: caller has asked to vary.
-TOKEN_LIFETIME_SECONDS: Final[int] = 3600
+TOKEN_LIFETIME_SECONDS: Final[int] = 12 * 3600
 
 #: The credential format's version tag, and the first field of every credential this seam
 #: mints. Present so that a future body -- a different payload, a different algorithm, OIDC
