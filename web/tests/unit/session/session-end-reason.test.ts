@@ -38,6 +38,7 @@ import {
   readSessionNote,
 } from '@/app/bff/session/end-note';
 import {
+  SESSION_ABSOLUTE_CAP_SECONDS,
   SESSION_COOKIE,
   forgetEverySession,
   openSession,
@@ -312,7 +313,11 @@ describe('sign-in and sign-out keep the note in step with the session', () => {
     const lines = response.headers.getSetCookie();
     expect(lines).toHaveLength(2);
     expect(lines[0]?.startsWith(`${SESSION_COOKIE}=`)).toBe(true);
-    expect(lines[1]).toBe(openNoteCookie(LIFETIME, false));
+    // Since the sliding session (2026-11-18) the cookie lives as long as the session may --
+    // the absolute cap -- and not as long as the credential the exchange answered with, so the
+    // note is the cap plus the week, and the session cookie carries the cap itself.
+    expect(lines[0]).toContain(`Max-Age=${String(SESSION_ABSOLUTE_CAP_SECONDS)}`);
+    expect(lines[1]).toBe(openNoteCookie(SESSION_ABSOLUTE_CAP_SECONDS, false));
     expect(jar.cookies.get(SESSION_NOTE_COOKIE)).toBe('open');
     expect(openSessionCount()).toBe(1);
   });

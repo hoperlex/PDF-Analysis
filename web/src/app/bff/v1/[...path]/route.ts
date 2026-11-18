@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **332 operations across 303 paths**, which is what the
+ * Those figures are **333 operations across 304 paths**, which is what the
  * frozen document declares after `W59-ANALYSIS-SETTINGS-01` adds the read of the
  * analysis-profile registry, `W59-VERSION-UPLOAD-01` the upload of a further version of one
  * set, `W59-DECISION-CARRYOVER-01` the expert-confirmed carryover of a decision to the next
@@ -66,6 +66,14 @@
  *
  *   **a live session** — the credential the API minted for that reviewer, held in
  *   `../../session/store.ts` and reachable only through `credentialOf`.
+ *
+ *   **a live session, renewed as it is used** (owner ruling of 2026-11-18) — a credential
+ *   issued more than ten minutes ago, or of unknown age, is renewed with `renewToken` before it
+ *   is presented, and the new one replaces it in the same row (`../../session/renewal.ts`). Every
+ *   request through here is activity, so a session ends after eight hours without one and after
+ *   thirty days at the latest. A renewal the API answers `401` ends the session as any upstream
+ *   `401` does; one it could not answer at all (the API unreachable, a 5xx) logs one line and
+ *   forwards with the credential already held, which has not expired.
  *
  *   **a cookie naming no live session** — `401 authentication_required`, and the cookie is
  *   cleared in the same answer. It is deliberately **not** served with the deployment
@@ -202,6 +210,7 @@ import {
   openNoteCookie,
 } from '../../session/end-note';
 import { admitGuest, guestClientKey } from '../../session/guest-throttle';
+import { refusedAnswer, renewIfDue } from '../../session/renewal';
 import type { SessionAccount } from '../../session/store';
 import {
   clearedSessionCookie,
@@ -210,8 +219,10 @@ import {
   openSession,
   readSessionId,
   refreshSubject,
+  remainingCapSeconds,
   requestIsSecure,
   sessionCookie,
+  sessionLapsed,
   subjectOf,
 } from '../../session/store';
 import { accountFromMe } from '../../session/subject';
@@ -452,7 +463,7 @@ function unconfigured(request: Request): Response {
  * nothing the API would accept — and the cookie is cleared so the next request is simply
  * an unauthenticated one rather than another of these.
  */
-function staleSession(request: Request): Response {
+function staleSession(request: Request, sessionId: string): Response {
   const response = envelopeResponse(
     401,
     synthesizedEnvelope(
@@ -463,11 +474,16 @@ function staleSession(request: Request): Response {
       request.headers.get('x-correlation-id') ?? mintForwardCorrelationId(),
     ),
   );
+  const secure = requestIsSecure(request);
+  response.headers.set('set-cookie', clearedSessionCookie(secure));
+  // «Сеанс истёк»: the register itself ended this session -- no request for the idle window, or
+  // the absolute cap -- and still remembers the id. The cookie now lives as long as the cap, so
+  // it outlives the row, and this is the one case where the answer is known. No note is
+  // written: the `open` note the sign-in left is what the sign-in screen reads it from.
+  if (sessionLapsed(sessionId)) return response;
   // «Сеанс недействителен»: the cookie named a session this tier does not hold, and nothing
   // says more — it was closed elsewhere, or the register was lost, or the id is forged. The
   // note lets the sign-in screen say that much and no more.
-  const secure = requestIsSecure(request);
-  response.headers.set('set-cookie', clearedSessionCookie(secure));
   response.headers.append('set-cookie', endNoteCookie('invalid', secure));
   return response;
 }
@@ -945,9 +961,11 @@ async function openTheSession(request: Request): Promise<Response> {
         ? withNext('/account', next)
         : (next ?? AFTER_SIGN_IN),
     [
-      sessionCookie(id, minted.expires_in, requestIsSecure(request)),
+      // The cookie lives as long as the session may (the absolute cap), not as long as this
+      // credential: the credential is renewed, the cookie is not re-sent.
+      sessionCookie(id, remainingCapSeconds(id), requestIsSecure(request)),
       // A session was opened in this browser: the note that lets a lapse be named «истёк».
-      openNoteCookie(minted.expires_in, requestIsSecure(request)),
+      openNoteCookie(remainingCapSeconds(id), requestIsSecure(request)),
     ],
   );
 }
@@ -1000,6 +1018,9 @@ async function changeThePassword(request: Request): Promise<Response> {
   if (isCrossSitePost(request)) return reportChange('validation');
   const next = postedReturnPath(request);
   const sessionId = readSessionId(request.headers.get('cookie'));
+  // Not renewed first, unlike the catch-all and the secret door: the credential this door
+  // presents is replaced, in a new row, by the one the change answers with, so a renewal would
+  // spend a call on a credential about to be revoked.
   const held = sessionId === null ? null : credentialOf(sessionId);
   if (held === null) {
     // No live session: there is no credential to present and nothing to revoke. Back to the
@@ -1115,9 +1136,10 @@ async function changeThePassword(request: Request): Promise<Response> {
   // in which a concurrent request from the same browser met `staleSession`.
   closeSession(sessionId);
   const secure = requestIsSecure(request);
+  // A new row, so a new cap: the change was proved by the current password, which is a sign-in.
   const cookie = [
-    sessionCookie(replacement, minted.expires_in, secure),
-    openNoteCookie(minted.expires_in, secure),
+    sessionCookie(replacement, remainingCapSeconds(replacement), secure),
+    openNoteCookie(remainingCapSeconds(replacement), secure),
   ];
   if (next !== null) return seeOther(described.profileComplete ? next : withNext('/account', next), cookie);
   return reportChange(
@@ -1307,6 +1329,20 @@ function mintedIntent(): string {
 }
 
 /**
+ * The API refused the credential this door held as live -- on the secret's own forward or on
+ * the renewal before it: the same fact `endedOn` records, answered as the redirect a form post
+ * needs. The session is closed here as well as there.
+ */
+function endedAtTheSecret(request: Request, sessionId: string): Response {
+  closeSession(sessionId);
+  const secure = requestIsSecure(request);
+  return seeOther(
+    withReason(withNext(SIGN_IN_SCREEN, `${WORKERS_SCREEN}?tab=connections`), 'ended'),
+    [clearedSessionCookie(secure), endNoteCookie('ended', secure)],
+  );
+}
+
+/**
  * Send the key to `setExecutorSecret`, and answer with a redirect and nothing else.
  *
  * The order mirrors the password door: the cross-site refusal first, before the session is
@@ -1318,12 +1354,13 @@ function mintedIntent(): string {
 async function setTheExecutorSecret(request: Request, connectionId: string): Promise<Response> {
   if (isCrossSitePost(request)) return reportSecret(connectionId, 'validation');
   const sessionId = readSessionId(request.headers.get('cookie'));
-  const held = sessionId === null ? null : credentialOf(sessionId);
-  if (held === null || subjectOf(sessionId) === null) {
-    return signInAgain(
+  const signInAgainAtTheSecret = () =>
+    signInAgain(
       request,
       `${WORKERS_SCREEN}?tab=connections&${EXECUTOR_SECRET_CONNECTION_PARAM}=${connectionId}`,
     );
+  if (sessionId === null || credentialOf(sessionId) === null || subjectOf(sessionId) === null) {
+    return signInAgainAtTheSecret();
   }
 
   const posted = await postedSecret(request);
@@ -1335,6 +1372,17 @@ async function setTheExecutorSecret(request: Request, connectionId: string): Pro
   } catch {
     return reportSecret(connectionId, 'unconfigured');
   }
+
+  // The sliding session, as in the catch-all: this post is a request through the forwarder, so it
+  // counts as activity and renews a credential that is ten minutes old. A renewal the API refuses
+  // ends the session exactly as the `401` of the secret's own forward does below.
+  const renewal = await renewIfDue(sessionId, {
+    upstream,
+    correlationId: request.headers.get('x-correlation-id'),
+  });
+  if (renewal.kind === 'refused') return endedAtTheSecret(request, sessionId);
+  const held = credentialOf(sessionId);
+  if (held === null) return signInAgainAtTheSecret();
 
   const headers = jsonHeaders(request);
   headers.set('idempotency-key', posted.intent ?? mintedIntent());
@@ -1349,15 +1397,7 @@ async function setTheExecutorSecret(request: Request, connectionId: string): Pro
   );
 
   // The credential no longer stands: the session is over here as well as there.
-  if (answer.status === 401) {
-    closeSession(sessionId);
-    // The API refused a credential this tier held as live: the same fact `endedOn` records.
-    const secure = requestIsSecure(request);
-    return seeOther(
-      withReason(withNext(SIGN_IN_SCREEN, `${WORKERS_SCREEN}?tab=connections`), 'ended'),
-      [clearedSessionCookie(secure), endNoteCookie('ended', secure)],
-    );
-  }
+  if (answer.status === 401) return endedAtTheSecret(request, sessionId);
   if (answer.status === 201) return reportSecret(connectionId, 'saved');
   if (answer.status === 403) return reportSecret(connectionId, 'forbidden');
   if (answer.status === 404) return reportSecret(connectionId, 'not_found');
@@ -1415,8 +1455,16 @@ async function handle(request: Request, context: RouteContext): Promise<Response
 
   const sessionId = readSessionId(request.headers.get('cookie'));
   if (sessionId !== null) {
+    // The sliding session: a credential issued more than ten minutes ago (or of unknown age) is
+    // renewed before it is presented, and this request is the activity that keeps the session.
+    // A renewal the API refuses ends the session as an upstream 401 does, below.
+    const renewal = await renewIfDue(sessionId, {
+      upstream,
+      correlationId: request.headers.get('x-correlation-id'),
+    });
+    if (renewal.kind === 'refused') return endedOn(request, sessionId, refusedAnswer(renewal));
     const held = credentialOf(sessionId);
-    if (held === null) return staleSession(request);
+    if (held === null) return staleSession(request, sessionId);
     const answer = await forwardWithCredential(request, segments, { upstream, token: held });
     // The API no longer accepts this credential: its epoch was raised. The session is over,
     // here as well as there, and the API's own envelope says so to the client.

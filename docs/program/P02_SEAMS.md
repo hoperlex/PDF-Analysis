@@ -10,9 +10,13 @@
 > `contracts/events/v1/**`. Where this document and one of those disagree, the frozen
 > contract wins and the disagreement is a defect in this file.
 
-## Current surface amendment — 1.59.0 / 0071
+## Current surface amendment — 1.60.0 / 0071
 
-`RUN-RESTART-01` (owner rulings `R-155a`…`R-155i`): one keyed write joins the table of §7, `restartRun` (`POST /runs/{run_id}/restart`, `expert` or `admin`, `202`, answers the `RunStatus` of the NEW run): a new run that replaces a `partial`, `failed` or `cancelled` run from one of the eight stage chips (`RestartPoint`, the new enum; `RestartRunRequest` carries it and the optional `cost_consent`). `RunStatus` gains the optional `restart_point` (with `started_from_run_id` as the source) and `replaced_by_run_id` (on the source, once the new run published and the source was tombstoned); `RunCostEstimateRequest` gains `restart_point` and `RunCostEstimate` the restart fields; `DecisionCarriedFrom` gains the optional `run_id` and `mode` (`DecisionCarryMode`). Refusals reuse existing error codes with typed details (`conflict_reason` `restart_*`, `analysis_input_invalid` `reason` `restart_*` with the new safe key `restart_point`). Storage is migration `0071_run_restart` (`audit_run.restart_point`; the link of the replaced source is the restart command, `audit_run.command_id = audit_run_deletion.command_id`). The surface is 303 paths / 332 operations / 826 schemas. The record of the change is `contracts/api/v1/README.md`.
+`SESSION-RENEW-01` (owner ruling of 2026-11-18, the sliding session): one operation joins the table of §7, `renewToken` (`POST /auth/token/renew`, behind the bearer seam, any active account, `200` answers the existing `IssueTokenResponse`): a fresh credential for the account behind the one presented, under the epoch and label its row holds now, with the new `TOKEN_LIFETIME_SECONDS` (8 h 10 min). It is not a keyed write (nothing is created), is reachable for an account on a default credential and for one with an incomplete profile, and answers the seam's `401` for a revoked, archived, deleted or expired credential. No schema, no migration, the head stays `0071_run_restart`. The surface counts of this seal and the record of the change are in `contracts/api/v1/README.md`.
+
+## Surface amendment — 1.59.0 / 0071
+
+`RUN-RESTART-01` (owner rulings `R-155a`…`R-155i`): one keyed write joins the table of §7, `restartRun` (`POST /runs/{run_id}/restart`, `expert` or `admin`, `202`, answers the `RunStatus` of the NEW run): a new run that replaces a `partial`, `failed` or `cancelled` run from one of the eight stage chips (`RestartPoint`, the new enum; `RestartRunRequest` carries it and the optional `cost_consent`). `RunStatus` gains the optional `restart_point` (with `started_from_run_id` as the source) and `replaced_by_run_id` (on the source, once the new run published and the source was tombstoned); `RunCostEstimateRequest` gains `restart_point` and `RunCostEstimate` the restart fields; `DecisionCarriedFrom` gains the optional `run_id` and `mode` (`DecisionCarryMode`). Refusals reuse existing error codes with typed details (`conflict_reason` `restart_*`, `analysis_input_invalid` `reason` `restart_*` with the new safe key `restart_point`). Storage is migration `0071_run_restart` (`audit_run.restart_point`; the link of the replaced source is the restart command, `audit_run.command_id = audit_run_deletion.command_id`). The surface counts of this seal and the record of the change are in `contracts/api/v1/README.md`.
 
 ## Surface amendment — 1.58.0 / 0070
 
@@ -879,7 +883,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-332 operations, sealed. `A5` generates the typed client from this document; `B6`
+333 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1280,6 +1284,7 @@ could.
 | `listRuns` | `GET /versions/{version_uid}/runs` |
 | `listDecisions` | `GET /decisions` |
 | `changePassword` | `POST /auth/password` |
+| `renewToken` | `POST /auth/token/renew` |
 | `getVersionBlocks` | `GET /versions/{version_uid}/blocks` |
 | `getDashboardSummary` | `GET /dashboard` |
 | `getMe` | `GET /me` |
@@ -1599,6 +1604,8 @@ Rules that hold across the whole surface:
     same status again;
   * `changePassword`: a repeat presents the credential the change revoked, and is
     `authentication_required`;
+  * `renewToken` (`SESSION-RENEW-01`) writes nothing and revokes nothing: a repeat mints another
+    credential for the same account, and the one presented stays valid until its own expiry;
   * `updateMyProfile` and `updateUser` state the result, so a repeat writes the same names
     and role set again. An unchanged role set raises no credential epoch;
   * `submitRegistration`: a repeat while the first application is pending is `conflict`

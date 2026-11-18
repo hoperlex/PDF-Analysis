@@ -214,6 +214,14 @@ class SuiteCredentialAdapter:
         self.is_default_credential = False
         return _SIGNER.issue(self._subject(), is_default_credential=False)
 
+    def renew(self, *, user_uid: str, token_epoch: int) -> Any:
+        """The sliding session. Refuses what the real adapter refuses: no such account, an
+        archived one, and an epoch that is not the credential's -- the three ways to ``None``
+        -- so a test that raises the epoch or archives the account sees the router's 401."""
+        if user_uid != TEST_SUBJECT.user_uid or self.archived or token_epoch != self.epoch:
+            return None
+        return _SIGNER.issue(self._subject(), is_default_credential=self.is_default_credential)
+
     def standing_of(self, user_uid: str) -> AccountStanding | None:
         """`R-50` and `W49-SEAL-01`. Every fact is a field rather than a constant, so a test
         in this suite can set it and watch the seam decide."""

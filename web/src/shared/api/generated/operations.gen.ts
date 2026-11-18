@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.59.0 (OpenAPI 3.1.0)
- *   sha256 b044db4b85ba12a6659f63958e8ce8a5689dd8d747d5f6bc3db52ab7238d062d
+ *   AuditManager PC-01 API 1.60.0 (OpenAPI 3.1.0)
+ *   sha256 86b7a68798f02cbece24382716603e1ecaefbeddefacae8bb8d65cf28a07041b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -613,6 +613,7 @@ export const OPERATION_IDS = [
   'rejectStageUploadCandidate',
   'removeComparisonLaunchEntry',
   'renameDocument',
+  'renewToken',
   'reportRunnerHealth',
   'requestExecutorProbe',
   'resetUserPassword',
@@ -6865,6 +6866,33 @@ export type RenameDocumentInput = {
 export type RenameDocumentResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
+// renewToken - POST /auth/token/renew
+// ------------------------------------------------------------------------------------
+
+/**
+ * Exchange the presented credential for a new one with a new lifetime.
+ *
+ * The sliding session (owner ruling of 2026-11-18). The web tier holds a reviewer's credential and, before it is old, asks for another one for the same account so that a reviewer who is working is not signed out. **The presented credential is the proof**: no password is read, there is no body, and whose credential this is is decided by the credential and never by anything the caller sends.
+ *
+ * **The response is the same shape the exchange answers with** (`IssueTokenResponse`): a new credential, its lifetime in seconds -- eight hours and ten minutes, the eight hour idle window the owner ruled plus the ten minute cadence at which the web tier renews -- and whether the account is still on a password it must change. The credential is minted under the account's credential epoch and display label **as the account's row holds them now**; `is_default_credential` is the row's answer again, so renewing does not launder it. The credential that was presented stays valid until its own expiry or the next revocation: nothing is revoked here.
+ *
+ * **It cannot keep alive what revocation ended.** A credential the seam refuses -- one minted before a password change, an administrator's reset or a role change raised the account's epoch, one of an archived or deleted account, an expired or a forged one -- is the seam's own `401 authentication_required`, and the epoch is compared again at the moment of minting, so a revocation that lands between the check and the mint is refused rather than undone.
+ *
+ * **It stays reachable for an account on a default credential and for one with an incomplete profile**, and it needs no role: any active account may renew its own credential. The web tier renews every session it holds, and a session on its way to the change-password screen is one of them.
+ *
+ * The `403` is declared because every operation behind the seam declares it; this operation does not raise it today. Nothing is created, so there is no idempotency key and no `409`; a repeat is a second valid credential, as two sign-ins would leave two.
+ */
+export type RenewTokenInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `renewToken` (`application/json`, HTTP 200). */
+export type RenewTokenResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
 // reportRunnerHealth - POST /runner/health
 // ------------------------------------------------------------------------------------
 
@@ -12735,6 +12763,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
+  },
+  renewToken: {
+    operationId: 'renewToken',
+    method: 'POST',
+    path: '/auth/token/renew',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['auth'],
   },
   reportRunnerHealth: {
     operationId: 'reportRunnerHealth',

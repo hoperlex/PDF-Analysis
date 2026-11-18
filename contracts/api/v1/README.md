@@ -11,7 +11,32 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.59.0` (`RUN-RESTART-01`)
+## Current contract `1.60.0` (`SESSION-RENEW-01`)
+
+The seal of the sliding session (owner ruling of 2026-11-18): a reviewer who is working is not signed out. Additive: **one operation, no schema**; no
+migration (head `0071`), no new error code, no identity prefix, no state transition, no new property of an existing schema.
+
+- **`renewToken`** (`POST /auth/token/renew`, behind the bearer seam, no body, no `Idempotency-Key`, `200` with the existing `IssueTokenResponse`: `token`,
+  `expires_in`, `is_default_credential`). The web tier presents the credential it holds and receives a fresh one for the **same account**, minted under the
+  credential epoch and the display label the account's row holds **now**; `is_default_credential` is the row's answer again, so renewing does not launder it.
+  The credential presented stays valid until its own expiry or the next revocation: nothing is revoked here. It cannot keep alive what revocation ended:
+  a credential minted before a password change, an administrator's reset or a role change raised the epoch, one of an archived or deleted account, an expired
+  one and a forged one are the seam's own `401 authentication_required`, and the epoch is compared **again** at the moment of minting, so a revocation that
+  lands between the seam's check and the mint is refused and not undone. It needs no role (any active account renews its own credential) and it is reachable
+  for an account on a default credential and for one with an incomplete profile (`OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES`,
+  `OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES`, `OPERATION_ROLES` in `auditmanager.api.security`): the web tier renews every session it holds, and a session on
+  its way to the change-password screen is one of them. `403` is declared like on every operation behind the seam and is not raised by this one.
+- **The lifetime moves with it, and no schema does.** `TOKEN_LIFETIME_SECONDS` is 8 hours and 10 minutes (29 400 s), the eight hour idle window the owner ruled
+  plus the ten minute cadence at which the web tier renews (it renews on the first request that finds the credential more than 600 s old). `expires_in` of the
+  exchange, of `changePassword` and of `renewToken` says so; the contract's own bound on a lifetime is unchanged. The session cookie of the web tier now lives as
+  long as the session's **absolute cap** (30 days from sign-in), after which the reviewer signs in again however active; both limits are the web tier's
+  (`web/src/app/bff/session/`) and are not in this contract.
+- **The surface** is 304 paths, 333 operations and 826 schemas; migration head `0071`. The domain catalogs stay at candidate revision 72 (nothing in them moves
+  but their `contract_version`).
+- **Not a throttle target.** The edge limits `POST /api/v1/auth/token` per address (`token_exchange`, 6 requests a minute); the web tier reaches the API
+  inside the compose network, not through the edge, and the zone's key names that one path, so `renewToken` meets no limit of its own.
+
+## Contract `1.59.0` (`RUN-RESTART-01`, historical)
 
 The seal of the task `RUN-RESTART-01` (`docs/program/tasks/RUN-RESTART-01.md`, owner rulings `R-155a`…`R-155i`): the analysis of an ended run is restarted from
 any of the eight stage chips of the run screen. Additive: **one operation, three schemas, optional properties of five existing schemas and one relaxed

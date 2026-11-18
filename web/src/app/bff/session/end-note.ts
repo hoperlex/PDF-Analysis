@@ -6,13 +6,15 @@
  *
  * The session cookie cannot carry the reason. When a session is over the answer to the
  * browser is "clear that cookie", and a cleared cookie says nothing about why; when a session
- * *lapses*, the browser drops the cookie itself (its `Max-Age` is the session's lifetime) and
- * the next request looks exactly like a first visit. So the two facts the server genuinely
+ * *lapses* at the cap, the browser drops the cookie itself (its `Max-Age` is the cap) and the
+ * next request looks exactly like a first visit. (A session that lapses *idle* leaves its
+ * cookie in the browser, which is why the register remembers the ids it ended:
+ * `sessionLapsed`.) So the two facts the server genuinely
  * has — "I closed this session because the API stopped accepting its credential" and "a
  * session was opened in this browser a while ago" — would be lost with the cookie. The note
  * keeps them:
  *
- *   - `open`     written at sign-in, with a lifetime of the session plus a week. It says "a
+ *   - `open`     written at sign-in, with a lifetime of the session's absolute cap plus a week. It says "a
  *                session was opened in this browser". It is what turns a vanished session
  *                cookie into «Сеанс истёк»: the cookie is gone, the note is not, and the only
  *                thing this tier does to a session cookie without writing another note is let
@@ -42,7 +44,7 @@
 
 import type { SessionEndReason } from '@/shared/lib/session-end-reason';
 
-import { SESSION_COOKIE } from './store';
+import { SESSION_COOKIE, sessionLapsed } from './store';
 
 export const SESSION_NOTE_COOKIE = 'am_session_note';
 
@@ -65,7 +67,10 @@ function attributesOf(maxAge: number, secure: boolean): string[] {
   return attributes;
 }
 
-/** `Set-Cookie`: a session was opened here, and its cookie lives for `lifetimeSeconds`. */
+/**
+ * `Set-Cookie`: a session was opened here, and its cookie lives for `lifetimeSeconds` -- the
+ * session's remaining absolute cap (`remainingCapSeconds`), to which the grace is added.
+ */
 export function openNoteCookie(lifetimeSeconds: number, secure: boolean): string {
   return [
     `${SESSION_NOTE_COOKIE}=open`,
@@ -107,18 +112,24 @@ export function readSessionNote(value: string | null | undefined): SessionNote |
  * In the order the evidence is firmest:
  *
  *   1. a note the server wrote when it ended or refused the session (`ended`, `invalid`);
- *   2. a session cookie that is present but names no session here — `invalid`;
- *   3. no session cookie, but the `open` note — a session was opened in this browser and its
+ *   2. a session cookie that names a session the register itself **ended** -- idle for its
+ *      window, or at its absolute cap -- `expired`. The cookie lives as long as the cap, so
+ *      since the sliding session it outlives the row and no longer lapses with it;
+ *   3. a session cookie that is present but names no session here — `invalid`;
+ *   4. no session cookie, but the `open` note — a session was opened in this browser and its
  *      cookie has lapsed — `expired`;
- *   4. otherwise nothing: a first visit, or a browser that signed out, is not told a story.
+ *   5. otherwise nothing: a first visit, or a browser that signed out, is not told a story.
  *
- * `sessionCookie` is the raw value as received, well-formed or not.
+ * `sessionCookie` is the raw value as received, well-formed or not. `lapsed` is the register's
+ * answer for that value ({@link sessionLapsed}), asked by the two readers below.
  */
 export function guestSessionReason(
   sessionCookie: string | null | undefined,
   note: SessionNote | null,
+  lapsed = false,
 ): SessionEndReason | null {
   if (note === 'ended' || note === 'invalid') return note;
+  if (lapsed) return 'expired';
   if (typeof sessionCookie === 'string' && sessionCookie.length > 0) return 'invalid';
   if (note === 'open') return 'expired';
   return null;
@@ -131,16 +142,20 @@ export interface CookieJarReader {
 
 /** {@link guestSessionReason} over a server component's cookie jar. */
 export function guestSessionReasonFromJar(jar: CookieJarReader): SessionEndReason | null {
+  const cookie = jar.get(SESSION_COOKIE)?.value ?? null;
   return guestSessionReason(
-    jar.get(SESSION_COOKIE)?.value ?? null,
+    cookie,
     readSessionNote(jar.get(SESSION_NOTE_COOKIE)?.value),
+    sessionLapsed(cookie),
   );
 }
 
 /** {@link guestSessionReason} over a request's `Cookie` header. */
 export function guestSessionReasonFromHeader(cookieHeader: string | null): SessionEndReason | null {
+  const cookie = readCookie(cookieHeader, SESSION_COOKIE);
   return guestSessionReason(
-    readCookie(cookieHeader, SESSION_COOKIE),
+    cookie,
     readSessionNote(readCookie(cookieHeader, SESSION_NOTE_COOKIE)),
+    sessionLapsed(cookie),
   );
 }

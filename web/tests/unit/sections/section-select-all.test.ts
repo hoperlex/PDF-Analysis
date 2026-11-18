@@ -98,7 +98,7 @@ describe('a section of more than one page', () => {
     client.setQueryData(key(undefined), page(FIRST_PAGE, 'c2'));
     const correlation = '0f0e9d8c-7b6a-4948-b726-150413021100';
     seedError(client, key('c2'), new ApiError(503, {
-      contract_version: '1.59.0', error_code: 'dependency_unavailable',
+      contract_version: '1.60.0', error_code: 'dependency_unavailable',
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = render(client);
@@ -168,7 +168,7 @@ describe('a session that cannot start an audit', () => {
     client.setQueryData(key(undefined), page(FIRST_PAGE, 'c2'));
     const correlation = '0f0e9d8c-7b6a-4948-b726-150413021100';
     seedError(client, key('c2'), new ApiError(503, {
-      contract_version: '1.59.0', error_code: 'dependency_unavailable',
+      contract_version: '1.60.0', error_code: 'dependency_unavailable',
       message: 'Сообщение об отказе.', correlation_id: correlation, retryable: false,
     }, correlation));
     const markup = render(client);

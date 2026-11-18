@@ -244,7 +244,7 @@ describe('the roles and the failures', () => {
     const client = newClient();
     seedQueue(client, queuePage([]), {}, { updatedAt: READ_AT });
     seedError(client, queryKeys.execution.queue(undefined, { stateGroup: 'active' }), new ApiError(503, {
-      contract_version: '1.59.0', error_code: 'dependency_unavailable', message: 'x', correlation_id: 'cid-tasks-1', retryable: true, details: {},
+      contract_version: '1.60.0', error_code: 'dependency_unavailable', message: 'x', correlation_id: 'cid-tasks-1', retryable: true, details: {},
     }, null));
     const markup = renderScreen(client, createElement(ExecutorHostTasks, { roles: ['expert'], now: NOW }));
     expect(markup).toContain('data-tasks-read-failure');

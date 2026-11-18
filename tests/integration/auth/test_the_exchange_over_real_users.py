@@ -124,7 +124,7 @@ def test_a_real_pair_is_exchanged_for_a_credential_naming_that_user(
     assert response.status_code == 200, response.text
     body = response.json()
     assert sorted(body) == ["expires_in", "is_default_credential", "token"], body
-    assert body["expires_in"] == 12 * 3600
+    assert body["expires_in"] == 8 * 3600 + 600
 
     signer = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
     assert signer is not None
@@ -286,7 +286,7 @@ def test_the_exchange_needs_no_credential_of_its_own(
     # A credential that is presented anyway is neither required nor honoured: the exchange
     # is open, so a nonsense one cannot turn a valid pair into a refusal.
     assert with_credential.status_code == 200, with_credential.text
-    assert json.loads(with_credential.text)["expires_in"] == 12 * 3600
+    assert json.loads(with_credential.text)["expires_in"] == 8 * 3600 + 600
 
 
 # =======================================================================================

@@ -190,6 +190,11 @@ class TwoAccountCredentialAdapter:
     ) -> Any:  # pragma: no cover - this module drives no password change
         raise AssertionError("this module does not drive changePassword")
 
+    def renew(
+        self, *, user_uid: str, token_epoch: int
+    ) -> Any:  # pragma: no cover - this module drives no renewal
+        raise AssertionError("this module does not drive renewToken")
+
     def standing_of(self, user_uid: str) -> AccountStanding | None:
         for account in ACCOUNTS:
             if account.user_uid == user_uid:

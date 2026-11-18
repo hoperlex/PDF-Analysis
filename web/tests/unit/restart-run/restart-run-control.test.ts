@@ -35,7 +35,7 @@ const LOADING = 'Загрузка: оценка стоимости переза�
 let live: LiveRender | null = null;
 
 const invalid = (details: Record<string, string>) => new ApiError(422, {
-  contract_version: '1.59.0', error_code: 'analysis_input_invalid', message: 'x', correlation_id: 'refused', retryable: false, details,
+  contract_version: '1.60.0', error_code: 'analysis_input_invalid', message: 'x', correlation_id: 'refused', retryable: false, details,
 }, 'refused');
 
 const ALL: readonly RestartPoint[] = ['preparation', 'text', 'blocks', 'cross_check', 'merge', 'norms', 'review', 'correction'];
@@ -171,7 +171,7 @@ describe('the confirmation', () => {
   });
 
   it('shows a refusal at the command itself as a sentence and the dialog stays open', async () => {
-    vi.mocked(restartRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.59.0', error_code: 'conflict',
+    vi.mocked(restartRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.60.0', error_code: 'conflict',
       message: 'x', correlation_id: 'c', retryable: false, details: { conflict_reason: 'restart_in_progress' } }, 'c'));
     const view = await mount();
     await view.press('Перезапустить с этого этапа');
@@ -194,7 +194,7 @@ describe('the confirmation', () => {
   });
 
   it('a stale digest reads the price again and needs a new agreement, under a new key', async () => {
-    vi.mocked(restartRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.59.0',
+    vi.mocked(restartRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.60.0',
       error_code: 'conflict', message: 'stale', correlation_id: 'stale', retryable: false,
       details: { conflict_reason: 'run_cost_estimate_stale' } }, 'stale'));
     vi.mocked(estimateRunCost).mockResolvedValueOnce({ data: estimateFor({ version_uid: VERSION_UID, start_from_run_id: RUN_ID,

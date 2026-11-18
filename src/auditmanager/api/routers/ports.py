@@ -1021,13 +1021,15 @@ class XlsxExportPort(Protocol):
 
 @runtime_checkable
 class CredentialPort(Protocol):
-    """``issueToken`` and ``changePassword``, and the epoch read the seam performs.
+    """``issueToken``, ``changePassword`` and ``renewToken``, and the epoch read the seam performs.
 
-    Three methods. The port still cannot read a password digest, cannot write one and
+    Four methods. The port still cannot read a password digest, cannot write one and
     cannot list users: everything it offers is "here is a login and a password, mint a
     credential or do not", "here is a proven subject and two passwords, replace one",
-    and "here is an identity, what generation of credentials does it accept". Registration
-    is still the next piece of work and this port still does not guess at its shape.
+    "here is a proven subject and the generation of its credential, mint another" (the
+    sliding session's, owner ruling of 2026-11-18), and "here is an identity, what
+    generation of credentials does it accept". Registration is still the next piece of
+    work and this port still does not guess at its shape.
 
     The token is minted **behind** this port rather than in the router, because minting
     needs the deployment's signing key and a router that held one would be a router that
@@ -1075,6 +1077,31 @@ class CredentialPort(Protocol):
         caller presented to make this request is revoked by the same statement that wrote
         the new digest. A ``DomainError`` with ``VALIDATION_FAILED`` is the answer when the
         new password is the current one or fails the mechanical bounds.
+        """
+
+    def renew(self, *, user_uid: str, token_epoch: int) -> IssuedCredential | None:
+        """A fresh credential for a subject the seam has just proven, or ``None``.
+
+        The sliding session (owner ruling of 2026-11-18). The caller presented a credential
+        this deployment minted and still accepts, and asks for another with a new lifetime
+        so that a reviewer who is working is not signed out. **No password is read or
+        asked**: the presented credential is the proof, which is why the operation is behind
+        the seam and not beside the exchange.
+
+        ``token_epoch`` is the generation **the presented credential carries**, and it is
+        passed in so that the account's row can be compared with it *again*, at the moment of
+        minting. The seam compared them a moment before; between that read and this one an
+        administrator may have reset the password or archived the account, which raises the
+        epoch, and a renewal that minted "under the current epoch" without the comparison
+        would hand the holder of a revoked credential a live one -- a revocation undone by
+        the operation that exists to extend sessions. So the adapter answers ``None`` when
+        the account is gone, archived, or on another epoch than the credential's, and the
+        router turns ``None`` into the seam's own ``authentication_required``.
+
+        The credential minted is under the account's epoch and label **as the row holds them
+        now**, and ``is_default_credential`` is read from the row, never carried over from
+        the presented credential. Nothing is written: a renewal is a read and a signature,
+        so it takes no write session and leaves no row to clean up.
         """
 
     def standing_of(self, user_uid: str) -> AccountStanding | None:

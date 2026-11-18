@@ -319,8 +319,15 @@ ENROLLMENT_OPERATIONS: Final[frozenset[str]] = frozenset({"redeemExecutorEnrollm
 #: `W49-SEAL-01` added ``getMe``: a client has to be able to read the state it must send the
 #: person out of -- the default credential, and whether the profile is complete -- and a
 #: read of one's own account is the one way to learn it without meeting a refusal.
+#:
+#: The sliding session (owner ruling of 2026-11-18) added ``renewToken``: the web tier renews the
+#: credential of every session it holds, including one that is on its way to the change screen,
+#: and a renewal refused to such an account would end the session that is about to change the
+#: password. It mints for the same account under the same standing, so the register is not
+#: widened in what a default credential may *do*: ``renewToken`` hands back a credential whose
+#: ``is_default_credential`` is read from the row again.
 OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES: Final[frozenset[str]] = frozenset(
-    {"issueToken", "changePassword", "getMe"}
+    {"issueToken", "changePassword", "getMe", "renewToken"}
 )
 
 #: `W49-SEAL-01`, `R-59`. The operations an account whose profile is **incomplete** -- no
@@ -335,8 +342,13 @@ OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES: Final[frozenset[str]] = frozenset(
 #: event is written only by a complete profile" hold by construction: ``appendDecision``
 #: is in neither set, so an account whose label could still be a 254-character e-mail never
 #: reaches the ledger, whose ``author_label`` is bounded at 128.
+#:
+#: The sliding session (owner ruling of 2026-11-18) adds ``renewToken`` as a fourth: a session
+#: that is completing its profile is still a session, and a credential that could not be
+#: renewed would sign the person out in the middle of the form. Renewing writes nothing and
+#: reads nothing of the product, so it cannot reach the ledger either.
 OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES: Final[frozenset[str]] = frozenset(
-    {"getMe", "updateMyProfile", "changePassword"}
+    {"getMe", "updateMyProfile", "changePassword", "renewToken"}
 )
 
 #: `W49-SEAL-01`. The capability an incomplete profile is told it lacks.
@@ -654,6 +666,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "getMe": _ANY_COMPLETE_ACCOUNT,
         "updateMyProfile": _ANY_COMPLETE_ACCOUNT,
         "changePassword": _ANY_COMPLETE_ACCOUNT,
+        # The sliding session (owner ruling of 2026-11-18): any active account may renew its own
+        # credential, roles or none, like the rest of the account's own operations. The seam's
+        # first register (standing) still refuses an archived or revoked one as 401.
+        "renewToken": _ANY_COMPLETE_ACCOUNT,
         "markReleaseNotesRead": _ANY_COMPLETE_ACCOUNT,
         # `UIP-G-05`: the account's own choice of an object, like its read mark: any complete account, roles or none.
         "setMyLastProject": _ANY_COMPLETE_ACCOUNT,
@@ -842,15 +858,21 @@ def role_capability(required: frozenset[str]) -> str:
 #: caller what to do about it.
 PASSWORD_CHANGED_CAPABILITY: Final[str] = "password_changed"
 
-#: How long a minted credential stays valid, in seconds. Twelve hours.
+#: How long a minted credential stays valid, in seconds: eight hours and ten minutes.
 #:
-#: Owner ruling of 2026-11-18: one hour signed every reviewer out in the middle of work,
-#: because nothing renews a credential yet; twelve hours is the stop-gap until the web tier
-#: renews it (a sliding session). Revocation is unchanged: ``token_epoch`` is read on every
-#: guarded request, so an archive, a role change or a password change still ends a
-#: credential on its next request, whatever its remaining lifetime. Twelve hours is also
-#: the longest lifetime the web tier will hold (``MAX_LIFETIME_SECONDS`` in
-#: ``web/src/app/bff/session/store.ts``).
+#: **It is the idle window plus the renewal cadence** (owner ruling of 2026-11-18). A session
+#: that makes no request for eight hours ends; the web tier renews a credential on the first
+#: request that finds it more than ten minutes old (``RENEW_AFTER_SECONDS`` in
+#: ``web/src/app/bff/session/renewal.ts``), so the credential held at the moment of the last
+#: request may have been minted up to ten minutes earlier and still has to cover eight
+#: hours after that request: 8 * 3600 + 600. One hour had signed every reviewer out in the
+#: middle of work, and twelve hours was the stop-gap before ``renewToken`` existed.
+#:
+#: Revocation is unchanged: ``token_epoch`` is read on every guarded request, so an archive, a
+#: role change or a password change still ends a credential on its next request, whatever its
+#: remaining lifetime, and ``renewToken`` is behind the seam and so meets the same refusal. The longest lifetime the web tier will hold
+#: (``MAX_LIFETIME_SECONDS`` in ``web/src/app/bff/session/store.ts``) stays twelve hours, a
+#: bound on what ``expires_in`` may say rather than a statement of what it says.
 #:
 #: A constant rather than a configured value: it is a property of this implementation, and
 #: the contract already tells every caller the lifetime in the response it just received
@@ -858,7 +880,7 @@ PASSWORD_CHANGED_CAPABILITY: Final[str] = "password_changed"
 #: line and the answer changes with it. A configuration name would have to be added to the
 #: deploy script and the runbook, which this session does not own, to express something no
 #: caller has asked to vary.
-TOKEN_LIFETIME_SECONDS: Final[int] = 12 * 3600
+TOKEN_LIFETIME_SECONDS: Final[int] = 8 * 3600 + 600
 
 #: The credential format's version tag, and the first field of every credential this seam
 #: mints. Present so that a future body -- a different payload, a different algorithm, OIDC
