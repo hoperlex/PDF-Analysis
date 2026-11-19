@@ -335,6 +335,9 @@ describe('the size of a row and its words', () => {
    * first on sheets that lack the cure, so it can fail.
    */
   describe('the pill of a proposal', () => {
+    // `STYLE-ORIG-01` (`R-157a`): the pill is set in Onest 700 at 10 px, no longer in the monospace face. 0.602 em stays the one conservative
+    // figure: it is the widest advance per character Onest has among the severity names (measured with Pillow 12.3 on Raqm: «Экономическое»
+    // 0.602, «Эксплуатационное» 0.586, «Рекомендательное» 0.588, «Проверить смежный раздел» 0.584, the qualifier 0.559).
     const ADVANCE = 0.602;
     const PAGE = 1440;
     const TABLE = PAGE - 2 * 16 - 2; // the page's gutter of 16 px a side, the frame's border of 1 px a side
@@ -357,12 +360,14 @@ describe('the size of a row and its words', () => {
     const fits = (css: string, name: string) => pill(name).whole <= room(css);
 
     const WIDEST = SEVERITY_LABELS.operational;
-    const NARROWER_COLUMN = TABLE_CSS.replace(/(\.colSeverity\s*\{[^}]*width:\s*)16%/, (_all, head: string) => `${head}14%`);
-    const WIDER_CELL_PADDING = TABLE_CSS.replace(/\.row > td\.severity\s*\{[^}]*\}/, '');
+    const NARROWER_COLUMN = TABLE_CSS.replace(/(\.colSeverity\s*\{[^}]*width:\s*)16%/, (_all, head: string) => `${head}12%`);
+    // The pill is about 30 px narrower since `STYLE-ORIG-01` (10 px, a 6 px pad), so the 8 px of the plain cell no longer overflows it; a 32 px pad does.
+    const WIDER_CELL_PADDING = TABLE_CSS.replace(/(\.row > td\.severity\s*\{[^}]*padding-inline:\s*)var\(--am-gap-xs\)/, '$1var(--am-gap-xl)');
 
-    it('counts: the old column and the old padding cannot hold it, so the count can fail', () => {
+    it('counts: a narrower column and a wider cell padding cannot hold it, so the count can fail', () => {
       expect(WIDEST).toBe('Эксплуатационное');
       expect(fits(NARROWER_COLUMN, WIDEST)).toBe(false);
+      expect(WIDER_CELL_PADDING, 'the mutation changed nothing').not.toBe(TABLE_CSS);
       expect(fits(WIDER_CELL_PADDING, WIDEST)).toBe(false);
     });
 
