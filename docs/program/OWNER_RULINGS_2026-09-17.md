@@ -2127,3 +2127,14 @@ re-run on 2026-11-19 with the same figures).
 | --- | --- | --- |
 | R-157i | Poll, the search over expert decisions on the fork: «Что записать в план форка (r4)?» Options offered: step 1 and a measurement first; steps 1 and 2 at once; approximate search at once; leave as is. Answer: «Сразу ступени 1 и 2». | The scan stays exact inside a section: no HNSW and no approximate prefilter. It is made cheaper in two steps. Step 1: the 24-month window moves into the run pass's SQL, plus an index for selecting a section's cases and a check of the query plan and PostgreSQL memory. Step 2: the vectors of `decision_memory_embedding` and `decision_memory_probe` are stored as `halfvec(1024)`, compared by cosine; the encoder still computes in fp32. Written as a dated amendment to `ADR-0029` decision 8. |
 | R-157j | Poll, «Сколько решений экспертов в месяц вы ожидаете на форке?»: «До 10 тыс. в месяц». | The fork is sized for at most about 240 thousand cases inside the 24-month window, about 0.5 GB of half vectors. Approximate search is not planned; it returns as a poll only if the fork's synthetic measurement shows that steps 1 and 2 miss the target. |
+
+## 3.60 — R-157k, the fork flow critic's examples (owner's poll answer, 2026-11-19, session `pdf-analysis-ba`)
+
+The occasion: the fork-storage session (`pdf-analysis-ba`, formerly `pdf-analysis-16`; thesis plan r5 at
+`.local/plans/fork-storage-2026-11-18/00-PLAN.md` section 3.6, git-ignored) found that the flow critic's reference block of past expert
+decisions (`precedents/candidate_context.py`) has a query vector only for a «warm» text, one already held word for word as an embedded case,
+because nothing is encoded during a run. On a second poll the owner told the session to record this ruling itself: docs only, `origin/dev`.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-157k | Poll: «Критик во флоу форка получает похожие решения экспертов (вердикт, обоснование, 2 последних комментария; до 3 случаев на замечание) только для дословных повторов: вектор замечания во время прогона не считается. На форке есть постоянный эмбеддер. Что записать в план и в поправку к ADR-0029?» Options offered: for all findings; exact repeats only; decide after the L0 measurement. Answer: «Для всех замечаний (Рекомендую)». | On the fork the resident embedder encodes the flow's observations once, in one batch, before the critic stage and outside the locked section. The vectors are kept as the run's probes, which the precedent pass reuses. The critic's examples then cover every observation. The block's rules and the `critic_context` switch (off by default) are unchanged. An embedder failure gives `query_vector_unavailable` and the critic runs without examples. Recorded as a dated amendment to `ADR-0029` decision 8. The code is written in the fork (`R-156k`); the current production VPS is unchanged. |
