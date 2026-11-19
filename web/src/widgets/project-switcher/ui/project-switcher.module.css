@@ -39,6 +39,25 @@
   max-width: min(var(--am-picker-width-max), calc(100vw - 32px));
 }
 
+/*
+ * At a phone's width the selector stands in the middle of the strip, and a panel anchored to its left edge ran 118 px off the
+ * screen's right (the panel is 358 px wide, the button starts at x = 149). The panel hangs from the strip instead, which is
+ * positioned there (`.am-app__utility`), as wide as the screen less a gutter: the way the «Меню» panel hangs from the bar.
+ */
+@media (max-width: 590px) {
+  .switcher :global(.am-menu) {
+    position: static;
+  }
+
+  .switcher :global(.am-menu__popup) {
+    right: var(--am-gap-md);
+    left: var(--am-gap-md);
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
 .face {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

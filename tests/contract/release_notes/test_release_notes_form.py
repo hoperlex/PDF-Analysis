@@ -178,8 +178,10 @@ def test_authored_shape_and_form() -> None:
     # adds to that item the run page fix of the same day (a duplicated React key, folded details). Revision 4 (AGENTS
     # §6.1) is the same day's other dev publications: «Во весь экран» and «Открыть PDF» join item 3, «Все» item 4, the
     # run screen's head item 6; the version is full at seven items, so «График работ» opens 0.12.1 the same day.
+    # 0.32.0 is at revision 2 (AGENTS §6.1): the real-screen walk after the interface change added four fixes (the phone header,
+    # the review list row, the calendars' day-off figures, the badge qualifier) to the note that had reached main at revision 1.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.32.0": 1,
+        "0.32.0": 2,
         "0.31.1": 2,
         "0.31.0": 1,
         "0.30.8": 1,

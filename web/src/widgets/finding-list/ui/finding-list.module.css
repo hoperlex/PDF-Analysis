@@ -141,10 +141,16 @@ button.viewLink:hover {
  * (`decision-reason-control.module.css`); this file only places it. Tokens only.
  */
 .withActions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) fit-content(18rem);
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: var(--am-gap-xs);
+}
+
+/* The row's text keeps at least 12rem: in a pane narrower than that plus the field, the field drops under the row instead of taking the width. */
+.withActions > button[data-finding-uid] {
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 /*
@@ -176,15 +182,11 @@ select.severityChoice {
 }
 
 /*
- * At a phone's width the `auto` column of the field and its note (a refusal's reason runs long) took what the row's `1fr` could not
- * give up: the row's button shrank to 22 px wide and 333 tall, its text starting at x = -7. The field drops under the row
- * instead, in a single track that may shrink.
+ * A row used to be two grid tracks, `1fr` and the field. At a phone's width, and in the review's list pane (about 210 px at 1440),
+ * the field took what the row's `1fr` could not give up: the row's button shrank to 22 px wide and 333 tall, its text starting at
+ * x = -7. The row is a wrapping flex line now (`.withActions`): the field drops under the text whenever the text would be narrower
+ * than 12rem, at any width.
  */
-@media (max-width: 590px) {
-  .withActions {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 
 /* `R-151g`: the designer's execution status of an accepted finding, beside its verdict. */
 .execution {

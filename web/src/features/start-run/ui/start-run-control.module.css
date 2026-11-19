@@ -24,6 +24,13 @@
   left: 0;
 }
 
+/* At a phone's width the button stands about 9 rem from the card's left edge: the panel takes what is left of the screen and its labels wrap. */
+@media (max-width: 590px) {
+  .more :global(.am-menu__popup) {
+    max-width: calc(100vw - 10rem);
+  }
+}
+
 /* `READINESS-WEB-01`: why the start is not possible; the rule at the left says it is a stop, the words stay in the ink colour. */
 .blocked {
   border-left-color: var(--am-failed);

@@ -70,7 +70,8 @@
   letter-spacing: var(--am-tracking-caps);
   text-align: left;
   text-transform: uppercase;
-  /* A narrow head wraps between its words («Лист / стр.») and never inside one. */
+  /* A narrow head wraps between its words («Лист / стр.») and never inside one; the global `thead th` is `nowrap`, so this says it. */
+  white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
 }

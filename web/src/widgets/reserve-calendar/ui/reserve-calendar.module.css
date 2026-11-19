@@ -117,7 +117,7 @@
 .dayColumn[data-day-off] {
   width: 18px;
   background: var(--am-surface-sunken);
-  font-size: calc(var(--am-text-xs) * 0.8);
+  font-size: calc(var(--am-text-xs) * 0.84);
 }
 
 .dayColumn[data-today] {

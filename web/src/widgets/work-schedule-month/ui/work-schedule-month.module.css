@@ -221,7 +221,7 @@
 
 .dayColumn[data-day-off] .weekday,
 .dayColumn[data-day-off] .dayNumber {
-  font-size: calc(var(--am-text-xs) * 0.8);
+  font-size: calc(var(--am-text-xs) * 0.84);
 }
 
 .dayToggle {
