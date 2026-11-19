@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-20 by `LOCAL-AGENT-01` (unverified development candidate, product `0.33.0`, published to `origin/dev` by `pdf-analysis-27`).** The deploy server connects its own Codex and Claude subscription logins: `deploy.sh` with `ALPHA_LOCAL_AGENT=auto` ends with `infra/deploy/local-agent.sh connect`, which installs the host agent under the account that holds the logins (`install.sh --login-user`, VS Code extension clients through wrappers in `/opt/pdf-analysis-cli/bin`) and talks to the stand over loopback; the card «Этот сервер» appears in «Диспетчер» enabled (`R-158a`..`R-158e`). A real end-to-end `connect` is first run on the fork's server. API `1.60.0` and migration head `0071_run_restart` unchanged.
+
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P9, the last (unverified development candidate, product `0.30.8`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** Debt of the pool: one reading line and one «Повторить» on a section being read whole, the proposed severity on one line in «Разбор», no pager on a one-page «Очередь», journey manifest notes. The pool is delivered; `UIP-S19-02` was dropped by the owner; API `1.58.0` and migration head `0070_document_group` unchanged.
 
 **Updated 2026-11-17 by `UI-PARITY-R3` publication point P8 (unverified development candidate, product `0.30.7`, branch `publish/ui-parity-r3` on `origin/dev`, published by the delegated publisher session).** «Диспетчер» in four tabs opening on «Обзор», server cards with «Сейчас», «Задачи» by period; step one of «Сравнение стадий» with «Только П / Только Р» counts, «Подтвердить все предложения (N)» and the suggested pairs in the one table. Contract resealed as `1.58.0` for two additive reads (`listExecutorHosts` `current_work`, `listStagePairs` unpaired counts), checked on throwaway PostgreSQL; migration head `0070_document_group` unchanged.
@@ -99,7 +101,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.32.0`; this file describes development, not a release.
+- Product `VERSION` is `0.33.0`; this file describes development, not a release.
 - The development API contract is `1.60.0`: **304 paths / 333 operations / 826 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0071_run_restart`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 

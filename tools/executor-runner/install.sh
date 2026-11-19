@@ -39,7 +39,16 @@
 #   AUDITMANAGER_STAND_ORIGIN   the stand, https://host[:port] (or --origin); not needed on a rerun
 #   AUDITMANAGER_AGENT_MODEL    single-model agent only: the model the connection pins (or --model)
 #   AUDITMANAGER_AGENT_CLI      single-model agent only: claude | codex (or --cli): may only confirm what the model implies
-# Options: --origin URL, --model ID, --cli NAME, --service-user NAME (default pdf-agent), --upgrade, --reconfigure
+# LOGIN USER (LOCAL-AGENT-01, owner 2026-11-20). --login-user NAME runs a HOST agent under an EXISTING account -- root
+# included -- instead of the dedicated service user, so it serves the CLIs that account is already signed in to (the deploy
+# server's own subscription logins; infra/deploy/local-agent.sh passes it). No account is created and no login is copied:
+# the service gets that account's HOME, write access to that home only (the CLIs refresh their logins there), and also looks
+# for the CLIs in /opt/pdf-analysis-cli/bin (wrappers local-agent.sh writes). It is a drop-in, pdf-analysis-agent.service.d/
+# 20-login-user.conf; a later run without --login-user removes it and goes back to the dedicated user. --max-images N
+# (1..8) writes `accept_images = true` and `max_images = N` into a host agent.toml this run writes (a block task carries up
+# to eight page crops; with the default of one image no block task reaches the host).
+# Options: --origin URL, --model ID, --cli NAME, --service-user NAME (default pdf-agent), --login-user NAME,
+#   --max-images N, --upgrade, --reconfigure
 #   (write agent.toml again: host mode when no model is given and the kept file is not a single-model one, otherwise
 #   the model given or the configured one), --package FILE --sha256 DIGEST (verify the archive before anything is
 #   installed), --uninstall, --help.
@@ -85,6 +94,9 @@ ORIGIN="${AUDITMANAGER_STAND_ORIGIN-}"
 CLI="${AUDITMANAGER_AGENT_CLI-}"
 MODEL="${AUDITMANAGER_AGENT_MODEL-}"
 SERVICE_USER=pdf-agent
+SERVICE_USER_GIVEN=0
+LOGIN_USER=""
+MAX_IMAGES=""
 PACKAGE_FILE=""
 PACKAGE_SHA256=""
 RECONFIGURE=0
@@ -95,13 +107,15 @@ while [ $# -gt 0 ]; do
         --uninstall) MODE=uninstall; shift ;;
         --reconfigure) RECONFIGURE=1; shift ;;
         --upgrade) UPGRADE=1; shift ;;
-        --origin | --cli | --model | --service-user | --package | --sha256)
+        --origin | --cli | --model | --service-user | --login-user | --max-images | --package | --sha256)
             [ $# -ge 2 ] || die 64 "$1 needs a value"
             case "$1" in
                 --origin) ORIGIN="$2" ;;
                 --cli) CLI="$2" ;;
                 --model) MODEL="$2" ;;
-                --service-user) SERVICE_USER="$2" ;;
+                --service-user) SERVICE_USER="$2"; SERVICE_USER_GIVEN=1 ;;
+                --login-user) LOGIN_USER="$2" ;;
+                --max-images) MAX_IMAGES="$2" ;;
                 --package) PACKAGE_FILE="$2" ;;
                 --sha256) PACKAGE_SHA256="$2" ;;
             esac
@@ -121,6 +135,14 @@ GRANT="${AUDITMANAGER_ENROLLMENT_SECRET-}"
 unset AUDITMANAGER_ENROLLMENT_SECRET
 
 [[ "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die 64 "--service-user must be a lower-case account name"
+if [ -n "$LOGIN_USER" ]; then
+    [[ "$LOGIN_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die 64 "--login-user must be a lower-case account name"
+    [ "$SERVICE_USER_GIVEN" -eq 0 ] || die 64 "--login-user and --service-user exclude each other: the agent runs under one account"
+    SERVICE_USER="$LOGIN_USER"
+fi
+if [ -n "$MAX_IMAGES" ]; then
+    [[ "$MAX_IMAGES" =~ ^[1-8]$ ]] || die 64 "--max-images must be an integer in 1..8"
+fi
 case "$CLI" in
     "" | claude | codex) ;;
     *) die 64 "--cli must be claude or codex" ;;
@@ -155,6 +177,12 @@ UNIT_DIR="$ROOT/etc/systemd/system"
 UNIT_FILE="$UNIT_DIR/$SERVICE_NAME.service"
 STATE_DIR="$ROOT$SERVICE_HOME"
 TOKEN_ENV=PDF_ANALYSIS_RUNNER_TOKEN
+DROPIN_DIR="$UNIT_DIR/$SERVICE_NAME.service.d"
+DROPIN_FILE="$DROPIN_DIR/20-login-user.conf"
+# Where local-agent.sh puts the wrappers of CLIs it found outside the usual directories (the VS Code extensions' own binaries).
+CLI_WRAPPER_DIR=/opt/pdf-analysis-cli/bin
+RUN_HOME="$SERVICE_HOME"
+CLI_DIRS=""
 APP_FILES=(agent.py runner_client.py detect.py host_mode.py api_answer.py codex_answer.py claude_answer.py)
 KEYS_REAL=/etc/pdf-analysis-agent/keys.env
 KEYS_FILE="$ROOT$KEYS_REAL"
@@ -167,7 +195,8 @@ if [ -n "$ROOT" ]; then PYTHON="${AUDITMANAGER_PYTHON:-$PYTHON}"; fi
 CHANGED=0
 staged=""
 unit_staged=""
-trap 'rm -f -- "$staged" "$unit_staged"' EXIT
+dropin_staged=""
+trap 'rm -f -- "$staged" "$unit_staged" "$dropin_staged"' EXIT
 
 # A command that changes the real system. Under a test root it runs only if a stand-in of that name is in
 # AUDITMANAGER_INSTALL_SYSCMD_DIR; otherwise it is reported as skipped and counts as done.
@@ -201,6 +230,8 @@ do_uninstall() {
     if [ -e "$UNIT_FILE" ]; then
         sysrun systemctl disable --now "$SERVICE_NAME.service" || warn "the service could not be stopped cleanly; continuing"
         rm -f -- "$UNIT_FILE"
+        rm -f -- "$DROPIN_FILE"
+        rmdir -- "$DROPIN_DIR" 2>/dev/null || true
         sysrun systemctl daemon-reload || warn "systemctl daemon-reload failed"
     fi
     rm -f -- "$ENV_FILE" "$CONF_FILE" "$CONF_FILE.pre-host" "$CONF_DIR/enroll-instance"
@@ -324,8 +355,15 @@ derive_cli() {  # derive_cli MODEL strict|lenient: sets DERIVED_CLI; strict refu
 CONFIRM_CLI=""
 TARGET_MODEL=""
 ACTIVE_CLI=""
+if [ "$AGENT_MODE" != host ]; then
+    [ -z "$LOGIN_USER" ] || die 64 "--login-user is for a host agent: a single-model agent runs under its own service user"
+    [ -z "$MAX_IMAGES" ] || die 64 "--max-images is for a host agent"
+fi
 if [ "$AGENT_MODE" = host ]; then
     [ -z "$CLI" ] || die 64 "--cli belongs to a single-model agent: a host agent serves every CLI it finds (give a model, or drop --cli)"
+    if [ "$CONFIG_KEPT" -eq 1 ] && [ -n "$MAX_IMAGES" ] && ! grep -q '^accept_images = true$' "$CONF_FILE"; then
+        warn "the kept $CONF_FILE does not accept images: --max-images was ignored; pass --reconfigure to write it again"
+    fi
     if [ "$CONFIG_KEPT" -eq 1 ] && [ -n "$MODEL" ]; then
         warn "the kept $CONF_FILE is a host agent: the model '$MODEL' was ignored; pass --reconfigure to install the single-model agent"
     fi
@@ -364,7 +402,27 @@ user_field() {  # user_field N: field N of the passwd entry of the service user,
     if [ -n "$line" ]; then printf '%s\n' "$line" | cut -d: -f"$1"; fi
 }
 
-if [ -n "$(user_field 1)" ]; then
+group_name() {  # group_name GID: the name of the group, empty when it is not known
+    local line=""
+    if [ -z "$ROOT" ]; then
+        line="$(getent group "$1" || true)"
+    elif [ -n "$SYSCMD_DIR" ] && [ -x "$SYSCMD_DIR/getent" ]; then
+        line="$("$SYSCMD_DIR/getent" group "$1" || true)"
+    fi
+    if [ -n "$line" ]; then printf '%s\n' "$line" | cut -d: -f1; fi
+}
+
+SERVICE_GROUP="$SERVICE_USER"
+if [ -n "$LOGIN_USER" ]; then
+    [ -n "$(user_field 1)" ] || die 66 "--login-user $LOGIN_USER: there is no such account on this machine"
+    RUN_HOME="$(user_field 6)"
+    [[ "$RUN_HOME" =~ ^/[A-Za-z0-9._/-]*$ ]] && [ "$RUN_HOME" != / ] \
+        || die 66 "--login-user $LOGIN_USER: its home directory is not a plain absolute path the unit can name"
+    SERVICE_GROUP="$(group_name "$(user_field 4)")"
+    [ -n "$SERVICE_GROUP" ] || SERVICE_GROUP="$LOGIN_USER"
+    CLI_DIRS="$CLI_WRAPPER_DIR:$RUN_HOME/.local/bin:$RUN_HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin"
+    say "the agent runs under the existing account $LOGIN_USER (home $RUN_HOME) and serves the CLIs it is signed in to"
+elif [ -n "$(user_field 1)" ]; then
     [ "$(user_field 3)" != 0 ] || die 66 "$SERVICE_USER is root; the agent needs an account of its own"
     [ "$(user_field 6)" = "$SERVICE_HOME" ] || die 66 "the account $SERVICE_USER exists with another home directory than $SERVICE_HOME: pick another --service-user, or fix the account"
     say "reusing the service user $SERVICE_USER"
@@ -396,9 +454,15 @@ if [ -e "$ENV_FILE" ]; then chmod 0600 -- "$ENV_FILE"; else install -m 0600 /dev
 detected_clis() {  # the lines `detect.py` prints, as the service user (its own HOME, never another account's)
     local flag=()
     if [ "$AGENT_MODE" = host ]; then flag=(--host --key-file "$KEYS_REAL"); fi
-    sysrun runuser -u "$SERVICE_USER" -- /usr/bin/env -i "HOME=$SERVICE_HOME" LANG=C.UTF-8 "$PYTHON" "$APP_REAL/detect.py" ${flag[@]+"${flag[@]}"} || true
+    local dirs=()
+    if [ -n "$CLI_DIRS" ]; then dirs=("PDF_ANALYSIS_CLI_DIRS=$CLI_DIRS"); fi
+    sysrun runuser -u "$SERVICE_USER" -- /usr/bin/env -i "HOME=$RUN_HOME" LANG=C.UTF-8 ${dirs[@]+"${dirs[@]}"} "$PYTHON" "$APP_REAL/detect.py" ${flag[@]+"${flag[@]}"} || true
 }
 
+IMAGES_LINES="# accept_images = false"
+if [ -n "$MAX_IMAGES" ]; then
+    IMAGES_LINES="accept_images = true"$'\n'"max_images = $MAX_IMAGES"
+fi
 STAGED_CONFIG=0
 if [ "$CONFIG_KEPT" -eq 1 ]; then
     say "kept the existing $CONF_FILE (pass --reconfigure to write it again)"
@@ -423,7 +487,7 @@ mode = "host"
 # API keys for direct calls (ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, one NAME=value per line). The file
 # must be mode 0600 and owned by the service user, or it is ignored. Absent: no API provider, only the signed-in CLIs.
 key_file = "$KEYS_REAL"
-# accept_images = false
+$IMAGES_LINES
 
 # Concurrent calls per provider. Default: 1 on a subscription login, 2 on an API login or key. A provider is one of
 # claude_code, codex, anthropic_api, openai_api, openrouter_api.
@@ -509,10 +573,33 @@ fi
 # ------------------------------------------------------------------------------------ the service
 
 unit_staged="$(mktemp "$UNIT_DIR/.$SERVICE_NAME.service.XXXXXX")"
-sed -e "s/^User=pdf-agent\$/User=$SERVICE_USER/" -e "s/^Group=pdf-agent\$/Group=$SERVICE_USER/" \
+sed -e "s/^User=pdf-agent\$/User=$SERVICE_USER/" -e "s/^Group=pdf-agent\$/Group=$SERVICE_GROUP/" \
     "$SRC_DIR/pdf-analysis-agent.service" > "$unit_staged"
 put 0644 "$unit_staged" "$UNIT_FILE"
 rm -f -- "$unit_staged"
+
+if [ -n "$LOGIN_USER" ]; then
+    install -d -m 0755 -- "$DROPIN_DIR"
+    dropin_staged="$(mktemp "$DROPIN_DIR/.20-login-user.conf.XXXXXX")"
+    cat > "$dropin_staged" << EOF
+# Written by install.sh --login-user $LOGIN_USER (LOCAL-AGENT-01): the host agent runs under that existing account and serves
+# the CLIs it is signed in to. Its home is writable because the CLIs refresh their logins there; nothing else is.
+# A run of install.sh without --login-user removes this file and goes back to the dedicated service user.
+[Service]
+Environment=HOME=$RUN_HOME
+Environment=PATH=$RUN_HOME/.local/bin:$RUN_HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PDF_ANALYSIS_CLI_DIRS=$CLI_DIRS
+ProtectHome=false
+ReadWritePaths=$RUN_HOME
+EOF
+    put 0644 "$dropin_staged" "$DROPIN_FILE"
+    rm -f -- "$dropin_staged"
+elif [ -e "$DROPIN_FILE" ]; then
+    rm -f -- "$DROPIN_FILE"
+    rmdir -- "$DROPIN_DIR" 2>/dev/null || true
+    CHANGED=1
+    say "removed the --login-user drop-in: the agent runs under the service user $SERVICE_USER again"
+fi
 
 sysrun systemctl daemon-reload
 if sysrun systemctl is-active --quiet "$SERVICE_NAME.service"; then
@@ -554,6 +641,15 @@ case "$ACTIVE_CLI" in
     *) LABEL="the CLI"; STEPS="  Claude Code:  $CLAUDE_STEP"$'\n'"  Codex:        $CODEX_STEP" ;;
 esac
 echo
+if [ "$AGENT_MODE" = host ] && [ -n "$LOGIN_USER" ]; then
+    cat << EOF
+The agent serves the CLIs the account $LOGIN_USER is signed in to, as listed above (a provider with auth=valid is used;
+nothing is copied, and no other account is looked at). A CLI signed out later leaves service within a minute. Check this
+machine with: sudo -u $LOGIN_USER -H env PDF_ANALYSIS_CLI_DIRS=$CLI_DIRS python3 $APP_REAL/detect.py --host
+The host appears in the stand's executor screen once it has reported. To remove the agent: sudo bash $APP_REAL/install.sh --uninstall
+EOF
+    exit 0
+fi
 if [ "$AGENT_MODE" = host ]; then
     cat << EOF
 The steps left are yours, and the installer never does them for you. The agent serves what it finds, so do the ones you want:

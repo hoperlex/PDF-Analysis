@@ -181,6 +181,7 @@ def test_authored_shape_and_form() -> None:
     # 0.32.0 is at revision 2 (AGENTS §6.1): the real-screen walk after the interface change added four fixes (the phone header,
     # the review list row, the calendars' day-off figures, the badge qualifier) to the note that had reached main at revision 1.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
+        "0.33.0": 1,
         "0.32.0": 2,
         "0.31.1": 2,
         "0.31.0": 1,
@@ -202,6 +203,7 @@ def test_authored_shape_and_form() -> None:
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
+        "0.33.0",
         "0.32.0",
         "0.31.1",
         "0.31.0",

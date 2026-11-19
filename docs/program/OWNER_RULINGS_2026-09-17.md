@@ -2149,3 +2149,17 @@ The session put this to the owner in one poll. The poll's option text named `R-1
 | Ruling | Owner's answer | Consequence |
 | --- | --- | --- |
 | R-157l | Poll: «В плане v2 есть ИИ-критик, но проход прецедентов считает его ответы детерминированными: если он считает замечание верным (accept) или требующим человека, «Рекомендовано снять» всё равно возможно. В v3 такой ответ — вето. Сейчас на деле не срабатывает: метки «снять» по разделам выключены. Дать ИИ-критику v2 право вето?» The chosen option: «Да, как в v3 (Рекомендую)», described as «accept и needs_human ИИ-критика v2 — вето на «снять». Детерминированный критик остаётся без вето. Записываю решение; правка critic_input.py — отдельной задачей до включения меток отказа». | **The AI pass of plan v2 vetoes «снять».** A record with `mode: substantive` and `model_called: true` vetoes when its `llm_decision` is `accept` or `needs_human`; an unreadable decision counts as `needs_human`. This applies `R-153ae` to it as in v3.<br>**The deterministic critic of plan v2 never vetoes.** It still counts as «reviewed» (`R-153ar`). This closes the question `R-156m` deferred, in favour of the code.<br>**Recorded in** `ADR-0029` decision 14 as a dated amendment.<br>**The code** (`src/auditmanager/precedents/run_pass/critic_input.py`) is task `docs/program/tasks/CRIT-V2-AI-VETO-01.md`, due before any section's refusal marks are switched on. |
+
+## 3.62 — R-158a..e, the deploy server's own subscriptions (owner's poll answers, 2026-11-20, session `pdf-analysis-27`)
+
+The occasion: before the fork hand-off the owner asked for «систему подключения к локально размещенному серверу (серверу деплоя) к
+подписочным сессиям codex и антропик … без функционала в ui, просто с галочкой можно на них переподключиться, если они найдены на машине
+размещения». The session put the plan `LOCAL-AGENT-01` and its three forks to him in one poll; then he left the window to the session.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-158a | Poll «Какой должна быть галочка»: «Карточка сразу включена». | The deploy server is an ordinary host card («Этот сервер» by default), enabled when it is created, as every connected host; the existing «Использовать» switch is the checkbox. No stand-side code for it. |
+| R-158b | Poll «Когда подключать»: «Автоматически при deploy.sh». | `deploy.sh` ends with `local-agent.sh connect` when `ALPHA_LOCAL_AGENT=auto` (the shipped example's value; an environment without the line is `off`). A step, not a guard: a failure is a deploy WARNING. |
+| R-158c | Poll «Под каким пользователем ОС»: «Владелец логинов, обычно root». | `install.sh --login-user` runs the host agent under the existing account that holds the logins, root included, through a drop-in; the dedicated `pdf-agent` stays the default of every other install. |
+| R-158d | Poll «Утверждаете план»: «Утверждаю, публикуй в dev». | Published to `origin/dev` with release note 0.33.0; `main` is not touched by this work. |
+| R-158e | Free text: «Работай до релиза, я для опроса недоступен, развилки в долг, в конце отчёт и долги». | The session decided the remaining forks itself and lists them as debts in its report (`.local/reports/local-agent-01-2026-11-20/`). |

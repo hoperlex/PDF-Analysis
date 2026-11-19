@@ -565,6 +565,49 @@ The agent's health report (`POST /api/v1/runner/health`) is counted by the runne
 (`runner_channel` per token, `runner_address` per address), which now match `/api/v1/runner/tasks/` and
 `/api/v1/runner/health`. `tests/contract/test_proxy_rate_limits.py` holds all of it.
 
+## Подписки сервера деплоя — `LOCAL-AGENT-01` (owner 2026-11-20)
+
+The deploy server may itself be signed in to Codex and Claude subscriptions — on a development machine that is also the deploy
+server they are usually the VS Code extensions' clients under `root`. `local-agent.sh` connects them to this stand as an ordinary
+host agent, with no screen of its own: the stand shows the card «Этот сервер» in «Диспетчер», **enabled at once**, and its
+«Использовать» switch is the only control (owner's poll, 2026-11-20, `R-158a`..`R-158d`).
+
+```
+sudo infra/deploy/local-agent.sh --env-file infra/deploy/env/alpha.env connect      # what deploy.sh runs with ALPHA_LOCAL_AGENT=auto
+sudo infra/deploy/local-agent.sh --env-file infra/deploy/env/alpha.env status       # changes nothing
+sudo infra/deploy/local-agent.sh --env-file infra/deploy/env/alpha.env disconnect   # removes the agent; archive the card on the stand
+```
+
+What `connect` does, in order (the script's header is the full account):
+
+1. finds `claude` and `codex` of the login account (`ALPHA_LOCAL_AGENT_USER`, default `root`) with `local_agent_clis.py`. A binary
+   inside a VS Code extension gets a wrapper in `/opt/pdf-analysis-cli/bin` that always runs the newest one, so an extension update
+   needs nothing; a file there without the script's marker line is never touched;
+2. asks the agent's own `detect.py --host`, as that account, what is signed in. Only `access=subscription auth=valid` counts; with
+   none, nothing is connected and the deploy goes on;
+3. refuses when an agent of another stand is installed on this machine (one machine, one agent);
+4. asks the stand inside the running `api` container (`python -m auditmanager.bootstrap.local_host`) for its agent package and — only
+   when no agent of this stand is installed yet, or with `--reenroll` — for a one-time grant of the card, issued in the name of
+   `ALPHA_LOCAL_AGENT_ACTOR` or else of the active administrator created first;
+5. downloads the package from the stand, checks its sha256 and runs its `install.sh --login-user <account> --max-images 8`: the
+   service runs under that account (a drop-in gives it the account's home and the wrapper directory), and accepts the up to eight
+   page crops a block task carries;
+6. waits up to 90 s for the first report and prints the models the card lists.
+
+The agent talks to the stand at `http://127.0.0.1:<ALPHA_HTTP_PORT>`, the stack's own proxy on this machine: nothing crosses the
+network and no certificate is involved (the agent accepts plain HTTP for a loopback host only). A second `connect` keeps the token
+and only follows the stand's package. **A card archived on the stand is not resurrected**: the stand then refuses the agent's token,
+and `connect` says that `--reenroll` connects it anew. To stop the deploy from connecting: `ALPHA_LOCAL_AGENT=off`.
+
+`deploy.sh` runs the step last, after every question about the stack has been answered, and as a step rather than a guard: its
+failure is a `WARNING [local_agent_not_connected]` in the summary, never a failed deploy. A deploy user who is not root needs exactly
+
+```
+<deploy user> ALL=(root) NOPASSWD: /srv/auditmanager/infra/deploy/local-agent.sh
+```
+
+(deploy.sh prints the line with the real path when it is missing). Runs reach the card only with `AUDITMANAGER_PROVIDER_SOURCE=database`.
+
 ## The client address — `REAL-IP-EDGE-01`, and what a host nginx in front must send
 
 **The problem, measured.** On the deployed stand the traffic is browser → a **host** nginx (TLS,
