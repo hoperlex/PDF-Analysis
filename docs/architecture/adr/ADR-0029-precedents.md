@@ -49,6 +49,19 @@ Open: the two temporary decisions («Temporary decisions») end only on their st
     - **So «В3» applies to v2 and v3 in the same way:** a finding that a critic reviewed and did not veto can get «снять»; a finding no critic reviewed cannot (`R-153ar`). The pass maps the v2 critic's output (`src/auditmanager/precedents/run_pass/critic_input.py`): a v2 run with the marker `original_review: deterministic-v1` has the deterministic critic in plan, and its finding counts as reviewed when a linked candidate carries that critic's record (decision 5); a v2 run without the marker has no critic in plan, and its findings get no «снять».
     - Neutral marks, comments and «Возможные нормы» work under any plan; the critic's reference block (decision 3) works only under v3, because only the AI critic reads it.
     - The veto of `R-153ae` is applied to the deterministic critic of plan v2 in the same way. The owner did not rule on that case separately: this is the planner's extension, revisable.
+    - **Amendment 2026-11-19 (the code since `ANALYSIS-REPAIR-INT-01`, product 0.27.0; added at the owner's word to the fork-storage session).** Two statements above lag behind the code:
+      - **Plan v2 also has an AI critic.**
+        - A v2 consent that carries `quality_policy` (`AUDITMANAGER_V2_QUALITY`, on by default) runs a substantive AI critic pass inside the `finding_review` stage after the deterministic one (`src/auditmanager/runs/v2_quality.py`).
+        - The deterministic record is kept on each candidate as `structural_critic`; `critic` holds the AI record (`mode: substantive`, `llm_decision`).
+        - With `flow_repair_policy` as well (`AUDITMANAGER_V2_FLOW_REPAIR`, on by default), that pass is the flow critic `v2-flow-repair-v1`.
+        - A consent with neither policy keeps the deterministic critic only.
+      - **The reference block reaches the v2 flow's AI critic, not only v3.**
+        - Besides the executor client's `context_request` of decision 3 (plan v3, stage layout), the stand itself puts `human_reference_data` into each request of the v2 flow critic (`src/auditmanager/precedents/candidate_context.py`).
+        - The rules: under the `critic_context` switch (off by default); at most 3 cases per observation and 12,000 characters; for each case the verdict, the decision reason and the two latest comments.
+        - Only warm vectors are used today. On the fork every observation is covered (decision 8, `R-157k`).
+      - **What stays open.** The run pass reads every critic record of a marked v2 run as deterministic, the AI pass's included (`src/auditmanager/precedents/run_pass/critic_input.py`, `_decision_of`): such a record counts as «reviewed» and never vetoes.
+        - Whether `accept` or `needs_human` from the v2 AI critic should veto «снять» is not decided here.
+        - It joins the open question on the previous bullet (`R-156m`, «Отложить»).
 
 ## Temporary decisions
 
@@ -104,3 +117,4 @@ The end of either temporary decision; the first use with real client documents (
 - 2026-11-18 — decision 4's fork bullet amended: the fork keeps `bge-m3-dense-v1` for the beta, thresholds unchanged (`R-156o`).
 - 2026-11-19 — decision 8's fork bullet amended: exact scan kept, vectors as `halfvec(1024)` with cosine, the 24-month window in the run pass's SQL (`R-157i`, `R-157j`).
 - 2026-11-19 — decision 8's fork bullet amended again: the resident embedder encodes the flow's observations before the critic stage, so the critic's examples cover every observation (`R-157k`).
+- 2026-11-19 — decision 14 amended to the code: plan v2 has an AI critic pass, the flow critic receives the reference block, and the pass reads v2 AI records as deterministic, which stays with the open question of `R-156m`.
