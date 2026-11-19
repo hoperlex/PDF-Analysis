@@ -27,7 +27,8 @@ import {
   sectionListingAudit,
   sectionPosition,
 } from '@/entities/document-version';
-import { SectionNeighbours, SectionNeighboursView, levelAddress } from '@/widgets/document-context';
+import type { levelAddress } from '@/widgets/document-context';
+import { SectionNeighbours, SectionNeighboursView } from '@/widgets/document-context';
 import { findProjectSection } from '@/entities/project';
 
 import { mountLive } from '../analysis-settings/live-render';
