@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-10; revised 2026-11-18 (ADR-OPTIMISE-01)
-- Basis: the owner's direct polls of 2026-11-10 (`R-153q`…`R-153ar`; wording in `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55); the product decisions are the owner's, the engineering choices inside them the planner's. Two decisions are **temporary** with end conditions («Temporary decisions»). Decision 14 corrects the ADR after the AR v3 removal and the plan v2 critic (`R-154a`…`R-154h`). Revisable by a dated addendum.; amendments `R-156o`, `R-157i`, `R-157j`, `R-157k`
+- Basis: the owner's direct polls of 2026-11-10 (`R-153q`…`R-153ar`; wording in `docs/program/OWNER_RULINGS_2026-09-17.md` section 3.55); the product decisions are the owner's, the engineering choices inside them the planner's. Two decisions are **temporary** with end conditions («Temporary decisions»). Decision 14 corrects the ADR after the AR v3 removal and the plan v2 critic (`R-154a`…`R-154h`). Revisable by a dated addendum.; amendments `R-156o`, `R-157i`, `R-157j`, `R-157k`, `R-157l`
 - Amends: `ADR-0027` decisions 2, 3 and 6 and `DECISION-MEMORY-01` (Q4, Q8, Q9, Q10, section 5.3, phase M4), by dated notes there.
 - Related: `ADR-0027`, `ADR-0028`, `ADR-0020`, `ADR-0021`, `ADR-0024`, `ADR-0026`. Lane task files (`docs/program/tasks/`) cite «ADR-0029 decision n».
 
@@ -12,7 +12,7 @@ Expert decisions kept in the decision memory (`ADR-0027`) must work for the prod
 
 ## Decision
 
-Open: the two temporary decisions («Temporary decisions») end only on their stated conditions; decision 11 is the second seal's work (sealed, decision 12); the last bullet of decision 14 (the veto applied to the plan v2 critic) is contradicted by `src/auditmanager/precedents/run_pass/critic_input.py` (it never vetoes) and waits for the owner's decision.
+Open: the two temporary decisions («Temporary decisions») end only on their stated conditions; decision 11 is the second seal's work (sealed, decision 12); the v2 critic's veto is ruled (`R-157l`, decision 14): the AI pass of plan v2 vetoes and the deterministic critic does not; the code of the AI veto in `src/auditmanager/precedents/run_pass/critic_input.py` is task `CRIT-V2-AI-VETO-01`, due before any section's refusal marks are switched on.
 
 1. **One model-free core, a new bounded context `precedents`.** It imports only the `public` module of other contexts and never calls a model. It alone decides who votes, which mark a finding gets and which hint it shows; both consumers read it.
 2. **Two consumers, one writer of verdicts.** The AI critic reads reference material through the executor client (decision 3); the expert reads marks, the queue, comments and «Возможные нормы» (`R-153x`). The ledger is written only by the expert: a mark is advice, the expert's ✓/✕ decides, and «Отмена» is a mark and a collapsed queue, never an automatic withdrawal (`R-153r`).
@@ -62,6 +62,11 @@ Open: the two temporary decisions («Temporary decisions») end only on their st
       - **What stays open.** The run pass reads every critic record of a marked v2 run as deterministic, the AI pass's included (`src/auditmanager/precedents/run_pass/critic_input.py`, `_decision_of`): such a record counts as «reviewed» and never vetoes.
         - Whether `accept` or `needs_human` from the v2 AI critic should veto «снять» is not decided here.
         - It joins the open question on the previous bullet (`R-156m`, «Отложить»).
+    - **Amendment 2026-11-19 (`R-157l`): the AI critic of plan v2 vetoes «снять» as in v3; the deterministic critic does not.**
+      - **The AI critic of plan v2 vetoes.** A record of its AI pass (`mode: substantive`, `model_called: true`) whose `llm_decision` is `accept` or `needs_human` hides «снять» for the linked finding, as `R-153ae` («Вето ИИ») does in v3. A record whose decision is unreadable counts as `needs_human`, as in v3.
+      - **The deterministic critic of plan v2 does not veto.** It counts as «reviewed» (`R-153ar`) and never vetoes. This answers the question `R-156m` deferred, in favour of the code, and supersedes the previous bullet's «in the same way» for the deterministic critic.
+      - **A finding the AI pass did not reach** stays not reviewed (no «снять»), as outside the AI critic's window in v3.
+      - **The code is pending.** Today the pass reads every record of a marked v2 run as deterministic (`critic_input.py`, `_decision_of` with `deterministic_plan`). The change is task `CRIT-V2-AI-VETO-01`. It is due before any section's refusal marks are switched on; until then the marks are off by default and the gap shows nothing.
 
 ## Temporary decisions
 
@@ -118,3 +123,4 @@ The end of either temporary decision; the first use with real client documents (
 - 2026-11-19 — decision 8's fork bullet amended: exact scan kept, vectors as `halfvec(1024)` with cosine, the 24-month window in the run pass's SQL (`R-157i`, `R-157j`).
 - 2026-11-19 — decision 8's fork bullet amended again: the resident embedder encodes the flow's observations before the critic stage, so the critic's examples cover every observation (`R-157k`).
 - 2026-11-19 — decision 14 amended to the code: plan v2 has an AI critic pass, the flow critic receives the reference block, and the pass reads v2 AI records as deterministic, which stays with the open question of `R-156m`.
+- 2026-11-19 — decision 14 amended: the AI pass of plan v2 vetoes «снять» and the deterministic critic does not (`R-157l`, closes `R-156m`); code pending in `CRIT-V2-AI-VETO-01`.
