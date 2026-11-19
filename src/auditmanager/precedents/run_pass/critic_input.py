@@ -3,7 +3,7 @@
 Pure: a saved extended-review document in, plain values out. The core takes «critic in plan» and «reviewed» as inputs and never looks at a plan; this
 module is the mapping the core's own notes leave to the pass.
 
-**Two critics, one rule for «reviewed», two rules for the veto.**
+**Three critics, one rule for «reviewed», two rules for the veto.**
 
 * Plan **v3** (``workflow_version`` ``extended-review-v3``) has the AI critic. A candidate it reviewed carries ``critic`` (with ``llm_decision``) and
   ``review_status: reviewed``; one it did not reach (outside the window of 40 records and 16 000 characters, or its call was refused) carries
@@ -12,8 +12,13 @@ module is the mapping the core's own notes leave to the pass.
   as «no objection».
 * Plan **v2** with the marker ``original_review: deterministic-v1`` has the original's deterministic critic (`V2-ORIGINAL-REVIEW-01`): no model, rows
   marked ``mode: deterministic`` and ``model_called: false``. It **counts as a review** for V3 (a finding it reviewed may get «снять», subject to every other
-  rule) but it **never vetoes** (the integrator's ruling): its verdicts are mapped onto accept / needs_human / rewrite for the expert's eyes, and none of
-  them is an objection to a precedent. Here its record is :data:`DECISION_DETERMINISTIC`, which is not in the core's veto set.
+  rule) but it **never vetoes** (`R-157l`, which closed `R-156m`): its verdicts are mapped onto accept / needs_human / rewrite for the expert's eyes, and
+  none of them is an objection to a precedent. Here its record is :data:`DECISION_DETERMINISTIC`, which is not in the core's veto set.
+* Plan **v2** may also run an **AI critic pass** after the deterministic one (``runs/v2_quality.py``, a consent with ``quality_policy``): it moves the
+  deterministic record to ``structural_critic`` and writes ``critic`` with ``mode: substantive``, ``model_called: true`` and ``llm_decision``. Such a record
+  is read **exactly as v3's** (`R-157l`, `ADR-0029` decision 14): ``accept`` and ``needs_human`` veto, an unreadable decision is ``needs_human``. A record
+  is the AI pass's only when it says so (``model_called`` is ``true`` and ``mode`` is not ``deterministic``); any other v2 record stays deterministic. A
+  candidate the AI pass did not reach keeps its placeholder with ``review_status: not_reviewed`` and is not reviewed, as outside v3's window.
 * A run with neither (a v2 run without the marker, a legacy run, an artifact that is missing, failed or not an object) has **no critic in plan**: no
   finding of it is reviewed, in v2 or in v3.
 
@@ -125,15 +130,29 @@ def _is_deterministic(critic: Mapping[str, Any]) -> bool:
     return critic.get("mode") == "deterministic" or critic.get("model_called") is False
 
 
-def _decision_of(item: Mapping[str, Any], *, deterministic_plan: bool) -> str | None:
-    """The record's decision as the core reads it, or ``None`` when the candidate has no critic record."""
+def _is_v2_ai_pass(critic: Mapping[str, Any]) -> bool:
+    """A record of the plan v2 AI critic pass: the model was called and the record does not say it is deterministic (`R-157l`)."""
+    return critic.get("model_called") is True and critic.get("mode") != "deterministic"
+
+
+def _ai_decision(critic: Mapping[str, Any]) -> str:
+    decision = critic.get("llm_decision")
+    return decision if isinstance(decision, str) and decision in _AI_DECISIONS else _UNREADABLE_AI_DECISION
+
+
+def _decision_of(item: Mapping[str, Any], *, v2_plan: bool) -> str | None:
+    """The record's decision as the core reads it, or ``None`` when the candidate has no critic record.
+
+    In a v2 plan only a record of the AI pass is an AI decision; every other v2 record is :data:`DECISION_DETERMINISTIC`. In v3 a record is an AI
+    decision unless it says it is deterministic."""
     critic = item.get("critic")
     if item.get("review_status") != "reviewed" or not isinstance(critic, Mapping):
         return None
-    if deterministic_plan or _is_deterministic(critic):
+    if v2_plan:
+        return _ai_decision(critic) if _is_v2_ai_pass(critic) else DECISION_DETERMINISTIC
+    if _is_deterministic(critic):
         return DECISION_DETERMINISTIC
-    decision = critic.get("llm_decision")
-    return decision if isinstance(decision, str) and decision in _AI_DECISIONS else _UNREADABLE_AI_DECISION
+    return _ai_decision(critic)
 
 
 def _restates(item: Mapping[str, Any], source_ids: Sequence[str]) -> tuple[str, str] | None:
@@ -167,17 +186,18 @@ def read_critic_plan(document: Mapping[str, Any] | None) -> CriticPlan:
     """The critic of a run from ``runs.public.read_extended_review``'s answer (``{"status", "result"}``), or :data:`NO_CRITIC`.
 
     ``None``, a document that is not an object, one without a result and a workflow that is neither v2 nor v3 read as :data:`NO_CRITIC`. A v2 result
-    without the marker keeps its candidates but has no critic in plan (``in_plan`` false: nothing is reviewed)."""
+    without the marker keeps its candidates but has no critic in plan (``in_plan`` false: nothing is reviewed). ``kind`` is ``ai`` for v3 and for a v2
+    run whose AI pass left a record, ``deterministic`` for a marked v2 run without one, ``none`` otherwise."""
     result = document.get("result") if isinstance(document, Mapping) else None
     if not isinstance(result, Mapping):
         return NO_CRITIC
     workflow = result.get("workflow_version")
     if workflow == WORKFLOW_V3:
-        in_plan, deterministic, kind = True, False, "ai"
+        in_plan, v2_plan, kind = True, False, "ai"
     elif workflow == WORKFLOW_V2:
         original = result.get("original_review")
         in_plan = isinstance(original, Mapping) and original.get("version") == _ORIGINAL_REVIEW_V2
-        deterministic, kind = True, "deterministic" if in_plan else "none"
+        v2_plan, kind = True, "deterministic" if in_plan else "none"
     else:
         return NO_CRITIC
     rows: list[CandidateRow] = []
@@ -188,11 +208,13 @@ def read_critic_plan(document: Mapping[str, Any] | None) -> CriticPlan:
             continue
         sources = _strings(item.get("source_ids"))
         # A run whose plan has no critic keeps its candidates (the card's «Возможные нормы» come from them) and none of them is reviewed.
-        decision = _decision_of(item, deterministic_plan=deterministic) if in_plan else None
+        decision = _decision_of(item, v2_plan=v2_plan) if in_plan else None
         rows.append(CandidateRow(
             candidate_id=identity, source_ids=sources, decision=decision,
             context_kinds=frozenset(_strings(item.get("context_kinds"))) if decision is not None else frozenset(),
             restates=_restates(item, sources), norms=_norms(item)))
+    if v2_plan and in_plan and any(row.decision not in (None, DECISION_DETERMINISTIC) for row in rows):
+        kind = "ai"
     return CriticPlan(in_plan=in_plan, kind=kind, candidates=tuple(rows))
 
 

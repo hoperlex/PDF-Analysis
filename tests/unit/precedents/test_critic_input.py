@@ -6,6 +6,8 @@ What is shown, each next to the case that must come out the other way:
   candidate outside its window (``not_reviewed``) is not reviewed at all;
 * the deterministic critic of plan v2: it **counts as a review** (a finding it reviewed can get «снять»), it **never vetoes** (its ``pass`` is mapped to
   ``accept`` for the expert's eyes and must not become the AI's ``accept``), and a v2 run without its marker has no critic in plan;
+* the AI critic pass of plan v2 (`R-157l`): its record (``mode: substantive``, ``model_called: true``) is read as v3's, so ``accept``, ``needs_human``
+  and an unreadable decision veto and ``reject`` does not; its placeholder for a candidate it did not reach is not a review;
 * a finding no critic reviewed can never get «снять», in v2 and in v3, and one outside the AI critic's window neither;
 * the link of a finding to its candidates (by reference for a candidate-finding, by restated words for a text finding), and the stored projection that
   lets a read evaluate again without the artifact.
@@ -38,6 +40,18 @@ UID = "fnd_01M2545JSD15ETSNNV904X991K"
 
 def ai_record(decision: str) -> dict[str, Any]:
     return {"input_id": "xri_1", "llm_decision": decision, "explanation": "..."}
+
+
+def v2_ai_record(decision: Any, **extra: Any) -> dict[str, Any]:
+    """A record of the plan v2 AI critic pass as ``analysis/extended/substantive_review.py`` writes it."""
+    return {"input_id": "xri_1", "llm_decision": decision, "mode": "substantive", "model_called": True, "policy": "substantive-v2-v1",
+            "expert_decision": False, "explanation": "...", **extra}
+
+
+def v2_ai_placeholder() -> dict[str, Any]:
+    """What the v2 AI pass leaves on a candidate it did not reach (``runs/v2_quality.py``)."""
+    return {"mode": "substantive", "model_called": False, "original_verdict": "not_reviewed", "llm_decision": "needs_human",
+            "explanation": "Содержательная проверка ещё не выполнена.", "expert_decision": False}
 
 
 def deterministic_record(decision: str = "accept", verdict: str = "pass") -> dict[str, Any]:
@@ -128,6 +142,58 @@ def test_no_verdict_of_the_deterministic_critic_is_a_veto(decision: str, verdict
     assert [row.decision for row in plan.candidates] == [DECISION_DETERMINISTIC] and plan.kind == "deterministic"
     advice = advice_for(v2)
     assert advice.review.reviewed and not advice.review.veto and advice.label.in_cancel_queue
+
+
+# -- the AI critic pass of plan v2 (`R-157l`) ----------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("decision", ["accept", "needs_human"])
+def test_a_v2_ai_accept_and_needs_human_are_a_veto_as_in_v3(decision: str) -> None:
+    v2 = document(V2, [candidate(sources=["text:0"], critic=v2_ai_record(decision), structural_critic=deterministic_record())], **MARKER)
+    plan = read_critic_plan(v2)
+    assert [row.decision for row in plan.candidates] == [decision] and plan.kind == "ai"
+    advice = advice_for(v2)
+    assert advice.review.reviewed and advice.review.veto
+    assert advice.label.code == "often_rejected" and "critic_veto" in advice.label.cancel_blockers and not advice.label.in_cancel_queue
+
+
+@pytest.mark.parametrize("decision", ["reject", "borderline", "rewrite"])
+def test_a_v2_ai_reject_borderline_or_rewrite_is_a_review_without_a_veto(decision: str) -> None:
+    advice = advice_for(document(V2, [candidate(sources=["text:0"], critic=v2_ai_record(decision))], **MARKER))
+    assert advice.review.reviewed and not advice.review.veto
+    assert advice.label.code == "cancel_suggested" and advice.label.in_cancel_queue
+
+
+@pytest.mark.parametrize("bad", ["maybe", None, 7])
+def test_a_v2_ai_record_the_pass_cannot_read_is_an_objection(bad: Any) -> None:
+    advice = advice_for(document(V2, [candidate(sources=["text:0"], critic=v2_ai_record(bad))], **MARKER))
+    assert advice.review.veto and advice.label.code == "often_rejected"
+    # a record without the AI pass's markers is the deterministic critic's, which never objects
+    unmarked = {key: value for key, value in v2_ai_record(bad).items() if key not in ("mode", "model_called")}
+    assert not advice_for(document(V2, [candidate(sources=["text:0"], critic=unmarked)], **MARKER)).review.veto
+
+
+def test_a_v2_record_that_says_it_is_deterministic_is_never_an_ai_veto() -> None:
+    """``model_called`` alone does not make an AI record: a row that says ``mode: deterministic`` keeps the deterministic critic's reading."""
+    record = {**deterministic_record("accept", "pass"), "model_called": True}
+    v2 = document(V2, [candidate(sources=["text:0"], critic=record)], **MARKER)
+    assert [row.decision for row in read_critic_plan(v2).candidates] == [DECISION_DETERMINISTIC]
+    assert not advice_for(v2).review.veto
+    # the same words with the AI pass's markers are the veto
+    assert advice_for(document(V2, [candidate(sources=["text:0"], critic=v2_ai_record("accept"))], **MARKER)).review.veto
+
+
+def test_a_candidate_the_v2_ai_pass_did_not_reach_is_not_reviewed() -> None:
+    unreached = candidate(sources=["text:0"], critic=v2_ai_placeholder(), status="not_reviewed", structural_critic=deterministic_record())
+    v2 = document(V2, [unreached], **MARKER)
+    assert [row.decision for row in read_critic_plan(v2).candidates] == [None] and read_critic_plan(v2).kind == "deterministic"
+    advice = advice_for(v2)
+    assert not advice.review.reviewed and not advice.label.in_cancel_queue
+
+
+def test_a_v2_run_without_the_marker_has_no_critic_even_with_an_ai_record() -> None:
+    plan = read_critic_plan(document(V2, [candidate(sources=["text:0"], critic=v2_ai_record("accept"))]))
+    assert not plan.in_plan and plan.kind == "none" and [row.decision for row in plan.candidates] == [None]
 
 
 def test_the_same_pass_verdict_is_a_veto_when_it_is_the_ai_critics_accept() -> None:

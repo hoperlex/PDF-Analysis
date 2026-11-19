@@ -40,3 +40,12 @@ Before any section's refusal marks (decision 6) are switched on. While every sec
 A behaviour change behind the per-section refusal-mark switches, which are off by default. Publish to `origin/dev` after the focused checks.
 - A release note is needed only if the change ships while some section's refusal marks are on.
 - Rollback is a revert of the commit.
+
+## Status
+**Done 2026-11-19** by the fork-storage session (`pdf-analysis-16`, earlier `pdf-analysis-ba`/`-df`) on the owner's poll answer «Сделай сейчас».
+
+- **The change:** `_decision_of` reads a v2 record as the AI pass's only when `model_called` is `true` and `mode` is not `deterministic`; such a record maps `llm_decision` as v3 does. `read_critic_plan` reports `kind: ai` for a marked v2 run whose AI pass left a record.
+- **Checks:**
+  - `tests/unit/precedents/test_critic_input.py`: 56 passed, 11 of them new. Against the previous module the 6 new veto cases fail and the counter-cases pass.
+  - `tests/unit/precedents` together with the two `tests/unit/analysis_extended` files that reference the module: 414 passed, 1 failed. The failure, `test_advice.py::test_the_core_imports_no_other_bounded_context`, fails the same way on the base `12d1055f9` (imports of `candidate_context.py`).
+- **Not run:** `tests/integration/precedents/test_precedent_pass.py`, which needs a real PostgreSQL. Its v2 cases use only deterministic records, whose reading is unchanged.
