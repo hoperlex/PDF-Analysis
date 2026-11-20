@@ -6,6 +6,9 @@ instructions below are preserved as the foundation record and do not describe th
 
 This repository is a **starter kit for developing a new application from scratch**. It is not a copy of the legacy code and assumes no runtime dependency on the old application.
 
+To install the whole stack on a new server: `sudo infra/deploy/first-install.sh --email <address> [--domain <name>]` from a fresh clone
+(or give an AI agent `infra/deploy/FIRST-INSTALL-PROMPT.md`); see `infra/deploy/README.md`.
+
 The legacy `PDF-proverka-main` is used only as:
 
 1. a behavioral oracle — the source of actual user-facing behaviour;

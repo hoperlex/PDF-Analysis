@@ -264,7 +264,7 @@ def test_the_table_text_is_the_whole_action_and_an_owner_line_says_so(rig: Rig) 
     for line in rig.run("--print-codes").stdout.splitlines():
         code, text = line.split("\t")
         assert text.strip() and "|" not in text, code
-        assert "ASK THE OWNER" in text or text.split()[0] in {"Fix", "Run", "Install", "Start", "Free", "Port", "Nothing", "The"}, code
+        assert "ASK THE OWNER" in text or text.split()[0] in {"Fix", "Run", "Install", "Start", "Free", "Port", "Nothing", "The", "An"}, code
 
 
 def test_print_codes_markdown_is_a_table_with_every_code(rig: Rig) -> None:
@@ -698,3 +698,67 @@ def test_the_on_host_tar_is_the_tar_push_bundle_sends() -> None:
 
     assert tar_line(SCRIPT, "bundle_tar()") .replace('"$1"', "X").replace('"$2"', "Y") == \
         tar_line(DEPLOY / "push-bundle.sh", "bundle_tar()").replace('"$PARENT"', "X").replace('"$KEY"', "Y")
+
+
+# ------------------------------------------------------------------------------------- the prompt for a simple agent
+
+
+def _prompt_table() -> str:
+    text = PROMPT.read_text()
+    begin, end = "<!-- STOP-CODES:BEGIN -->\n", "<!-- STOP-CODES:END -->"
+    assert begin in text and end in text, "the prompt lost its STOP-CODES markers"
+    return text[text.index(begin) + len(begin):text.index(end)]
+
+
+def test_the_prompt_carries_the_scripts_stop_table_verbatim(rig: Rig) -> None:
+    """The one table is in the script; the prompt's copy is generated from it. Regenerate with:
+    infra/deploy/first-install.sh --print-codes --markdown, between the two markers of the prompt."""
+    assert _prompt_table() == rig.run("--print-codes", "--markdown").stdout
+
+
+def test_every_code_the_script_can_print_is_in_the_table() -> None:
+    table = {line.split("\t")[0] for line in subprocess.run(
+        [str(SCRIPT), "--print-codes"], capture_output=True, text=True, check=True).stdout.splitlines()}
+    # Comment lines and the dry run's sentences (one says "; stop with a printed instruction") are not call sites.
+    lines = [line for line in SCRIPT.read_text().splitlines() if not line.lstrip().startswith("#") and 'echo "' not in line]
+    code = "\n".join(lines)
+    code = code[:code.index('CODES_TABLE="$(cat')] + code[code.index("\nTABLE\n"):]
+    used = set(re.findall(r"(?:^|[;&|{)]|\bthen|\belse|\|\|)\s*stop ([a-z_]+)", code, re.M))
+    assert used <= table, f"stop codes used but not in the table: {sorted(used - table)}"
+    unused = table - used - {"unexpected"}
+    assert not unused, f"codes in the table that no stop uses: {sorted(unused)}"
+
+
+def test_the_prompt_is_short_and_carries_the_rules_a_simple_agent_needs() -> None:
+    text = PROMPT.read_text()
+    prose = text[:text.index("<!-- STOP-CODES:BEGIN -->")]
+    assert len(prose.strip().splitlines()) <= 50
+    for must in ("sudo infra/deploy/first-install.sh", "STOP [code]", "DONE:", "ASK THE OWNER", "last 30 lines",
+                 "Never kill a process by name", "Never push", "main", "Never edit", "password", "run the same command again"):
+        assert must in prose, must
+    for option in ("--email", "--domain", "--norms-bundle", "--skip-executors", "--resume-stage", "--set"):
+        assert option in prose, option
+    # it names no file path of a secret except by pattern, and holds no value that looks like one
+    assert not re.search(r"[A-Za-z0-9_-]{40,}", prose)
+
+
+def test_the_readmes_carry_the_two_commands_and_the_prompt_pointer() -> None:
+    deploy_readme = (DEPLOY / "README.md").read_text()
+    head = "\n".join(deploy_readme.splitlines()[:8])
+    assert "git clone" in head and "first-install.sh" in head and "FIRST-INSTALL-PROMPT.md" in head
+    assert "first-install.sh" in (ROOT / "README.md").read_text() and "FIRST-INSTALL-PROMPT.md" in (ROOT / "README.md").read_text()
+
+
+def test_a_second_run_while_the_first_still_works_is_refused_not_started(rig: Rig, stack) -> None:
+    """An agent whose tool timed out may start the command again while the first process lives on."""
+    import fcntl
+
+    state = rig.state_root / "auditmanager"
+    state.mkdir(parents=True)
+    with open(state / "first-install.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        done = rig.run(*_args(stack))
+    assert done.returncode == 10 and _stops(done)[-1][0] == "already_running", done.stdout[-800:]
+    assert "first-install.log" in done.stdout and not (rig.repo / "infra/deploy/env/alpha.env").exists()
+    rig.plan("deploy", "1|stop here")
+    assert _stops(rig.run(*_args(stack)))[-1][0] == "deploy_failed"  # the lock was released when the holder let go

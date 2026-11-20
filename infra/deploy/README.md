@@ -1,5 +1,9 @@
 # The alpha deployment — the runbook
 
+**New server, first installation:** `git clone <repository> /srv/auditmanager && cd /srv/auditmanager`, then
+`sudo infra/deploy/first-install.sh --email <address> [--domain <name>] [--norms-bundle <directory>]` (`--dry-run` previews it)
+— or give an AI agent `infra/deploy/FIRST-INSTALL-PROMPT.md`.
+
 Everything here was built and **driven** by `W14-PKG` on the development host. Nothing in
 it has run on a server, and it deliberately stops short of doing so: `R-1` is ruled (the
 owner's own VPS) but the host name, who holds root, which ports may be opened and when
@@ -28,6 +32,7 @@ down`. This is the deployed stack.
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
 | `apply-grants.sh` | `PROD-04-DB-ROLES-01` — the one idempotent step that gives the application role (`ALPHA_APP_DB_USER`) exactly the rights `scripts/recovery/grant_classification.py` says, and nothing that changes the schema, plus default privileges for what a later migration creates (`R-156n`; a relation the classification does not name is a warning, exit 0); `--check` verifies, `--config-only` judges the settings. Run by `deploy.sh` between `migrate` and `up`, and by `reset.sh` and `copy-serve.sh restore-db` after a restore (a `--no-privileges` dump carries none). Runbook §16 |
+| `first-install.sh` | `FIRST-INSTALL-01` — the first installation of the whole stack on a server that has never run it, from one command, in idempotent stages (preflight, environment with every secret generated, first deploy, administrator, norms import, HTTPS, executors, verify, GitHub values, marker). Every stop is one line `STOP [code]: <what to do>` from one code table (`--print-codes`); success ends with `DONE:`. `FIRST-INSTALL-PROMPT.md` is the prompt for a simple agent; `lib/first_install_env.py` and `lib/first_install_api.py` are its standard-library helpers; the tests are `tests/unit/deploy/` |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |

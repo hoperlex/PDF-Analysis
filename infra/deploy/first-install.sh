@@ -103,7 +103,7 @@ checkout_wrong|Run the script from its own clone: cd %s   and then the same comm
 checkout_dirty|ASK THE OWNER: the clone has local changes (%s). Do not edit or clean it. Use a fresh clone of the repository and run the command there.
 checkout_path|ASK THE OWNER: the clone path %s must use only letters, digits, '.', '_' and '-' (auto-deploy refuses other characters). Clone into such a path, for example /srv/auditmanager, and run the command there.
 no_origin|ASK THE OWNER: this clone has no 'origin' remote and auto-deploy needs it. Use a fresh clone made with git clone.
-deploy_user_invalid|ASK THE OWNER or do as printed: %s
+deploy_user_invalid|ASK THE OWNER, who runs the printed command: %s
 disk_low|Free disk space is %s GiB on %s and %s GiB are needed. Run: docker builder prune -af   (it removes build cache only) and run the same command again. If it stops here again, ASK THE OWNER for a larger disk.
 ram_low|ASK THE OWNER: only %s MiB of memory are available and %s MiB are needed. Free memory or resize the server, then run the same command again.
 http_port_busy|Port %s on this server is already in use. Run the same command again with --http-port set to another free port number (for example 31501).
@@ -114,6 +114,7 @@ domain_invalid|ASK THE OWNER for the server's public DNS name (%s). It is lower 
 email_required|ASK THE OWNER for an e-mail address. It becomes the administrator's login and the certificate contact. Then run the same command again with --email ADDRESS.
 email_invalid|ASK THE OWNER for a plain e-mail address (letters, digits and . _ + - around one @); %s is not one. Then run the same command again with --email ADDRESS.
 env_invalid|ASK THE OWNER: the environment file is not usable (%s). Do not edit it. The owner repairs or removes it.
+already_running|An earlier run of this command is still working: do not start another. Wait five minutes, look at the end of %s with tail -n 30, and run the same command again only when that file has not changed for fifteen minutes.
 already_installed|Nothing to do: this server was installed on %s (marker %s). To repeat one failed stage on purpose, the owner runs: sudo infra/deploy/first-install.sh --resume-stage N (same options).
 deploy_refused|ASK THE OWNER: deploy.sh refused: %s
 deploy_failed|Run the same command once more. If it stops here again, ASK THE OWNER and show the last 30 lines of output (deploy.sh ended with status %s).
@@ -400,11 +401,11 @@ stage_preflight() {
     say "clone $REPO at $(git -C "$REPO" rev-parse --short HEAD)"
     # who deploys
     if [ "$OPT_DEPLOY_USER" != root ]; then
-        getent passwd "$OPT_DEPLOY_USER" >/dev/null || stop deploy_user_invalid "the account $OPT_DEPLOY_USER does not exist; create it (adduser), then run the same command again."
+        getent passwd "$OPT_DEPLOY_USER" >/dev/null || stop deploy_user_invalid "the account $OPT_DEPLOY_USER does not exist: create it with adduser $OPT_DEPLOY_USER   then run the same command again."
         id -nG "$OPT_DEPLOY_USER" | tr ' ' '\n' | grep -qx docker \
-            || stop deploy_user_invalid "$OPT_DEPLOY_USER cannot use docker; run: usermod -aG docker $OPT_DEPLOY_USER   then run the same command again."
+            || stop deploy_user_invalid "$OPT_DEPLOY_USER cannot use docker: run usermod -aG docker $OPT_DEPLOY_USER   then run the same command again."
         [ "$(stat -c %U "$REPO")" = "$OPT_DEPLOY_USER" ] \
-            || stop deploy_user_invalid "the clone must belong to $OPT_DEPLOY_USER; run: chown -R $OPT_DEPLOY_USER: $REPO   then run the same command again."
+            || stop deploy_user_invalid "the clone must belong to $OPT_DEPLOY_USER: run chown -R $OPT_DEPLOY_USER: $REPO   then run the same command again."
     fi
     # disk and memory, against the runbook's figures
     local root free total available
@@ -525,10 +526,11 @@ stage_admin() {
 }
 
 # --------------------------------------------------------------------------------------------------------- 5 norms
+# fd 200 is this script's run lock; the detached importer `receive-bundle.sh import` starts must not keep it after this script ends.
 inbound() { SSH_ORIGINAL_COMMAND="$*" BUNDLE_STAGING="$NORMS_STAGING" STAND_COPY_RECORD="$NORMS_COPY_DIR/record.json" \
-    ALPHA_ENV_FILE="$ENV_FILE" "$DEPLOY_DIR/receive-bundle.sh"; }
+    ALPHA_ENV_FILE="$ENV_FILE" "$DEPLOY_DIR/receive-bundle.sh" 200>&-; }
 copy() { SSH_ORIGINAL_COMMAND="$*" ALPHA_CHECKOUT="$REPO" ALPHA_ENV_FILE="$ENV_FILE" STAND_COPY_DIR="$NORMS_COPY_DIR" \
-    BUNDLE_STAGING="$NORMS_STAGING" "$DEPLOY_DIR/copy-serve.sh"; }
+    BUNDLE_STAGING="$NORMS_STAGING" "$DEPLOY_DIR/copy-serve.sh" 200>&-; }
 
 # The tar push-bundle.sh sends, byte for byte (`bundle_tar` there; a test holds the two command lines equal).
 bundle_tar() { # bundle_tar PARENT KEY
@@ -953,6 +955,10 @@ main() {
     fi
     [ "$(id -u)" -eq 0 ] || [ "$TEST_MODE" = yes ] || stop not_root
     mkdir -p "$LOG_DIR"
+    # One run at a time: an agent whose tool timed out may start the command again while the first still works.
+    private_dir "$STATE_DIR"
+    exec 200>"$STATE_DIR/first-install.lock"
+    flock -n 200 || stop already_running "$LOG_FILE"
     if [ -n "$OPT_RESUME" ]; then
         state_clear_from "$OPT_RESUME"
     fi
