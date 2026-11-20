@@ -2163,3 +2163,13 @@ The occasion: before the fork hand-off the owner asked for «систему по
 | R-158c | Poll «Под каким пользователем ОС»: «Владелец логинов, обычно root». | `install.sh --login-user` runs the host agent under the existing account that holds the logins, root included, through a drop-in; the dedicated `pdf-agent` stays the default of every other install. |
 | R-158d | Poll «Утверждаете план»: «Утверждаю, публикуй в dev». | Published to `origin/dev` with release note 0.33.0; `main` is not touched by this work. |
 | R-158e | Free text: «Работай до релиза, я для опроса недоступен, развилки в долг, в конце отчёт и долги». | The session decided the remaining forks itself and lists them as debts in its report (`.local/reports/local-agent-01-2026-11-20/`). |
+
+## 3.63 — R-158f, the auto-deploy target (owner's poll answer, 2026-11-20, session `pdf-analysis-16`)
+
+The occasion: the fork hand-over. `deploy-auto.yml` pinned the parent's production address, host key and checkout path. The host did not
+check which repository a deployment came from. So a fork holding the parent's deployment secrets could roll the parent's production back
+to the fork point: the fork point is an ancestor of the parent's `main`.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-158f | Poll «Как исправляем (в родителе, форк унаследует)?»; options: GitHub environment and own repository, pin in source and own repository, GitHub environment only. Answer: «GitHub-окружение + свой репо (Рекомендую)». | **The repository names its server.** The address, the host key and the checkout path are the repository's Actions variables (`DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_PATH`). The workflow refuses without them and pins nothing in source.<br>**The server names its repository.** It refuses, before writing or fetching, a deployment from any repository other than its checkout's `origin`.<br>**Where the variables live.** The session used repository-level variables, not a GitHub environment named `production`. Environments in private repositories depend on the GitHub plan, which could not be checked, and the branch restriction is already in the workflow. Adding `environment: production` later is one line.<br>**Before the change reaches `main`,** the owner sets the three variables to the formerly pinned values (`DEPLOYMENT_RUNBOOK.md` section 3).<br>**Recorded in** `ADR-0021` decision 1 (dated amendment). |

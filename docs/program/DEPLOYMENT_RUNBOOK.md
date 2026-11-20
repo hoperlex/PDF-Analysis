@@ -418,6 +418,36 @@ operator needs while deciding which command to type, and until 2026-09-29 this d
 carried neither (`Y1`): `grep -c -i session docs/program/DEPLOYMENT_RUNBOOK.md` answered
 **0**.
 
+### Auto-deploy: the repository names its server, the server names its repository (`R-158f`)
+
+`.github/workflows/deploy-auto.yml` carries no address, host key or path. It reads them from this repository's Actions **variables**
+(Settings → Secrets and variables → Actions → Variables), and refuses before it connects when one is missing:
+
+| Name | Kind | What it holds |
+|---|---|---|
+| `DEPLOY_HOST` | variable | the server's SSH address, a host name or an IPv4 address |
+| `DEPLOY_KNOWN_HOSTS` | variable | one or more `known_hosts` lines, one of which names `DEPLOY_HOST` exactly; plain lines only (no comments, markers or hashed hosts) |
+| `DEPLOY_PATH` | variable | the absolute path of the server's checkout, for example `/srv/auditmanager` |
+| `VPS_USER` | secret | the account the workflow logs in as |
+| `VPS_SSH_KEY` | secret | that account's private key |
+
+**The host key** is taken from the server itself and checked out of band before it is stored. On the server, print it with
+`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` (the fingerprint) and `cat /etc/ssh/ssh_host_ed25519_key.pub` (the key). The variable's
+line is `<DEPLOY_HOST> ssh-ed25519 <key>`. Compare the fingerprint with `ssh-keyscan -t ed25519 <DEPLOY_HOST> | ssh-keygen -lf -` run
+from elsewhere. The workflow never scans the host itself and keeps `StrictHostKeyChecking=yes`.
+
+**The server accepts only its own repository.** Before it writes or fetches anything, the remote script compares `owner/name` of the
+checkout's `origin` (any form: https, `git@`, `ssh://`, an ssh alias; case ignored) with the repository the workflow runs in. A mismatch exits
+**4** with `REFUSED: … this deployment comes from …`. After a repository rename or transfer, run
+`git -C <DEPLOY_PATH> remote set-url origin <new URL>` on the server once.
+
+**A fork** starts with none of these variables, so its pushes to `main` deploy nowhere. Its owner sets the variables to the fork's own
+server; the parent's server would refuse the fork's deployments anyway.
+
+**Before this workflow first reaches `main`**, set the three variables to the values the old workflow pinned: the address, its host key
+line(s) and `/srv/auditmanager`. Check on the server that `git -C /srv/auditmanager remote get-url origin` names this repository. Otherwise
+the first deployment after the change refuses: safely, and without touching the host. The old secret `VPS_HOST` is no longer read.
+
 ---
 
 ## 4. Prove it is this tree, and keep proving it
