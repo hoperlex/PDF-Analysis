@@ -10,7 +10,7 @@
 #
 # Built on the host like the other repository-owned images. The base is pinned by digest (the same Alpine
 # the MinIO image uses); the client by exact package version in `client.pin`. See that file for what is and
-# is not pinned, and why the value in it is `UNRESOLVED` until someone with network access resolves it.
+# is not pinned, and how its value was resolved against this base digest.
 FROM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
 
 COPY client.pin /etc/acme/client.pin

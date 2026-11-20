@@ -170,11 +170,23 @@ class Rig:
         subprocess.run([*git, "commit", "-q", "-m", "clone"], check=True)
         subprocess.run([*git, "remote", "add", "origin", "https://github.com/acme-co/audit-install.git"], check=True)
 
-    def pin_acme_client(self) -> None:
+    def _set_acme_pin(self, value: str) -> None:
+        """The clone's pin says ``value``, committed so the clone stays clean. Independent of what the real file holds."""
         pin = self.repo / "infra/acme/client.pin"
-        pin.write_text(pin.read_text().replace("ACME_CLIENT_APK_VERSION=UNRESOLVED", "ACME_CLIENT_APK_VERSION=4.1.1-r0"))
-        subprocess.run(["git", "-C", str(self.repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am", "pin"],
-                       check=True)
+        text = pin.read_text()
+        lines = [f"ACME_CLIENT_APK_VERSION={value}" if line.startswith("ACME_CLIENT_APK_VERSION=") else line
+                 for line in text.splitlines()]
+        changed = "\n".join(lines) + "\n"
+        if changed != text:
+            pin.write_text(changed)
+            subprocess.run(["git", "-C", str(self.repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am",
+                            f"pin {value}"], check=True)
+
+    def pin_acme_client(self) -> None:
+        self._set_acme_pin("4.1.1-r0")
+
+    def unpin_acme_client(self) -> None:
+        self._set_acme_pin("UNRESOLVED")
 
     def plan(self, name: str, *lines: str) -> None:
         (self.stub / f"{name}.plan").write_text("".join(f"{line}\n" for line in lines))
@@ -602,6 +614,7 @@ def test_dns_missing_and_mismatch_are_stops_that_say_what_to_create(rig: Rig, st
 
 
 def test_an_unpinned_acme_client_is_a_stop_before_the_environment_is_touched(rig: Rig, stack) -> None:
+    rig.unpin_acme_client()
     (rig.stub / f"dns-{DOMAIN}").write_text("203.0.113.7\n")
     rig.plan("deploy", f"3|{GATE}", "0|ok")
     (rig.stub / "agent.status").write_text(SUBSCRIPTION)

@@ -619,8 +619,9 @@ echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | ope
 Expect (shape): `notAfter=Dec 30 ... 2026 GMT`.
 
 **1. Resolve the client pin once, from any machine with docker and network.** The image installs `certbot`
-by exact package version from `infra/acme/client.pin`, which ships saying `UNRESOLVED`; `deploy.sh` refuses to
-deploy a host with a name set until it is resolved (guard `acme-client-pinned`), and so does the image build.
+by exact package version from `infra/acme/client.pin`. A pin that says `UNRESOLVED` (as it shipped) makes
+`deploy.sh` refuse a host with a name set (guard `acme-client-pinned`), and so does the image build. **Done on
+2026-11-20:** `4.0.0-r0` for the pinned Alpine 3.22.1 digest; repeat this step only when that digest moves.
 
 ```
 docker run --rm alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 \
@@ -815,8 +816,8 @@ terminate TLS. The volumes `<instance>-acme-state` (the account key and the line
 ### What this section does not do
 
 * it has **not been run**: no certificate authority was contacted, no image was built, no host was touched;
-* it does not resolve `infra/acme/client.pin` (step 1) or choose between a name under `sslip.io` and one of the
-  owner's own (step 9) — both are the owner's;
+* it does not re-resolve `infra/acme/client.pin` when the base digest moves (step 1; resolved once on 2026-11-20) or
+  choose between a name under `sslip.io` and one of the owner's own (step 9) — both are the owner's;
 * it does not run the restore paths for you: `reset.sh --restore` and `copy-serve.sh restore-db` close 443 after a
   restore that brings the seeded pair back (above), and what they print is §7's and §13's;
 * it does not restart anything on a renewal: the proxy reloads on its own timer, so a renewal needs no right to

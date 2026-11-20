@@ -7,11 +7,12 @@
 # package version, `<upstream version>-r<release>`, as `apk` prints it. A version that is not in this file
 # cannot be installed: the Dockerfile refuses to build.
 #
-# WHY THE VALUE BELOW IS NOT A VERSION. The lane that wrote this had no network and no docker, and a
-# version number written from memory is a claim about a package index nobody looked at. So the line says
-# `UNRESOLVED`, and until a person with network access replaces it with what the index answers, `deploy.sh`
-# refuses to deploy a host that has ALPHA_CERT_NAME set (`acme-client-pinned`) and so does the build. The
-# one step, from any machine with docker (the runbook, section 6, step 1, prints the expected output):
+# HOW THE VALUE BELOW WAS RESOLVED. The lane that wrote this file had no network, so it shipped the word
+# `UNRESOLVED`, which `deploy.sh` refuses for a host with ALPHA_CERT_NAME set (`acme-client-pinned`), as does the
+# build. On 2026-11-20 the fork-storage session (for the one-command first install, FIRST-INSTALL-01) ran the
+# step below against the pinned base digest; the index answered `certbot policy:` / `4.0.0-r0:` from
+# `https://dl-cdn.alpinelinux.org/alpine/v3.22/community`. Re-run it whenever the base digest moves
+# (the runbook, section 6, step 1, prints the expected output):
 #
 #   docker run --rm alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 \
 #     sh -c 'apk update >/dev/null && apk policy certbot'
@@ -22,4 +23,4 @@
 # WHAT THIS DOES NOT PIN, said plainly: the packages `certbot` depends on float within Alpine 3.22's
 # repository at build time. The image's identity is the base digest plus the client version, not a full
 # lock of its dependency closure (the PostgreSQL and MinIO images are pinned harder than this).
-ACME_CLIENT_APK_VERSION=UNRESOLVED
+ACME_CLIENT_APK_VERSION=4.0.0-r0

@@ -154,5 +154,3 @@ def serve():
         server.server_close()
 
     return state, stop
-
-

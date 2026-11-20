@@ -71,7 +71,7 @@ EDITED = {
 #: A name no one owns and the guard accepts: not reserved, two labels, lower case. Not the live name.
 NAME = "rehearsal-host.sslip.io"
 #: A package version of the shape `apk policy` prints. It names nothing real; the staged tree needs only
-#: its SHAPE to pass `acme-client-pinned`, and the real file keeps the word UNRESOLVED.
+#: its SHAPE to pass `acme-client-pinned`. The real file holds the resolved version (2026-11-20).
 PINNED = "ACME_CLIENT_APK_VERSION=9.9.9-r0\n"
 
 ACME_GUARDS = (
@@ -579,14 +579,18 @@ class TestTrustedProxiesEmptyWithName:
 
 
 class TestAcmeClientPinned:
-    def test_the_shipped_word_is_refused_in_our_words_before_docker(self, tmp_path: Path) -> None:
-        """The REAL file's content, not a staged stand-in: this is the state the lane ships in."""
+    def test_the_shipped_pin_is_a_resolved_package_version_that_passes(self, tmp_path: Path, serving: int) -> None:
+        """The REAL file's content, not a staged stand-in: resolved on 2026-11-20 (runbook section 6 step 1)."""
         shipped = (ACME_DIR / "client.pin").read_text(encoding="utf-8")
-        assert re.search(r"^ACME_CLIENT_APK_VERSION=UNRESOLVED$", shipped, re.M), (
-            "infra/acme/client.pin no longer says UNRESOLVED; if someone resolved it, this case and the "
-            "lane's report need to say so"
-        )
+        assert re.search(r"^ACME_CLIENT_APK_VERSION=[0-9]+(?:\.[0-9]+)*-r[0-9]+$", shipped, re.M), shipped
+        assert "UNRESOLVED\n" not in shipped.split("ACME_CLIENT_APK_VERSION=", 1)[1]
         script = _stage(tmp_path, pin=shipped)
+        completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings()), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+    def test_the_unresolved_word_is_refused_in_our_words_before_docker(self, tmp_path: Path) -> None:
+        """The word the file shipped with, staged: refused before docker is touched."""
+        script = _stage(tmp_path, pin="ACME_CLIENT_APK_VERSION=UNRESOLVED\n")
         completed, log = _run(script, _env(tmp_path, _free_port(), **_acme_settings()), tmp_path)
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
         assert "the ACME client is not pinned" in completed.stderr, completed.stderr
