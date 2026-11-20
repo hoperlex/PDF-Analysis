@@ -559,9 +559,12 @@ ensure_tools() {
 }
 docker_manual_command() { printf '%s' "curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && sh /tmp/get-docker.sh"; }
 
-# install_docker_packages PACKAGES...: Docker's own apt repository, trusted only by the pinned fingerprint of its key. The
-# distribution's packages are not used: Debian 12 and Ubuntu 22.04 carry no compose v2 plugin (their docker-compose is v1), and the
-# stack needs `docker compose` and its buildx.
+# install_docker_packages PACKAGES...: Docker's own apt repository, trusted only because the downloaded key has the pinned
+# fingerprint. Chosen over the distribution's packages because those differ by release in the engine's version and in whether a
+# compose v2 package exists at all (Ubuntu 24.04 has `docker-compose-v2`, measured on the development host; this installer is also
+# for Debian and older Ubuntu), while Docker's repository gives the engine, buildx and compose v2 as one set on every release the
+# installer supports -- the stack needs `docker compose` and its buildx. The price is trust in one key: its fingerprint is pinned
+# above, was read from the live key of both distributions on 2026-11-20, and a different one stops the run (`docker_key_mismatch`).
 docker_step_failed() { # docker_step_failed OUTPUT: show what the step printed, then stop
     printf '%s\n' "$1" | tail -n 8
     stop docker_install_failed "$(oneline "$(last_line "$1")" 200)"

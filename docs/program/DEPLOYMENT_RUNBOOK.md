@@ -217,11 +217,16 @@ whose sources changed, and nothing removes the old generation.** So:
 ## 2. The one file a human must write
 
 **On a server that has never run this stack, `infra/deploy/first-install.sh` writes this file, and does the rest of this
-runbook's first-installation order** (`FIRST-INSTALL-01`): every secret generated in every place it is written (the second
+runbook's first-installation order** (`FIRST-INSTALL-01`). Started in any clone (the owner's working copy), it makes the server's
+own checkout `/srv/<instance>` from that clone's origin, detached at its commit (what every auto-deploy leaves), and works only in
+it, so the working copy can be edited freely and the deploy clone stays clean for deploy-auto. It installs Docker (Docker's apt
+repository, key fingerprint pinned) and its tools on Debian and Ubuntu. The file: every secret generated in every place it is written (the second
 copies inside the database URLs and the S3 names, the application role's password, the X25519 pair), mode 600, an existing
 file never overwritten; then the first deploy, the administrator's password and profile (§3, `[default_credential]`), the
 on-host norms import (§11, §13 with `SSH_ORIGINAL_COMMAND`), the staging and real certificate and `ALPHA_PUBLISH_HTTPS=yes` (§6),
-the host's own subscriptions, `verify-deployed.sh` (§4) and the values to paste into GitHub (§3, auto-deploy). It is
+the host's own subscriptions, `verify-deployed.sh` (§4), the values to paste into GitHub (§3, auto-deploy), and, with the norms
+corpus in, the semantic norm lookup: `ALPHA_NORM_EMBED=yes` with its address empty from the start, then the memory gate and the
+quality gate of `NORM-VECTOR-TEMP-01` (rollout steps 3 to 5), and only when both pass the address and a worker restart. It is
 `sudo infra/deploy/first-install.sh --email <address> [--domain <name>] [--norms-bundle <directory>]`; `--dry-run` prints its
 stages. **It has run against stubs only** (`tests/unit/deploy/`): its first real run is a server's. What follows is what it does,
 for a person who writes or repairs the file by hand.

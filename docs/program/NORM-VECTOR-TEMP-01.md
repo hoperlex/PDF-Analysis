@@ -77,6 +77,16 @@ Owner decisions of 2026-11-11 (poll): deploy by this plan; quality thresholds 0.
 5. **Rollback**: empty `AUDITMANAGER_NORM_EMBED_URL` and restart the worker (the word search alone, as before); `ALPHA_NORM_EMBED=no`
    and `docker compose --profile norm-embed rm -sf norm-embed` removes the service.
 
+## The first install does this (`FIRST-INSTALL-01`, owner 2026-11-20: always on)
+
+`infra/deploy/first-install.sh` writes `ALPHA_NORM_EMBED=yes`, `ALPHA_MEM_LIMIT_NORM_EMBED=1200m` and an EMPTY address into a new `alpha.env`
+(rollout step 2). After its norms stage has made a snapshot current it runs steps 3 and 4 as written above (memory above 600 MB and swap
+not growing while the embedder works; `semantic_check --windows 500`) and, when both pass, step 5: it sets
+`AUDITMANAGER_NORM_EMBED_URL=http://norm-embed:8080` and runs `docker compose ... up -d --no-deps worker` (`--no-deps`: only the worker is
+recreated). A failed gate leaves the address empty -- the rollback state -- and stops with the reason; installed without a norms bundle, the
+address stays empty until the installer is run again with `--norms-bundle`. `--set ALPHA_NORM_EMBED=no` is the owner's way out (the
+rollback's second step: the service is removed).
+
 ## Removal
 
 This is a stop-gap. The permanent embedder for run-time text is a database-side decision still to be made; the precedents' night
