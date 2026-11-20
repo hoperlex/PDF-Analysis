@@ -603,6 +603,13 @@ stage_norms() {
     available="$(mem_field_mib MemAvailable)"
     [ "${available:-0}" -ge "$NORMS_RAM_AVAILABLE_MIB" ] || stop ram_low "${available:-0}" "$NORMS_RAM_AVAILABLE_MIB"
 
+    # An open record that is not a test-data waiver is somebody's copy or import. `receive` would turn it into an import record
+    # (its design: `W54-PLAN.md` section 3.5), so the stage looks first and touches nothing of another kind.
+    norms_record
+    if [ "$NORMS_REC_STATE" = open ] && [ "$NORMS_REC_KIND" != test_data_waiver ]; then
+        stop norms_busy "record $NORMS_REC_STAMP, kind $NORMS_REC_KIND"
+    fi
+
     # 1. the bundle: verified here (push-bundle.sh --dry-run applies the one bundle rule), then streamed into `receive`
     norms_status
     if [ "$(norms_import_state "$key")" = absent ]; then
