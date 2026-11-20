@@ -69,6 +69,12 @@ SECRET_DIR="$(seam SECRET_DIR /root)"
 LOG_DIR="$(seam LOG_DIR /var/log)"
 NORMS_COPY_DIR="$(seam COPY_DIR /srv/auditmanager-copy)"      # deploy.sh's defaults: STAND_COPY_RECORD's directory
 NORMS_STAGING="$(seam STAGING /srv/auditmanager-bundles)"     # and BUNDLE_STAGING
+OS_RELEASE="$(seam OS_RELEASE /etc/os-release)"
+KEYRINGS_DIR="$(seam KEYRINGS_DIR /etc/apt/keyrings)"
+APT_SOURCES_DIR="$(seam APT_SOURCES_DIR /etc/apt/sources.list.d)"
+SAMPLE_SECONDS="$(seam SAMPLE_SECONDS 2)"
+DOCKER_WAIT_SECONDS="$(seam DOCKER_WAIT_SECONDS 30)"
+DEPLOY_ROOT="$(seam DEPLOY_ROOT /srv)"
 PROC_NET="$(seam PROC_NET /proc/net)"
 MEMINFO="$(seam MEMINFO /proc/meminfo)"
 HOST_KEY_PUB="$(seam HOST_KEY_PUB /etc/ssh/ssh_host_ed25519_key.pub)"
@@ -84,61 +90,92 @@ WARN_RAM_TOTAL_MIB=3500
 STOP_RAM_AVAILABLE_MIB=1024
 # STAND-NORMS-IMPORT-RUNBOOK-01.md section 0 item 4: "RAM available >= 2 GiB (importer peak 0.79 GiB + 1 GiB), swap excluded".
 NORMS_RAM_AVAILABLE_MIB=2048
+# NORM-VECTOR-TEMP-01 rollout step 3: "available memory stays above 600 MB and swap does not grow".
+SEMANTIC_MIN_AVAILABLE_MIB=600
+SEMANTIC_URL=http://norm-embed:8080
+SEMANTIC_WINDOWS=500
+# Docker's own signing key, from https://download.docker.com/linux/{debian,ubuntu}/gpg (one file for both). The installer trusts the
+# download only when its fingerprint is this one; read from the live key on 2026-11-20.
+DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+DOCKER_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
 DEFAULT_INSTANCE=auditmanager
 DEFAULT_HTTP_PORT=31500
 
 # ----------------------------------------------------------------------------------------------------------- STOP codes
 # THE SINGLE SOURCE. One line per code: `code|text`. The text is a printf format whose `%s` the stop call fills with the facts of
-# this run. The text is the whole of the action: a line that begins `ASK THE OWNER` is for the owner and no one else; any other line
-# is something the reader does itself, exactly as printed, and then runs the same command again. `--print-codes` prints this
-# table; the prompt for a simple agent carries the same table and a test holds the two equal. A text may not hold `|`.
+# this run, and it is the whole of the action. THREE KINDS, told apart by how the text begins:
+#
+#   * no prefix: something the reader does itself, exactly as printed (a command, or "run the same command again"), because the
+#     script could not do it for the reader. Most codes are of this kind.
+#   * `ASK THE OWNER`: a fact only the owner holds -- an e-mail address, the domain, a record at the registrar, a sign-in to a
+#     subscription, the provider's firewall, money. Never a technical question; the text says what is needed.
+#   * `REPORT TO THE OWNER`: a failure with no safe automatic action. The reader shows the line (and the last 30 lines of output) and
+#     stops; nothing is retried.
+#
+# `--print-codes` prints this table; the prompt for a simple agent carries the same table and a test holds the two equal. Another
+# test holds the two prefixes to a short list of codes (OWNER_FACT_CODES and REPORT_CODES there). A text may not hold `|`.
 CODES_TABLE="$(cat <<'TABLE'
 usage|Fix the command line as the lines above say (--help shows it), then run the same command again.
 not_root|Run the same command with sudo (as root).
-tool_missing|Install the missing tools (%s) with: apt-get install -y %s   then run the same command again.
-docker_missing|ASK THE OWNER: Docker Engine with the compose plugin is not installed on this server. After the owner has installed it, run the same command again.
-docker_down|Start Docker with: systemctl start docker   then run the same command again. If it does not start, ASK THE OWNER.
-docker_old|ASK THE OWNER: %s Docker Engine 20 or newer with the compose v2 plugin is required.
+tool_missing|Install the missing tools with this one command: %s   then run the same command again.
+docker_missing|Install Docker Engine with its compose plugin with this one command: %s   then run the same command again.
+docker_install_failed|Run the same command once more (a network error is the usual cause). What failed: %s
+docker_key_mismatch|REPORT TO THE OWNER: the Docker package key from download.docker.com has the fingerprint %s, not the pinned %s. Nothing was installed. Do not retry: the download may have been tampered with.
+docker_down|REPORT TO THE OWNER: Docker is installed but does not start even after systemctl enable --now docker. Show the owner the output of: journalctl -u docker --no-pager -n 40
+docker_old|REPORT TO THE OWNER: %s Containers are running on this server and upgrading Docker restarts them, so it is not done automatically.
 checkout_wrong|Run the script from its own clone: cd %s   and then the same command again.
-checkout_dirty|ASK THE OWNER: the clone has local changes (%s). Do not edit or clean it. Use a fresh clone of the repository and run the command there.
-checkout_path|ASK THE OWNER: the clone path %s must use only letters, digits, '.', '_' and '-' (auto-deploy refuses other characters). Clone into such a path, for example /srv/auditmanager, and run the command there.
-no_origin|ASK THE OWNER: this clone has no 'origin' remote and auto-deploy needs it. Use a fresh clone made with git clone.
-deploy_user_invalid|ASK THE OWNER, who runs the printed command: %s
-disk_low|Free disk space is %s GiB on %s and %s GiB are needed. Run: docker builder prune -af   (it removes build cache only) and run the same command again. If it stops here again, ASK THE OWNER for a larger disk.
-ram_low|ASK THE OWNER: only %s MiB of memory are available and %s MiB are needed. Free memory or resize the server, then run the same command again.
-http_port_busy|Port %s on this server is already in use. Run the same command again with --http-port set to another free port number (for example 31501).
-public_port_busy|ASK THE OWNER: public port %s is held by %s. It must be free for the certificate (DEPLOYMENT_RUNBOOK.md section 6 step 4 for a host nginx). After it is free, run the same command again.
+checkout_dirty|The deploy clone %s has local changes (%s) and must not be edited or cleaned. Run this command (it makes a clean clone at a free path and works there): %s
+deploy_path_unusable|%s cannot be the deploy clone: %s. Run this command (it uses a free path; nothing at the old path is touched): %s
+deploy_clone_installed|REPORT TO THE OWNER: %s holds an installation's secrets but %s, so it cannot be used and must not be replaced.
+no_origin|This clone has no 'origin' remote, which auto-deploy needs, but it has the remote %s. Run this command: git -C %s remote add origin %s   then run the same command again.
+no_origin_url|ASK THE OWNER for the repository's clone URL: %s has no remote to read it from. Then run this command: git -C %s remote add origin URL   and run the same command again.
+clone_needs_access|ASK THE OWNER to give this server read access to the repository %s: for a private repository a read-only deploy key (the repository's Settings, Deploy keys) or an https address with an access token. Then run the same command again.
+clone_failed|Run the same command once more (a network error is the usual cause). What failed: %s
+deploy_user_invalid|Run this command: %s   then run the same command again.
+disk_low|Free disk space is %s GiB on %s and %s GiB are needed. Run this command: docker builder prune -af   (it removes build cache only) and then run the same command again.
+disk_too_small|ASK THE OWNER for a larger disk: %s GiB are free on %s, %s GiB are needed, and clearing the build cache did not help. It costs money, so only the owner decides.
+ram_low|Only %s MiB of memory are available and %s MiB are needed. Wait five minutes so that other work on the server can finish, then run the same command again.
+ram_too_small|ASK THE OWNER for a server with more memory: %s MiB are available and %s MiB are needed, and waiting did not help. It costs money, so only the owner decides.
+http_port_busy|Port %s on this server is already in use. Run the same command again with --http-port %s added (that port is free).
+public_port_busy|ASK THE OWNER whether %s may be stopped: it holds public port %s, which the certificate needs, and it serves something else on this server. When the owner has stopped it, run the same command again.
 instance_invalid|Run again with --instance made of 3 to 40 lower-case letters, digits and '-', starting with a letter (for example auditmanager).
 instance_mismatch|Run the same command again with --instance %s, or without --instance: the existing environment file already belongs to that instance.
-domain_invalid|ASK THE OWNER for the server's public DNS name (%s). It is lower case, has a dot, no scheme and no port, for example audit.mycompany.ru.
+domain_invalid|ASK THE OWNER for the server's public DNS name: %s is not one. It is lower case, has a dot, no scheme and no port, for example audit.mycompany.ru.
 email_required|ASK THE OWNER for an e-mail address. It becomes the administrator's login and the certificate contact. Then run the same command again with --email ADDRESS.
-email_invalid|ASK THE OWNER for a plain e-mail address (letters, digits and . _ + - around one @); %s is not one. Then run the same command again with --email ADDRESS.
-env_invalid|ASK THE OWNER: the environment file is not usable (%s). Do not edit it. The owner repairs or removes it.
+email_invalid|ASK THE OWNER for a plain e-mail address (letters, digits and . _ + - around one @): %s is not one. Then run the same command again with --email ADDRESS.
+env_invalid|The environment file is not usable (%s) and nothing has been deployed from it. Run this command: %s   then run the same command again (it writes new files).
+env_invalid_installed|REPORT TO THE OWNER: the environment file is not usable (%s) and this server already has an installation made from it, so it must not be replaced.
+already_installed|Nothing to do: this server was installed on %s (marker %s). To add the norms bundle later run: sudo infra/deploy/first-install.sh --norms-bundle DIRECTORY
 already_running|An earlier run of this command is still working: do not start another. Wait five minutes, look at the end of %s with tail -n 30, and run the same command again only when that file has not changed for fifteen minutes.
-already_installed|Nothing to do: this server was installed on %s (marker %s). To repeat one failed stage on purpose, the owner runs: sudo infra/deploy/first-install.sh --resume-stage N (same options).
-deploy_refused|ASK THE OWNER: deploy.sh refused: %s
-deploy_failed|Run the same command once more. If it stops here again, ASK THE OWNER and show the last 30 lines of output (deploy.sh ended with status %s).
-host_overloaded|The server is overloaded. Wait five minutes, then run the same command again. If it stops here again, ASK THE OWNER.
-acme_unpinned|ASK THE OWNER: the certificate client is not pinned in infra/acme/client.pin (DEPLOYMENT_RUNBOOK.md section 6 step 1). The owner commits the pin to the repository; then update this clone with git pull --ff-only and run the same command again.
-dns_missing|ASK THE OWNER: the name %s has no DNS A record. Create an A record for it pointing to %s, wait a few minutes, then run the same command again.
-dns_mismatch|ASK THE OWNER: the DNS A record of %s points to %s, not to this server (%s). Change the record, wait a few minutes, then run the same command again.
-acme_staging_failed|ASK THE OWNER: the test certificate was not issued within %s seconds. Show the owner the output of: docker compose --env-file %s -f %s -f %s logs acme
-acme_real_failed|ASK THE OWNER: the real certificate was not issued within %s seconds (a rate limit of the authority is the usual reason, DEPLOYMENT_RUNBOOK.md section 6 step 9). Show the owner the output of: docker compose --env-file %s -f %s -f %s logs acme
-https_not_published|ASK THE OWNER: the deploy finished but public port 443 is not published (%s). Show the owner the last 30 lines of output.
-admin_failed|ASK THE OWNER: the administrator account could not be finished (%s). Show the owner the last 30 lines of output. Never print the password file.
-admin_unknown_password|ASK THE OWNER: the administrator's password is neither the published one nor the one stored in %s. The owner decides; do not guess.
-norms_bundle_invalid|ASK THE OWNER: the norms bundle %s is not usable (%s).
-norms_disk_low|Free disk space is too small for the norms import: %s GiB are free on %s and about %s GiB are needed. Run: docker builder prune -af   and run the same command again. If it stops here again, ASK THE OWNER for a larger disk.
-norms_busy|ASK THE OWNER: another copy or import is open (%s). Do not touch it. After the owner has closed it, run the same command again.
-norms_refused|ASK THE OWNER: the norms transfer or import was refused: %s
-norms_import_failed|ASK THE OWNER: the norms import ended with status %s (2 is a refusal, 75 an unfinished admission). Its log is %s
-norms_import_interrupted|ASK THE OWNER: the norms import of %s started and is neither running nor finished (the server may have restarted). The owner checks it with docker ps and decides (STAND-NORMS-IMPORT-RUNBOOK-01.md section 8).
-norms_report_differs|ASK THE OWNER: the norms import finished but its report does not match (status %s). Do not designate anything. The owner decides before the writers are resumed; the report is %s
-norms_designate_failed|ASK THE OWNER: the norms snapshot could not be made current (%s).
-executors_login_needed|ASK THE OWNER to sign this server in to a subscription: as root run claude (and/or codex login) and finish the sign-in in the browser. Then run the same command again. If the owner does not want this server's own subscriptions, run the same command again with --skip-executors.
-executors_not_connected|ASK THE OWNER: signed-in subscriptions were found but local-agent.sh could not connect them (status %s). Show the owner the last 30 lines of output.
-verify_failed|ASK THE OWNER: verify-deployed.sh ended with status %s (0 is success). Show the owner the last 30 lines of output.
-unexpected|ASK THE OWNER and show the last 30 lines of output (the script failed at line %s).
+deploy_refused|REPORT TO THE OWNER: deploy.sh refused for a reason this installer does not know: %s
+deploy_failed|Run the same command once more (deploy.sh ended with status %s; a network error during the build is the usual cause).
+host_overloaded|The server is overloaded. Wait five minutes, then run the same command again.
+acme_unpinned|The deploy clone predates the certificate client's pin. Run this command: git -C %s fetch origin && git -C %s checkout --detach origin/HEAD   then run the same command again.
+dns_missing|ASK THE OWNER to create a DNS A record at the domain registrar: name %s, address %s. Then wait a few minutes and run the same command again.
+dns_mismatch|ASK THE OWNER to change the DNS A record of %s at the domain registrar: it points to %s and must point to %s (this server). Then wait a few minutes and run the same command again.
+acme_staging_failed|ASK THE OWNER to open public ports 80 and 443 in the server provider's firewall and to check the DNS record of %s: the test certificate was not issued within %s seconds. What the authority said: %s. Then run the same command again.
+acme_real_failed|ASK THE OWNER: the real certificate was not issued within %s seconds. What the authority said: %s. A rate limit means waiting or choosing another name, which only the owner can do. Then run the same command again.
+https_not_published|REPORT TO THE OWNER: the deploy finished but public port 443 is not published (%s).
+admin_failed|REPORT TO THE OWNER: the administrator account could not be finished (%s). The password file is never printed.
+admin_unknown_password|ASK THE OWNER to write the administrator's current login and password himself into %s as two lines, login=... and password=... (mode 600). Never ask for them in a message. Then run the same command again.
+norms_bundle_invalid|ASK THE OWNER for the norms bundle directory: %s is not usable (%s).
+norms_disk_low|Free disk space is too small for the norms import: %s GiB are free on %s and about %s GiB are needed. Run this command: docker builder prune -af   and then run the same command again.
+norms_disk_too_small|ASK THE OWNER for a larger disk: %s GiB are free on %s, about %s GiB are needed for the norms import, and clearing the build cache did not help. It costs money, so only the owner decides.
+norms_busy|REPORT TO THE OWNER: another copy or import is open (%s) and was not touched.
+norms_wait|Another copy or import step holds a lock (%s). Wait five minutes, then run the same command again.
+norms_refused|REPORT TO THE OWNER: the norms transfer or import was refused: %s
+norms_import_unfinished|The norms importer ended unfinished three times (status 75: the object store was unavailable). Wait ten minutes, then run the same command again; importing again is safe.
+norms_import_failed|REPORT TO THE OWNER: the norms import ended with status %s (2 is a refusal, 1 a mismatch). Its log is %s
+norms_report_differs|REPORT TO THE OWNER: the norms import finished but its report does not match (status %s). Nothing was designated and the writers stay stopped. The report is %s
+norms_designate_failed|REPORT TO THE OWNER: the norms snapshot could not be made current (%s).
+semantic_memory_low|Semantic norm lookup stays OFF, and the stack works on word search. The memory gate failed: %s. Wait ten minutes, then run the same command again; both gates are measured again.
+semantic_quality_failed|REPORT TO THE OWNER: semantic norm lookup stays OFF (the stack works on word search; nothing is broken). The quality gate failed: %s. The lookup needs more memory and the full-precision model, which is the owner's decision. If the owner accepts word search only, run this command: %s
+semantic_check_failed|The quality gate could not run (%s). Semantic norm lookup stays OFF and the stack works on word search. Run the same command once more.
+semantic_worker_failed|The worker did not start with the embedder address, so the address was taken out again and the stack works on word search. Run the same command once more. What failed: %s
+executors_login_needed|ASK THE OWNER to sign this server in to his subscription: as root run claude (and/or codex login) and finish the sign-in in the browser. Then run the same command again. If the owner does not want this server's own subscriptions, run the same command again with --skip-executors added.
+executors_not_connected|REPORT TO THE OWNER: signed-in subscriptions were found but local-agent.sh could not connect them (status %s).
+verify_failed|REPORT TO THE OWNER: verify-deployed.sh ended with status %s, also after the proxy was reloaded.
+unexpected|REPORT TO THE OWNER: the script failed at line %s.
 TABLE
 )"
 
@@ -180,7 +217,8 @@ trap 'on_error $LINENO' ERR
 
 say() { printf 'first-install: %s\n' "$*"; }
 warn() { printf 'first-install: WARNING: %s\n' "$*"; }
-stage_header() { printf '\nfirst-install: [%s/10] %s\n' "$1" "$2"; }
+STAGE_COUNT=11
+stage_header() { printf '\nfirst-install: [%s/%s] %s\n' "$1" "$STAGE_COUNT" "$2"; }
 
 usage() {
     cat <<'USAGE'
@@ -192,10 +230,12 @@ usage: sudo infra/deploy/first-install.sh --email ADDRESS [options]
   --instance NAME        the name of this installation (default auditmanager)
   --http-port N          the loopback port of the application (default 31500)
   --deploy-user NAME     the account GitHub auto-deploy logs in as (default root)
-  --set NAME=VALUE       one more setting for a NEW alpha.env (repeatable; the example file's names only)
+  --deploy-path PATH     the server's own checkout, made by the installer from this clone's origin (default /srv/<instance>)
+  --set NAME=VALUE       one more setting for a NEW alpha.env (repeatable; the example file's names only).
+                         --set ALPHA_NORM_EMBED=no (the owner's choice) turns the semantic norm lookup off, also later
   --no-ci-key            do not generate a deploy key for GitHub auto-deploy
   --skip-executors       do not require this server's own claude/codex subscriptions (the owner decides)
-  --resume-stage N       run again from stage N (1-9), also after the installation is marked done
+  --resume-stage N       run again from stage N (1-10), also after the installation is marked done
   --dry-run              print the stages and what each would do; change nothing
   --print-codes          print the STOP code table (add --markdown for the prompt's form)
   -h, --help             this text
@@ -211,14 +251,14 @@ usage_error() { # usage_error MESSAGE: the message, the help, then the one STOP 
 }
 
 # --------------------------------------------------------------------------------------------------------- arguments
-OPT_EMAIL="" OPT_DOMAIN="" OPT_BUNDLE="" OPT_INSTANCE="" OPT_HTTP_PORT="" OPT_DEPLOY_USER=root
+OPT_EMAIL="" OPT_DOMAIN="" OPT_BUNDLE="" OPT_INSTANCE="" OPT_HTTP_PORT="" OPT_DEPLOY_USER=root OPT_DEPLOY_PATH=""
 OPT_NO_CI_KEY=no OPT_SKIP_EXECUTORS=no OPT_RESUME="" OPT_DRY_RUN=no
 OPT_SETS=()
 
 parse_args() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            --email|--domain|--norms-bundle|--instance|--http-port|--deploy-user|--set|--resume-stage)
+            --email|--domain|--norms-bundle|--instance|--http-port|--deploy-user|--deploy-path|--set|--resume-stage)
                 if [ "$#" -lt 2 ] || [ -z "$2" ]; then usage_error "$1 needs a value"; fi
                 case "$1" in
                     --email) OPT_EMAIL="${2,,}" ;;
@@ -227,6 +267,7 @@ parse_args() {
                     --instance) OPT_INSTANCE="$2" ;;
                     --http-port) OPT_HTTP_PORT="$2" ;;
                     --deploy-user) OPT_DEPLOY_USER="$2" ;;
+                    --deploy-path) OPT_DEPLOY_PATH="$2" ;;
                     --set) OPT_SETS+=("$2") ;;
                     --resume-stage) OPT_RESUME="$2" ;;
                 esac
@@ -249,9 +290,15 @@ validate_args() {
         fi
     fi
     if [ -n "$OPT_RESUME" ]; then
-        [[ "$OPT_RESUME" =~ ^[1-9]$ ]] || usage_error "--resume-stage is a number from 1 to 9"
+        [[ "$OPT_RESUME" =~ ^([1-9]|10)$ ]] || usage_error "--resume-stage is a number from 1 to 10"
     fi
     [[ "$OPT_DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || usage_error "--deploy-user is a lower-case account name"
+    if [ -n "$OPT_DEPLOY_PATH" ]; then
+        # The same rule the auto-deploy workflow applies to DEPLOY_PATH.
+        if ! [[ "$OPT_DEPLOY_PATH" =~ ^(/[A-Za-z0-9_.-]+)+$ ]] || [[ "$OPT_DEPLOY_PATH/" == */../* ]] || [[ "$OPT_DEPLOY_PATH/" == */./* ]]; then
+            usage_error "--deploy-path is an absolute path of letters, digits, '.', '_' and '-' (no . or .. component)"
+        fi
+    fi
     if [ -n "$OPT_EMAIL" ] && ! [[ "$OPT_EMAIL" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then stop email_invalid "$OPT_EMAIL"; fi
     if [ -n "$OPT_DOMAIN" ]; then
         # shellcheck source=infra/deploy/lib/proxy-listeners.sh
@@ -294,11 +341,27 @@ resolve_instance() {
     ALPHA_BASE="http://127.0.0.1:$HTTP_PORT/api/v1"
 }
 
+DEPLOY_PATH="" REPO_REAL="" DEPLOY_REAL=""
+# Where the production checkout is: --deploy-path, else this clone when an installation was already made in it (it IS the deploy
+# clone, and a second stack of the same name on this host would collide), else /srv/<instance>.
+decide_deploy_path() {
+    if [ -n "$OPT_DEPLOY_PATH" ]; then
+        DEPLOY_PATH="$OPT_DEPLOY_PATH"
+    elif [ -f "$ENV_FILE" ] && [[ "$REPO" =~ ^(/[A-Za-z0-9_.-]+)+$ ]]; then
+        DEPLOY_PATH="$REPO"
+    else
+        DEPLOY_PATH="$DEPLOY_ROOT/$INSTANCE"
+    fi
+    REPO_REAL="$REPO"
+    if [ -d "$DEPLOY_PATH" ]; then DEPLOY_REAL="$(cd "$DEPLOY_PATH" && pwd -P)"; else DEPLOY_REAL="$DEPLOY_PATH"; fi
+}
+
 state_has() { [ -f "$STATE_FILE" ] && grep -qxF "$1=ok" "$STATE_FILE"; }
 state_mark() {
     private_dir "$STATE_DIR"
     state_has "$1" || printf '%s=ok\n' "$1" >> "$STATE_FILE"
 }
+state_unset() { [ ! -f "$STATE_FILE" ] || { grep -vxF "$1=ok" "$STATE_FILE" > "$STATE_FILE.tmp" || true; mv -f "$STATE_FILE.tmp" "$STATE_FILE"; }; }
 state_clear_from() { # forget every result of stage N and later (keys are s<N> and s<N>.<name>)
     [ -f "$STATE_FILE" ] || return 0
     local kept
@@ -360,73 +423,374 @@ email_needed() {
     return 0
 }
 
+# The installer's own command with the options as the reader gave them, for a printed instruction. A relative bundle path is made
+# absolute, because the instruction may be run from another directory.
+ORIG_ARGS=()
+command_line() { # command_line [DEPLOY_PATH]: with a path, any --deploy-path of the reader is replaced by it
+    local out="sudo infra/deploy/first-install.sh" arg previous="" skip=no
+    for arg in ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}; do
+        if [ "$skip" = yes ]; then skip=no; previous="$arg"; continue; fi
+        if [ -n "${1:-}" ] && [ "$arg" = --deploy-path ]; then skip=yes; previous="$arg"; continue; fi
+        if [ "$previous" = --norms-bundle ] && [ -d "$arg" ]; then arg="$(cd "$arg" && pwd -P)"; fi
+        out="$out $(printf '%q' "$arg")"
+        previous="$arg"
+    done
+    if [ -n "${1:-}" ]; then out="$out --deploy-path $1"; fi
+    printf '%s' "$out"
+}
+
+# A free path for a clone that cannot be used: /srv/<instance>-2, -3, ...
+free_deploy_path() {
+    local base="$DEPLOY_ROOT/$INSTANCE" candidate n=1
+    candidate="$base"
+    while [ -e "$candidate" ] || [ "$candidate" = "$REPO" ] || [ "$candidate" = "$DEPLOY_PATH" ]; do
+        n=$(( n + 1 ))
+        candidate="$base-$n"
+    done
+    printf '%s' "$candidate"
+}
+repo_slug() { # owner/name of a clone address in any form (https, git@, ssh://, a path), lower case, as deploy-auto reads it
+    printf '%s\n' "$1" | sed -E 's#/+$##; s#\.git$##; s#^.*[:/]([^:/]+)/([^:/]+)$#\1/\2#' | tr '[:upper:]' '[:lower:]'
+}
+
+# escalate FIRST SECOND FACT...: the first time a shortage stops the run, FIRST says what to do about it and to run again; the same
+# shortage again means that did not help, and SECOND is the owner's (it costs money). Cleared when the check passes.
+escalate() {
+    local first="$1" second="$2" key="${HINT_KEY:-$1}"
+    shift 2
+    if state_has "s1.hint_$key"; then stop "$second" "$@"; fi
+    private_dir "$STATE_DIR"
+    state_mark "s1.hint_$key"
+    stop "$first" "$@"
+}
+
+# ---- the host's tools, and Docker: installed by the script where it can be done safely (Debian and Ubuntu), else one command ----
+PKG_MANAGER=""
+detect_package_manager() {
+    local manager
+    if [ "$TEST_MODE" = yes ] && [ -n "${FIRST_INSTALL_PKG_MANAGER:-}" ]; then PKG_MANAGER="$FIRST_INSTALL_PKG_MANAGER"; return 0; fi
+    for manager in apt-get dnf yum zypper apk; do
+        if command -v "$manager" >/dev/null 2>&1; then PKG_MANAGER="$manager"; return 0; fi
+    done
+    PKG_MANAGER=none
+}
+OS_ID="" OS_LIKE="" OS_CODENAME="" OS_UBUNTU_CODENAME=""
+read_os_release() {
+    [ -r "$OS_RELEASE" ] || return 0
+    OS_ID="$(sed -n 's/^ID=//p' "$OS_RELEASE" | head -n 1 | tr -d '"' || true)"
+    OS_LIKE="$(sed -n 's/^ID_LIKE=//p' "$OS_RELEASE" | head -n 1 | tr -d '"' || true)"
+    OS_CODENAME="$(sed -n 's/^VERSION_CODENAME=//p' "$OS_RELEASE" | head -n 1 | tr -d '"' || true)"
+    OS_UBUNTU_CODENAME="$(sed -n 's/^UBUNTU_CODENAME=//p' "$OS_RELEASE" | head -n 1 | tr -d '"' || true)"
+}
+# What download.docker.com has a repository for: debian or ubuntu (a derivative of Ubuntu names its Ubuntu base), else nothing.
+docker_repo_distro() {
+    read_os_release
+    case "$OS_ID" in
+        debian) [ -z "$OS_CODENAME" ] || { echo debian; return 0; } ;;
+        ubuntu) [ -z "$OS_CODENAME" ] || { echo ubuntu; return 0; } ;;
+    esac
+    case " $OS_LIKE " in *" ubuntu "*) [ -z "$OS_UBUNTU_CODENAME" ] || { echo ubuntu; return 0; } ;; esac
+    return 0
+}
+package_for() { # package_for TOOL: the package of that tool under the detected package manager
+    case "$1:$PKG_MANAGER" in
+        flock:*) echo util-linux ;;
+        ssh-keygen:dnf|ssh-keygen:yum|ssh-keygen:zypper) echo openssh-clients ;;
+        ssh-keygen:*) echo openssh-client ;;
+        getent:apt-get) echo libc-bin ;;
+        getent:dnf|getent:yum) echo glibc-common ;;
+        getent:zypper) echo glibc ;;
+        getent:apk) echo musl-utils ;;
+        sha256sum:*|df:*|stat:*) echo coreutils ;;
+        awk:*) echo gawk ;;
+        *) echo "$1" ;;
+    esac
+}
+install_command() { # install_command PACKAGES: the one command that installs them with the detected package manager
+    case "$PKG_MANAGER" in
+        apt-get) echo "apt-get update && apt-get install -y $1" ;;
+        dnf) echo "dnf install -y $1" ;;
+        yum) echo "yum install -y $1" ;;
+        zypper) echo "zypper --non-interactive install $1" ;;
+        apk) echo "apk add $1" ;;
+        *) echo "install these packages with the system's package manager: $1" ;;
+    esac
+}
+APT_UPDATED=no
+apt_run() { # apt_run ARGS...: noninteractive apt-get, waiting for a lock a fresh server's own updater may hold
+    if [ "$APT_UPDATED" = no ] && [ "$1" != update ]; then
+        APT_UPDATED=yes
+        DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 -q update
+    fi
+    DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 -q -y "$@"
+}
+tool_present() {
+    if [ "$TEST_MODE" = yes ] && [[ " ${FIRST_INSTALL_FAKE_MISSING:-} " == *" $1 "* ]]; then return 1; fi
+    command -v "$1" >/dev/null 2>&1
+}
+MISSING_TOOLS=""
+find_missing_tools() {
+    local tool
+    MISSING_TOOLS=""
+    for tool in git curl sed awk flock tar sha256sum python3 ssh-keygen getent df stat; do
+        tool_present "$tool" || MISSING_TOOLS="$MISSING_TOOLS $tool"
+    done
+    MISSING_TOOLS="${MISSING_TOOLS# }"
+}
+ensure_tools() {
+    local tool packages="" package out
+    local -a package_list
+    find_missing_tools
+    if [ -z "$MISSING_TOOLS" ]; then return 0; fi
+    detect_package_manager
+    for tool in $MISSING_TOOLS; do
+        package="$(package_for "$tool")"
+        case " $packages " in *" $package "*) ;; *) packages="$packages $package" ;; esac
+    done
+    packages="${packages# }"
+    if [ "$PKG_MANAGER" = apt-get ]; then
+        say "missing tools: $MISSING_TOOLS: installing $packages with apt-get"
+        read -r -a package_list <<<"$packages"
+        if ! out="$(apt_run install "${package_list[@]}" 2>&1)"; then printf '%s\n' "$out" | tail -n 5; fi
+        find_missing_tools
+        if [ -z "$MISSING_TOOLS" ]; then return 0; fi
+    fi
+    stop tool_missing "$(install_command "$packages")"
+}
+docker_manual_command() { printf '%s' "curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && sh /tmp/get-docker.sh"; }
+
+# install_docker_packages PACKAGES...: Docker's own apt repository, trusted only by the pinned fingerprint of its key. The
+# distribution's packages are not used: Debian 12 and Ubuntu 22.04 carry no compose v2 plugin (their docker-compose is v1), and the
+# stack needs `docker compose` and its buildx.
+docker_step_failed() { # docker_step_failed OUTPUT: show what the step printed, then stop
+    printf '%s\n' "$1" | tail -n 8
+    stop docker_install_failed "$(oneline "$(last_line "$1")" 200)"
+}
+install_docker_packages() {
+    local distro codename key fingerprint list out
+    read_os_release
+    distro="$(docker_repo_distro)"
+    if [ -z "$distro" ] || [ "$PKG_MANAGER" != apt-get ]; then stop docker_missing "$(docker_manual_command)"; fi
+    if [ "$distro" = debian ]; then codename="$OS_CODENAME"; else codename="${OS_UBUNTU_CODENAME:-$OS_CODENAME}"; fi
+    say "installing Docker from Docker's apt repository for $distro $codename"
+    out="$(apt_run install ca-certificates curl gnupg 2>&1)" || docker_step_failed "$out"
+    key="$(mktemp)"
+    out="$(curl -fsSL --max-time 60 -o "$key" "https://download.docker.com/linux/$distro/gpg" 2>&1)" || { rm -f "$key"; docker_step_failed "$out"; }
+    fingerprint="$(gpg --show-keys --with-colons "$key" 2>/dev/null | awk -F: '$1 == "fpr" { print $10; exit }' || true)"
+    if [ "$fingerprint" != "$DOCKER_KEY_FPR" ]; then
+        rm -f "$key"
+        stop docker_key_mismatch "${fingerprint:-none}" "$DOCKER_KEY_FPR"
+    fi
+    install -d -m 0755 "$KEYRINGS_DIR"
+    install -m 0644 "$key" "$KEYRINGS_DIR/docker.asc"
+    rm -f "$key"
+    list="$APT_SOURCES_DIR/docker.list"
+    if [ ! -f "$list" ]; then
+        printf 'deb [arch=%s signed-by=%s/docker.asc] https://download.docker.com/linux/%s %s stable\n' \
+            "$(dpkg --print-architecture)" "$KEYRINGS_DIR" "$distro" "$codename" > "$list"
+        chmod 644 "$list"
+    fi
+    APT_UPDATED=no
+    out="$(apt_run install "$@" 2>&1)" || docker_step_failed "$out"
+    systemctl enable --now docker >/dev/null 2>&1 || true
+}
+docker_major() { docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1; }
+compose_major() { docker compose version --short 2>/dev/null | sed 's/^v//' | cut -d. -f1; }
+docker_answers() { docker info >/dev/null 2>&1; }
+ensure_docker() {
+    local waited=0 server compose
+    detect_package_manager
+    if ! tool_present docker; then
+        install_docker_packages "${DOCKER_PACKAGES[@]}"
+    fi
+    if ! docker_answers; then
+        say "Docker does not answer: starting it"
+        systemctl enable --now docker >/dev/null 2>&1 || true
+        while [ "$waited" -lt "$DOCKER_WAIT_SECONDS" ] && ! docker_answers; do sleep 2; waited=$(( waited + 2 )); done
+        docker_answers || stop docker_down
+    fi
+    server="$(docker_major)"
+    if ! [[ "$server" =~ ^[0-9]+$ ]] || [ "$server" -lt 20 ]; then
+        if [ -n "$(docker ps -q 2>/dev/null | head -n 1)" ]; then stop docker_old "Docker Engine ${server:-of an unknown version} is installed (20 or newer is needed)."; fi
+        say "Docker Engine ${server:-of an unknown version} is older than 20: upgrading it from Docker's apt repository"
+        install_docker_packages "${DOCKER_PACKAGES[@]}"
+        docker_answers || stop docker_down
+    fi
+    compose="$(compose_major)"
+    if ! [[ "$compose" =~ ^[0-9]+$ ]] || [ "$compose" -lt 2 ]; then
+        say "the compose v2 plugin is missing or old: installing docker-compose-plugin"
+        install_docker_packages docker-compose-plugin
+    fi
+    server="$(docker_major)"
+    compose="$(compose_major)"
+    if ! [[ "$server" =~ ^[0-9]+$ ]] || [ "$server" -lt 20 ] || ! [[ "$compose" =~ ^[0-9]+$ ]] || [ "$compose" -lt 2 ]; then
+        stop docker_install_failed "Docker ${server:-?} and compose ${compose:-?} after the installation (20 and 2 are needed)"
+    fi
+    say "docker $(docker version --format '{{.Server.Version}}' 2>/dev/null), compose $(docker compose version --short 2>/dev/null)"
+}
+
+# Stage 1 runs inside the deploy clone. Its problems are fixed by a clean clone at a free path, which the installer makes itself.
+check_clone() {
+    local top status files remote url
+    top="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -z "$top" ] || [ "$(cd "$top" && pwd -P)" != "$REPO" ]; then stop checkout_wrong "$REPO"; fi
+    if ! git -C "$REPO" remote get-url origin >/dev/null 2>&1; then
+        remote="$(git -C "$REPO" remote 2>/dev/null | head -n 1 || true)"
+        url=""
+        if [ -n "$remote" ]; then url="$(git -C "$REPO" remote get-url "$remote" 2>/dev/null || true)"; fi
+        if [ -n "$url" ]; then stop no_origin "$remote" "$REPO" "$url"; fi
+        stop no_origin_url "$REPO" "$REPO"
+    fi
+    status="$(git -C "$REPO" status --porcelain --untracked-files=all 2>/dev/null || true)"
+    if [ -n "$status" ]; then
+        files="$(oneline "$(printf '%s' "$status" | head -n 3 | tr '\n' ';')" 160)"
+        if [ -f "$ENV_FILE" ]; then stop deploy_clone_installed "$REPO" "has local changes ($files)"; fi
+        stop checkout_dirty "$REPO" "$files" "$(command_line "$(free_deploy_path)")"
+    fi
+    say "deploy clone $REPO at $(git -C "$REPO" rev-parse --short HEAD)"
+}
+
+# ---- the deploy clone: the clone the installer was started in is the owner's working copy and is never installed from ----
+# Started anywhere but the deploy path, the installer makes the deploy clone (a clone of this clone's origin URL), puts it on the
+# same commit, and runs itself again from there with the same arguments. The deploy clone is left DETACHED at that commit, which is
+# exactly what every auto-deploy leaves (`git checkout --detach <sha>`, deploy-auto.yml), so the first auto-deploy finds nothing to
+# change; a checked-out branch would only be switched away from. Nothing is written in the starting clone.
+clone_failed_is_access() { # clone_failed_is_access OUTPUT
+    case "$1" in
+        *"could not read Username"*|*"Authentication failed"*|*"Permission denied"*|*"Repository not found"*|*"publickey"*) return 0 ;;
+        *"terminal prompts disabled"*|*"returned error: 401"*|*"returned error: 403"*|*"The requested URL returned error: 404"*) return 0 ;;
+    esac
+    return 1
+}
+create_deploy_clone() { # create_deploy_clone URL SHA BRANCH
+    local url="$1" sha="$2" branch="$3" out ref note=""
+    mkdir -p "$(dirname "$DEPLOY_PATH")"
+    say "making the deploy clone $DEPLOY_PATH from $url"
+    if ! out="$( umask 022; GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new}" \
+            git -c credential.interactive=never clone --quiet "$url" "$DEPLOY_PATH" 2>&1 )"; then
+        printf '%s\n' "$out" | tail -n 5
+        if clone_failed_is_access "$out"; then stop clone_needs_access "$url"; fi
+        stop clone_failed "$(oneline "$(last_line "$out")" 200)"
+    fi
+    if git -C "$DEPLOY_PATH" cat-file -e "$sha^{commit}" 2>/dev/null; then
+        ref="$sha"
+    else
+        # An unpublished commit cannot be deployed from anywhere but this machine; what is on origin is what auto-deploy knows.
+        if [ -n "$branch" ] && git -C "$DEPLOY_PATH" rev-parse --verify -q "origin/$branch" >/dev/null; then ref="origin/$branch"; else ref="origin/HEAD"; fi
+        note=" (the commit ${sha:0:8} of the starting clone is not on origin, so $ref is used)"
+    fi
+    git -C "$DEPLOY_PATH" -c advice.detachedHead=false checkout --quiet --detach "$ref" \
+        || stop clone_failed "the commit $ref could not be checked out in $DEPLOY_PATH"
+    say "the deploy clone is at $(git -C "$DEPLOY_PATH" rev-parse --short HEAD), detached$note"
+}
+reuse_deploy_clone() { # reuse_deploy_clone URL: an existing deploy path must be this repository, clean, with the installer in it
+    local url="$1" top origin status installed=no reason="" files
+    [ ! -f "$DEPLOY_PATH/infra/deploy/env/alpha.env" ] || installed=yes
+    top="$(git -C "$DEPLOY_PATH" rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -z "$top" ] || [ "$(cd "$top" && pwd -P)" != "$DEPLOY_REAL" ]; then
+        reason="it is not empty and is not a clone of a repository"
+    else
+        origin="$(git -C "$DEPLOY_PATH" remote get-url origin 2>/dev/null || true)"
+        status="$(git -C "$DEPLOY_PATH" status --porcelain --untracked-files=all 2>/dev/null || true)"
+        if [ -z "$origin" ]; then
+            reason="it has no origin"
+        elif [ "$(repo_slug "$origin")" != "$(repo_slug "$url")" ]; then
+            reason="its origin is $(repo_slug "$origin"), not $(repo_slug "$url")"
+        elif [ -n "$status" ]; then
+            files="$(oneline "$(printf '%s' "$status" | head -n 3 | tr '\n' ';')" 120)"
+            reason="it has local changes ($files)"
+        elif [ ! -x "$DEPLOY_PATH/infra/deploy/first-install.sh" ]; then
+            reason="it has no infra/deploy/first-install.sh (an older commit)"
+        fi
+    fi
+    if [ -n "$reason" ]; then
+        if [ "$installed" = yes ]; then stop deploy_clone_installed "$DEPLOY_PATH" "$reason"; fi
+        stop deploy_path_unusable "$DEPLOY_PATH" "$reason" "$(command_line "$(free_deploy_path)")"
+    fi
+    say "the deploy clone $DEPLOY_PATH exists, is clean and has the same origin: used as it is (at $(git -C "$DEPLOY_PATH" rev-parse --short HEAD))"
+}
+start_in_deploy_clone() {
+    local url sha branch remote=""
+    ensure_tools
+    url="$(git -C "$REPO" remote get-url origin 2>/dev/null || true)"
+    if [ -z "$url" ]; then
+        remote="$(git -C "$REPO" remote 2>/dev/null | head -n 1 || true)"
+        if [ -n "$remote" ]; then url="$(git -C "$REPO" remote get-url "$remote" 2>/dev/null || true)"; fi
+        if [ -z "$url" ]; then stop no_origin_url "$REPO" "$REPO"; fi
+        say "this clone has no 'origin': the address of its remote '$remote' is used"
+    fi
+    sha="$(git -C "$REPO" rev-parse HEAD 2>/dev/null || true)"
+    [ -n "$sha" ] || stop checkout_wrong "$REPO"
+    branch="$(git -C "$REPO" symbolic-ref --short -q HEAD 2>/dev/null || true)"
+    if [ -e "$DEPLOY_PATH" ] && [ -n "$(ls -A "$DEPLOY_PATH" 2>/dev/null || true)" ]; then
+        reuse_deploy_clone "$url"
+    else
+        create_deploy_clone "$url" "$sha" "$branch"
+    fi
+    say "this clone ($REPO) is only where the installer was started and is not touched; continuing in $DEPLOY_PATH"
+}
+
+next_free_port() { # next_free_port N: the first port after N that nothing listens on
+    local port="$1" tries=0
+    while [ "$tries" -lt 200 ]; do
+        port=$(( port + 1 ))
+        tries=$(( tries + 1 ))
+        port_listening "$port" || { echo "$port"; return 0; }
+    done
+    echo "$port"
+}
+port_holder_name() { # a name for what holds a port, for the owner (ss is used when it is there; the tests have no listener to name)
+    local line
+    if [ "$TEST_MODE" = no ] && command -v ss >/dev/null 2>&1; then
+        line="$(ss -ltnpH "sport = :$1" 2>/dev/null | head -n 1 | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' || true)"
+        if [ -n "$line" ]; then printf '%s' "$line"; return 0; fi
+    fi
+    printf 'another program'
+}
+
 stage_preflight() {
-    local tool missing="" packages="" dep
     # root
     if [ "$(id -u)" -ne 0 ] && [ "$TEST_MODE" = no ]; then stop not_root; fi
     # inputs that are only needed when a stage will use them
     if email_needed && [ -z "$OPT_EMAIL" ]; then stop email_required; fi
-    # tools (docker is judged on its own below)
-    for tool in git curl sed awk flock tar sha256sum python3 ssh-keygen getent df stat; do
-        command -v "$tool" >/dev/null 2>&1 && continue
-        missing="$missing $tool"
-        case "$tool" in
-            flock) dep=util-linux ;; ssh-keygen) dep=openssh-client ;; getent) dep=libc-bin ;; sha256sum|df|stat) dep=coreutils ;;
-            awk) dep=gawk ;; *) dep="$tool" ;;
-        esac
-        case " $packages " in *" $dep "*) ;; *) packages="$packages $dep" ;; esac
-    done
-    if [ -n "$missing" ]; then stop tool_missing "${missing# }" "${packages# }"; fi
-    python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || stop tool_missing "python3 (3.8 or newer)" "python3"
-    # docker and compose
-    command -v docker >/dev/null 2>&1 || stop docker_missing
-    docker info >/dev/null 2>&1 || stop docker_down
-    local server compose_version
-    server="$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)"
-    if ! [[ "${server%%.*}" =~ ^[0-9]+$ ]] || [ "${server%%.*}" -lt 20 ]; then stop docker_old "Docker Engine ${server:-of unknown version} is installed."; fi
-    compose_version="$(docker compose version --short 2>/dev/null || true)"
-    compose_version="${compose_version#v}"
-    if ! [[ "${compose_version%%.*}" =~ ^[0-9]+$ ]] || [ "${compose_version%%.*}" -lt 2 ]; then
-        stop docker_old "The compose plugin is ${compose_version:-missing}."
-    fi
-    say "docker $server, compose $compose_version"
-    # the clone
-    local top status
-    top="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null || true)"
-    if [ -z "$top" ] || [ "$(cd "$top" && pwd -P)" != "$REPO" ]; then stop checkout_wrong "$REPO"; fi
-    [[ "$REPO" =~ ^(/[A-Za-z0-9_.-]+)+$ ]] || stop checkout_path "$REPO"
-    git -C "$REPO" remote get-url origin >/dev/null 2>&1 || stop no_origin
-    status="$(git -C "$REPO" status --porcelain --untracked-files=all 2>/dev/null || true)"
-    if [ -n "$status" ]; then stop checkout_dirty "$(oneline "$(printf '%s' "$status" | head -n 3 | tr '\n' ';')" 160)"; fi
-    say "clone $REPO at $(git -C "$REPO" rev-parse --short HEAD)"
+    ensure_tools
+    python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || { detect_package_manager; stop tool_missing "$(install_command python3)"; }
+    check_clone
+    ensure_docker
     # who deploys
     if [ "$OPT_DEPLOY_USER" != root ]; then
-        getent passwd "$OPT_DEPLOY_USER" >/dev/null || stop deploy_user_invalid "the account $OPT_DEPLOY_USER does not exist: create it with adduser $OPT_DEPLOY_USER   then run the same command again."
-        id -nG "$OPT_DEPLOY_USER" | tr ' ' '\n' | grep -qx docker \
-            || stop deploy_user_invalid "$OPT_DEPLOY_USER cannot use docker: run usermod -aG docker $OPT_DEPLOY_USER   then run the same command again."
-        [ "$(stat -c %U "$REPO")" = "$OPT_DEPLOY_USER" ] \
-            || stop deploy_user_invalid "the clone must belong to $OPT_DEPLOY_USER: run chown -R $OPT_DEPLOY_USER: $REPO   then run the same command again."
+        getent passwd "$OPT_DEPLOY_USER" >/dev/null || stop deploy_user_invalid "adduser --disabled-password --gecos '' $OPT_DEPLOY_USER"
+        id -nG "$OPT_DEPLOY_USER" | tr ' ' '\n' | grep -qx docker || stop deploy_user_invalid "usermod -aG docker $OPT_DEPLOY_USER"
+        [ "$(stat -c %U "$REPO")" = "$OPT_DEPLOY_USER" ] || stop deploy_user_invalid "chown -R $OPT_DEPLOY_USER: $REPO"
     fi
     # disk and memory, against the runbook's figures
     local root free total available
     root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
     [ -d "$root" ] || root="$REPO"
     free="$(free_gib "$root")"
-    [ "$free" -ge "$MIN_FREE_GIB" ] || stop disk_low "$free" "$root" "$MIN_FREE_GIB"
+    if [ "$free" -lt "$MIN_FREE_GIB" ]; then escalate disk_low disk_too_small "$free" "$root" "$MIN_FREE_GIB"; fi
+    state_unset s1.hint_disk_low
     available="$(mem_field_mib MemAvailable)"
     total="$(mem_field_mib MemTotal)"
-    [ "${available:-0}" -ge "$STOP_RAM_AVAILABLE_MIB" ] || stop ram_low "${available:-0}" "$STOP_RAM_AVAILABLE_MIB"
+    if [ "${available:-0}" -lt "$STOP_RAM_AVAILABLE_MIB" ]; then escalate ram_low ram_too_small "${available:-0}" "$STOP_RAM_AVAILABLE_MIB"; fi
+    state_unset s1.hint_ram_low
     say "disk free $free GiB on $root; memory ${available} MiB available of ${total} MiB"
     if [ "${total:-0}" -lt "$WARN_RAM_TOTAL_MIB" ]; then
         warn "this server has ${total} MiB of memory; the image build can be slow, and deploy.sh stops an overloaded build by itself (a STOP [host_overloaded] then says to wait and run again)"
     fi
     # ports
-    if [ ! -f "$ENV_FILE" ] && port_listening "$HTTP_PORT"; then stop http_port_busy "$HTTP_PORT"; fi
+    if [ ! -f "$ENV_FILE" ] && port_listening "$HTTP_PORT"; then
+        local free_port
+        free_port="$(next_free_port "$HTTP_PORT")"
+        if [ -n "$OPT_HTTP_PORT" ]; then stop http_port_busy "$HTTP_PORT" "$free_port"; fi
+        say "port $HTTP_PORT is in use: the application will use port $free_port instead"
+        HTTP_PORT="$free_port"
+    fi
     if [ -n "$OPT_DOMAIN" ]; then
         local port
         for port in 80 443; do
             if port_listening "$port" && ! port_holder_is_ours "$port"; then
-                stop public_port_busy "$port" "another program (see: ss -ltnp 'sport = :$port')"
+                stop public_port_busy "$(port_holder_name "$port")" "$port"
             fi
         done
     fi
@@ -434,25 +798,59 @@ stage_preflight() {
 }
 
 # ------------------------------------------------------------------------------------------------------------ 2 env
+stack_has_data() { # an installation made from this environment exists: its database volume holds this file's passwords
+    state_has s3 || docker volume inspect "$INSTANCE-postgres-data" >/dev/null 2>&1
+}
+env_problem_stop() { # env_problem_stop PROBLEMS: the one STOP for an environment file that does not check clean
+    local text stamp command
+    text="$(oneline "$(printf '%s' "$1" | tr '\n' ';')" 240)"
+    if stack_has_data; then stop env_invalid_installed "$text"; fi
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    command="mv $ENV_FILE $ENV_DIR/rejected-$stamp-alpha.env"
+    if [ -f "$PROVIDER_FILE" ]; then command="$command && mv $PROVIDER_FILE $ENV_DIR/rejected-$stamp-provider.env"; fi
+    stop env_invalid "$text" "$command"
+}
+# `--set ALPHA_NORM_EMBED=yes|no` is the one `--set` that is also applied to an environment file that already exists: it is the
+# owner's switch for the semantic norm lookup, and turning it off must not need an edit by hand.
+apply_norm_embed_choice() {
+    local setting current rest=0
+    for setting in ${OPT_SETS[@]+"${OPT_SETS[@]}"}; do
+        case "$setting" in
+            ALPHA_NORM_EMBED=yes|ALPHA_NORM_EMBED=no)
+                current="$(env_get ALPHA_NORM_EMBED)"
+                if [ "$current" != "${setting#*=}" ]; then
+                    if [ "${setting#*=}" = no ]; then
+                        python3 -I "$ENV_HELPER" set --env "$ENV_FILE" ALPHA_NORM_EMBED=no
+                    else
+                        python3 -I "$ENV_HELPER" set --env "$ENV_FILE" ALPHA_NORM_EMBED=yes ALPHA_MEM_LIMIT_NORM_EMBED=1200m
+                    fi
+                    say "the owner's choice $setting is applied to the existing alpha.env"
+                    state_unset s10
+                fi ;;
+            *) rest=$(( rest + 1 )) ;;
+        esac
+    done
+    if [ "$rest" -gt 0 ]; then warn "--set is used only for a NEW alpha.env (except ALPHA_NORM_EMBED); the existing one was not changed"; fi
+}
 stage_env() {
     local problems
     mkdir -p "$ENV_DIR"
     if [ ! -f "$ENV_FILE" ]; then
         local args=(create --env-dir "$ENV_DIR" --instance "$INSTANCE" --http-port "$HTTP_PORT") setting
         for setting in ${OPT_SETS[@]+"${OPT_SETS[@]}"}; do args+=(--set "$setting"); done
-        if ! problems="$(python3 -I "$ENV_HELPER" "${args[@]}" 2>&1)"; then stop env_invalid "$(oneline "$problems" 200)"; fi
+        if ! problems="$(python3 -I "$ENV_HELPER" "${args[@]}" 2>&1)"; then env_problem_stop "$problems"; fi
         say "$problems"
     else
         say "alpha.env already exists: kept as it is"
-        if [ "${#OPT_SETS[@]}" -gt 0 ]; then warn "--set is used only for a NEW alpha.env; the existing one was not changed"; fi
+        apply_norm_embed_choice
     fi
     if ! problems="$(python3 -I "$ENV_HELPER" check --env "$ENV_FILE" --provider "$PROVIDER_FILE" --example "$ENV_EXAMPLE")"; then
         if printf '%s\n' "$problems" | grep -q 'must be 600'; then
             chmod 600 "$ENV_FILE"; [ ! -f "$PROVIDER_FILE" ] || chmod 600 "$PROVIDER_FILE"
             say "the environment files were readable by others: mode set to 600"
-            problems="$(python3 -I "$ENV_HELPER" check --env "$ENV_FILE" --provider "$PROVIDER_FILE" --example "$ENV_EXAMPLE")" || stop env_invalid "$(oneline "$(printf '%s' "$problems" | tr '\n' ';')" 240)"
+            problems="$(python3 -I "$ENV_HELPER" check --env "$ENV_FILE" --provider "$PROVIDER_FILE" --example "$ENV_EXAMPLE")" || env_problem_stop "$problems"
         else
-            stop env_invalid "$(oneline "$(printf '%s' "$problems" | tr '\n' ';')" 240)"
+            env_problem_stop "$problems"
         fi
     fi
     INSTANCE="$(env_get ALPHA_INSTANCE)"
@@ -482,7 +880,7 @@ stop_for_deploy() { # the one STOP for a deploy.sh that did not end well
         *"public port"*"already in use"*) stop public_port_busy "$(printf '%s' "$refused" | sed -n 's/.*public port \([0-9]*\).*/\1/p')" "another program" ;;
         "port "*"already in use, and not by"*) stop http_port_busy "$HTTP_PORT" ;;
         *build_overload*|*overloaded*) stop host_overloaded ;;
-        *"ACME client is not pinned"*) stop acme_unpinned ;;
+        *"ACME client is not pinned"*) stop acme_unpinned "$REPO" "$REPO" ;;
         *"[default_credential]"*) stop admin_failed "deploy.sh still finds the published admin password valid" ;;
         *) stop deploy_refused "$(oneline "$refused" 380)" ;;
     esac
@@ -573,18 +971,25 @@ norms_ensure_dirs() {
     done
 }
 
-norms_wait_for_import() { # norms_wait_for_import KEY -> returns when the import has an exit status; sets NORMS_EXIT
+importer_container_running() { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${INSTANCE}-api-run-"; }
+NORMS_EXIT="" NORMS_INTERRUPTED=no
+norms_wait_for_import() { # norms_wait_for_import KEY: returns with NORMS_EXIT (the importer's status) or NORMS_INTERRUPTED=yes
     local key="$1" state waited=0
+    NORMS_EXIT="" NORMS_INTERRUPTED=no
     while :; do
         norms_status
         state="$(norms_import_state "$key")"
         case "$state" in
             exited\ *) NORMS_EXIT="${state#exited }"; return 0 ;;
             running*)
-                if printf '%s\n' "$NORMS_STATUS_OUT" | grep -q '^import_lock: free$' && [ "$waited" -ge $(( POLL_SECONDS * 2 )) ]; then
-                    stop norms_import_interrupted "$key"
+                # Started, the lock is free and no importer container runs: the server restarted under it
+                # (STAND-NORMS-IMPORT-RUNBOOK-01 section 8). `import` is re-entrant, so the stage simply starts it again.
+                if printf '%s\n' "$NORMS_STATUS_OUT" | grep -q '^import_lock: free$' && [ "$waited" -ge $(( POLL_SECONDS * 2 )) ] \
+                    && ! importer_container_running; then
+                    NORMS_INTERRUPTED=yes
+                    return 0
                 fi ;;
-            *) stop norms_import_interrupted "$key" ;;
+            *) NORMS_INTERRUPTED=yes; return 0 ;;
         esac
         if [ $(( waited % 300 )) -eq 0 ]; then
             say "importing $key ($(( waited / 60 )) min so far): $(printf '%s\n' "$NORMS_STATUS_OUT" | awk -v k="$key" '$1 == "bundle:" && $2 == k { f = 1; next } f && /^  \|/ { l = $0 } END { print l }' | cut -c1-160)"
@@ -592,6 +997,33 @@ norms_wait_for_import() { # norms_wait_for_import KEY -> returns when the import
         sleep "$POLL_SECONDS"
         waited=$(( waited + POLL_SECONDS ))
     done
+}
+
+norms_refusal() { # norms_refusal OUTPUT: a lock held by another step is a wait; anything else is for the owner to see
+    local line
+    line="$(oneline "$(last_line "$1")" 300)"
+    case "$1" in *lock-free*) stop norms_wait "$line" ;; esac
+    stop norms_refused "$line"
+}
+
+norms_start_import() { # norms_start_import KEY: the test-data waiver (a new one when the open one has too little window left), then the importer
+    local key="$1" out
+    norms_record
+    if [ "$NORMS_REC_STATE" = open ] && [ "$NORMS_REC_KIND" = test_data_waiver ] && [ "$NORMS_REC_AGE" -gt $(( NORMS_REC_WINDOW - 7200 )) ]; then
+        say "the open waiver $NORMS_REC_STAMP has too little of its window left: closing it and opening a new one"
+        out="$(copy resume "$NORMS_REC_STAMP" 2>&1)" || norms_refusal "$out"
+        norms_record
+    fi
+    case "$NORMS_REC_STATE:$NORMS_REC_KIND" in
+        none:*|closed:*)
+            out="$(copy attest --test-data 2>&1)" || norms_refusal "$out"
+            printf '%s\n' "$out"
+            norms_record ;;
+        open:test_data_waiver) say "the open waiver $NORMS_REC_STAMP is used" ;;
+        *) stop norms_busy "record $NORMS_REC_STAMP, kind $NORMS_REC_KIND" ;;
+    esac
+    out="$(inbound import "$key" 2>&1)" || norms_refusal "$out"
+    printf '%s\n' "$out"
 }
 
 stage_norms() {
@@ -603,7 +1035,10 @@ stage_norms() {
     norms_ensure_dirs
     local available
     available="$(mem_field_mib MemAvailable)"
-    [ "${available:-0}" -ge "$NORMS_RAM_AVAILABLE_MIB" ] || stop ram_low "${available:-0}" "$NORMS_RAM_AVAILABLE_MIB"
+    if [ "${available:-0}" -lt "$NORMS_RAM_AVAILABLE_MIB" ]; then
+        HINT_KEY=norms_ram escalate ram_low ram_too_small "${available:-0}" "$NORMS_RAM_AVAILABLE_MIB"
+    fi
+    state_unset s1.hint_norms_ram
 
     # An open record that is not a test-data waiver is somebody's copy or import. `receive` would turn it into an import record
     # (its design: `W54-PLAN.md` section 3.5), so the stage looks first and touches nothing of another kind.
@@ -629,47 +1064,50 @@ stage_norms() {
         [ -d "$docker_root" ] || docker_root="$REPO"
         docker_free="$(free_gib "$docker_root")"
         if [ "$(stat -c %d "$NORMS_STAGING")" = "$(stat -c %d "$docker_root")" ]; then
-            [ "$staging_free" -ge $(( need_staging + need_docker )) ] || stop norms_disk_low "$staging_free" "$NORMS_STAGING" $(( need_staging + need_docker ))
+            if [ "$staging_free" -lt $(( need_staging + need_docker )) ]; then
+                escalate norms_disk_low norms_disk_too_small "$staging_free" "$NORMS_STAGING" $(( need_staging + need_docker ))
+            fi
         else
-            [ "$staging_free" -ge "$need_staging" ] || stop norms_disk_low "$staging_free" "$NORMS_STAGING" "$need_staging"
-            [ "$docker_free" -ge "$need_docker" ] || stop norms_disk_low "$docker_free" "$docker_root" "$need_docker"
+            if [ "$staging_free" -lt "$need_staging" ]; then escalate norms_disk_low norms_disk_too_small "$staging_free" "$NORMS_STAGING" "$need_staging"; fi
+            if [ "$docker_free" -lt "$need_docker" ]; then escalate norms_disk_low norms_disk_too_small "$docker_free" "$docker_root" "$need_docker"; fi
         fi
+        state_unset s1.hint_norms_disk_low
         say "sending $key ($size bytes) into the on-host receive; this takes minutes"
         status=0
-        bundle_tar "$parent" "$key" | inbound receive "$key" "$size" || status=$?
+        out="$(mktemp)"
+        bundle_tar "$parent" "$key" | inbound receive "$key" "$size" 2>&1 | tee "$out" || status="${PIPESTATUS[1]}"
         if [ "$status" -ne 0 ]; then
-            stop norms_refused "receive ended with status $status; its REFUSED [guard] line is above"
+            local refusal
+            refusal="$(cat "$out")"
+            rm -f "$out"
+            norms_refusal "$refusal"
         fi
+        rm -f "$out"
     else
         say "the bundle $key is already received"
     fi
 
-    # 2. the waiver and the importer
-    norms_status
-    local import_state
-    import_state="$(norms_import_state "$key")"
-    if [ "$import_state" = "not imported" ] || [ "${import_state#exited }" = 75 ]; then
-        norms_record
-        if [ "$NORMS_REC_STATE" = open ] && [ "$NORMS_REC_KIND" = test_data_waiver ] \
-            && [ "$NORMS_REC_AGE" -gt $(( NORMS_REC_WINDOW - 7200 )) ] && [ "$import_state" = "not imported" ]; then
-            say "the open waiver $NORMS_REC_STAMP has too little of its window left: closing it and opening a new one"
-            copy resume "$NORMS_REC_STAMP" >/dev/null || stop norms_refused "resume of the old waiver was refused"
-            norms_record
+    # 2. the waiver and the importer, started again (it is re-entrant) when it ended unfinished or was interrupted
+    local import_state attempt=0 restart=no
+    while :; do
+        attempt=$(( attempt + 1 ))
+        norms_status
+        import_state="$(norms_import_state "$key")"
+        if [ "$restart" = yes ] || [ "$import_state" = "not imported" ] || [ "$import_state" = "exited 75" ]; then
+            norms_start_import "$key"
+        elif [ "$import_state" = absent ]; then
+            stop norms_refused "the bundle $key is not in the staging directory after the receive"
         fi
-        case "$NORMS_REC_STATE:$NORMS_REC_KIND" in
-            none:*|closed:*)
-                out="$(copy attest --test-data 2>&1)" || stop norms_refused "$(oneline "$(last_line "$out")" 300)"
-                printf '%s\n' "$out"
-                norms_record ;;
-            open:test_data_waiver) say "the open waiver $NORMS_REC_STAMP is used" ;;
-            *) stop norms_busy "record $NORMS_REC_STAMP, kind $NORMS_REC_KIND" ;;
-        esac
-        out="$(inbound import "$key" 2>&1)" || stop norms_refused "$(oneline "$(last_line "$out")" 300)"
-        printf '%s\n' "$out"
-    elif [ "$import_state" = absent ]; then
-        stop norms_refused "the bundle $key is not in the staging directory after the receive"
-    fi
-    norms_wait_for_import "$key"
+        restart=no
+        norms_wait_for_import "$key"
+        if [ "$NORMS_INTERRUPTED" = yes ] || [ "$NORMS_EXIT" = 75 ]; then
+            if [ "$attempt" -ge 3 ]; then stop norms_import_unfinished; fi
+            say "the importer did not finish (interrupted, or status 75): importing again, which is safe"
+            restart=yes
+            continue
+        fi
+        break
+    done
     case "$NORMS_EXIT" in
         0) say "the importer finished" ;;
         *) stop norms_import_failed "$NORMS_EXIT" "$NORMS_STAGING/logs/$key.import.log" ;;
@@ -685,7 +1123,7 @@ stage_norms() {
             [ "$status" -eq 0 ] || stop norms_report_differs "$status" "$NORMS_STAGING/logs/$key.report"
             state_mark s5.reported
         fi
-        out="$(copy resume "$stamp" 2>&1)" || stop norms_refused "$(oneline "$(last_line "$out")" 300)"
+        out="$(copy resume "$stamp" 2>&1)" || norms_refusal "$out"
         printf '%s\n' "$out"
     fi
     "$DEPLOY_DIR/reload-proxy.sh" --env-file "$ENV_FILE" || warn "reload-proxy.sh ended with a non-zero status; verify-deployed.sh decides"
@@ -717,21 +1155,21 @@ stage_https() {
 
     local pin
     pin="$(sed -n 's/^ACME_CLIENT_APK_VERSION=//p' "$ACME_PIN" 2>/dev/null | tail -n 1)"
-    if [ -z "$pin" ] || [ "$pin" = UNRESOLVED ]; then stop acme_unpinned; fi
+    if [ -z "$pin" ] || [ "$pin" = UNRESOLVED ]; then stop acme_unpinned "$REPO" "$REPO"; fi
 
     local verify=("$DEPLOY_DIR/verify-deployed.sh" --env-file "$ENV_FILE")
     if ! state_has s6.staging; then
         python3 -I "$ENV_HELPER" set --env "$ENV_FILE" "ALPHA_CERT_NAME=$OPT_DOMAIN" "ALPHA_ACME_EMAIL=$OPT_EMAIL" ALPHA_ACME_STAGING=yes
         run_deploy https-staging
         if [ "$DEPLOY_STATUS" -ne 0 ]; then stop_for_deploy; fi
-        wait_for_certificate "${verify[@]}" --acme-rehearsal || stop acme_staging_failed "$CERT_WAIT_SECONDS" "$ENV_FILE" "$COMPOSE_FILE" "$ACME_OVERLAY"
+        wait_for_certificate "${verify[@]}" --acme-rehearsal || stop acme_staging_failed "$OPT_DOMAIN" "$CERT_WAIT_SECONDS" "$(acme_reason)"
         state_mark s6.staging
     fi
     if ! state_has s6.real; then
         python3 -I "$ENV_HELPER" set --env "$ENV_FILE" ALPHA_ACME_STAGING=no
         run_deploy https-real
         if [ "$DEPLOY_STATUS" -ne 0 ]; then stop_for_deploy; fi
-        wait_for_certificate "${verify[@]}" || stop acme_real_failed "$CERT_WAIT_SECONDS" "$ENV_FILE" "$COMPOSE_FILE" "$ACME_OVERLAY"
+        wait_for_certificate "${verify[@]}" || stop acme_real_failed "$CERT_WAIT_SECONDS" "$(acme_reason)"
         state_mark s6.real
     fi
     if ! state_has s6.published; then
@@ -746,6 +1184,13 @@ stage_https() {
         state_mark s6.published
     fi
     say "HTTPS: https://$OPT_DOMAIN is published on port 443"
+}
+
+acme_reason() { # what the authority said, from the ACME service's own log (it holds no secret)
+    local words
+    words="$(docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" --file "$ACME_OVERLAY" logs --no-color --tail 80 acme 2>&1 \
+        | grep -iE 'rate limit|too many|unauthorized|timeout|connection|refused|dns|problem|error|fail' | tail -n 2 | tr '\n' ' ' || true)"
+    printf '%s' "$(oneline "${words:-the log of the acme service names no reason}" 220)"
 }
 
 wait_for_certificate() { # wait_for_certificate VERIFY-COMMAND...: polls verify-deployed.sh until 0 or the time is up
@@ -779,6 +1224,13 @@ stage_executors() {
 stage_verify() {
     local status=0
     "$DEPLOY_DIR/verify-deployed.sh" --env-file "$ENV_FILE" </dev/null || status=$?
+    if [ "$status" -ne 0 ]; then
+        # DEPLOYMENT_RUNBOOK.md section 4: a proxy that holds a replaced container's address answers 502, and reload-proxy.sh is the repair.
+        say "verify-deployed.sh ended with status $status: reloading the proxy once, as the runbook says, and asking again"
+        "$DEPLOY_DIR/reload-proxy.sh" --env-file "$ENV_FILE" </dev/null || true
+        status=0
+        "$DEPLOY_DIR/verify-deployed.sh" --env-file "$ENV_FILE" </dev/null || status=$?
+    fi
     [ "$status" -eq 0 ] || stop verify_failed "$status"
     say "verify-deployed.sh: the running stack is this tree"
 }
@@ -792,29 +1244,32 @@ stage_github() {
     host="${OPT_DOMAIN:-$(public_ipv4)}"
     GITHUB_HOST="${host:-<the public IPv4 address of this server>}"
     printf '\nfirst-install: ---- for the owner: connect GitHub auto-deploy (Settings > Secrets and variables > Actions of %s) ----\n' "$repo_name"
-    printf '  variable DEPLOY_HOST        %s\n' "$GITHUB_HOST"
-    printf '  variable DEPLOY_PATH        %s\n' "$REPO"
+    printf '  variable DEPLOY_HOST=%s\n' "$GITHUB_HOST"
+    printf '  variable DEPLOY_PATH=%s   (the installer made this checkout and works in it; the clone it was started in is not used)\n' "$REPO"
     if [ -r "$HOST_KEY_PUB" ]; then
         key_line="$(awk -v h="$GITHUB_HOST" '{ print h " " $1 " " $2; exit }' "$HOST_KEY_PUB")"
         fingerprint="$(ssh-keygen -lf "$HOST_KEY_PUB" 2>/dev/null | awk '{ print $2 }' || true)"
-        printf '  variable DEPLOY_KNOWN_HOSTS %s\n' "$key_line"
+        printf '  variable DEPLOY_KNOWN_HOSTS=%s\n' "$key_line"
         printf '    the key fingerprint is %s ; compare it with: ssh-keyscan -t ed25519 %s | ssh-keygen -lf -\n' "${fingerprint:-unknown}" "$GITHUB_HOST"
     else
         warn "$HOST_KEY_PUB does not exist: take the host key line for DEPLOY_KNOWN_HOSTS from another key type of this server (ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub)"
     fi
-    printf '  secret   VPS_USER           %s\n' "$OPT_DEPLOY_USER"
+    printf '  secret   VPS_USER=%s\n' "$OPT_DEPLOY_USER"
     CI_KEY_FILE="$SECRET_DIR/$INSTANCE-deploy-key"
     if [ "$OPT_NO_CI_KEY" = yes ]; then
-        printf '  secret   VPS_SSH_KEY        the private key of an account that may log in as %s (no key was generated: --no-ci-key)\n' "$OPT_DEPLOY_USER"
+        printf '  secret   VPS_SSH_KEY=the private key of an account that may log in as %s (no key was generated: --no-ci-key)\n' "$OPT_DEPLOY_USER"
     else
         ensure_ci_key
-        printf '  secret   VPS_SSH_KEY        the whole content of the file %s (root-only; the owner copies it and then deletes the file)\n' "$CI_KEY_FILE"
+        printf '  secret   VPS_SSH_KEY=the whole content of the file %s (root-only; the owner copies it and then deletes the file)\n' "$CI_KEY_FILE"
     fi
     if [ "$OPT_DEPLOY_USER" != root ]; then
         printf '  sudoers  (visudo -f /etc/sudoers.d/%s-local-agent)   %s ALL=(root) NOPASSWD: %s/infra/deploy/local-agent.sh\n' \
             "$INSTANCE" "$OPT_DEPLOY_USER" "$REPO"
     fi
     printf '  the server deploys only the repository it was cloned from: %s\n' "$repo_name"
+    if [ "$(env_get ALPHA_NORM_EMBED)" = yes ] && ! state_has s5.designated; then
+        printf '  note     semantic norm lookup is not on yet: it turns on by itself when the installer is run again with --norms-bundle (sudo infra/deploy/first-install.sh --norms-bundle DIRECTORY)\n'
+    fi
 }
 
 ensure_ci_key() {
@@ -841,7 +1296,145 @@ ensure_ci_key() {
     say "the deploy key's public half is authorized for $OPT_DEPLOY_USER"
 }
 
-# ------------------------------------------------------------------------------------------------------- 10 marker
+# -------------------------------------------------------------------------------------------------------- 10 semantic
+# The semantic norm lookup (`NORM-VECTOR-TEMP-01`, docs/program/NORM-VECTOR-TEMP-01.md, owner 2026-11-20: always on). The embedder
+# is built and started by deploy.sh (`ALPHA_NORM_EMBED=yes`, the address EMPTY: rollout step 2). Once a norms snapshot is current
+# the two gates of rollout steps 3 and 4 are run exactly as the document gives them; only when both pass is the worker pointed at the
+# embedder (step 5). A failed gate leaves the address EMPTY, which is the document's rollback state: the stack works on word search.
+# The stage is last but one on purpose: a gate that fails stops the run only after everything else is installed.
+SEM_REASON=""
+semantic_compose() { # docker compose with the profile deploy.sh puts in every compose command when ALPHA_NORM_EMBED=yes
+    local profiles="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}norm-embed"
+    COMPOSE_PROFILES="$profiles" docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"
+}
+swap_used_mib() {
+    local total free
+    total="$(awk '$1 == "SwapTotal:" { print $2; exit }' "$MEMINFO")"
+    free="$(awk '$1 == "SwapFree:" { print $2; exit }' "$MEMINFO")"
+    echo $(( (${total:-0} - ${free:-0}) / 1024 ))
+}
+set_embed_url() { python3 -I "$ENV_HELPER" set --env "$ENV_FILE" "AUDITMANAGER_NORM_EMBED_URL=$1" >/dev/null; }
+restart_worker() { # `docker compose ... up -d worker` (step 5), then wait until the worker runs; 0 when it does
+    local out id waited=0
+    out="$(semantic_compose up -d --no-deps worker 2>&1)" || { SEM_REASON="$(oneline "$(last_line "$out")" 200)"; return 1; }
+    while [ "$waited" -lt 60 ]; do
+        id="$(semantic_compose ps --quiet worker 2>/dev/null | head -n 1 || true)"
+        if [ -n "$id" ] && [ "$(docker inspect --format '{{.State.Status}}' "$id" 2>/dev/null || true)" = running ]; then return 0; fi
+        sleep 2
+        waited=$(( waited + 2 ))
+    done
+    SEM_REASON="the worker is not running 60 seconds after up -d worker"
+    return 1
+}
+keep_semantic_off() { # the rollback state: the address empty and the worker restarted on it, when it had been set
+    local url
+    url="$(env_get AUDITMANAGER_NORM_EMBED_URL)"
+    if [ -n "$url" ]; then
+        set_embed_url ""
+        restart_worker || warn "the worker could not be restarted after the address was taken out: $SEM_REASON"
+    fi
+}
+# parse the one JSON line semantic_check prints: "VERDICT MEAN RECALL WINDOWS", or nothing
+semantic_json() {
+    printf '%s\n' "$1" | python3 -I -c '
+import json, sys
+for line in reversed(sys.stdin.read().splitlines()):
+    line = line.strip()
+    if line.startswith("{"):
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        print(data.get("verdict", ""), data.get("mean_inner_product", ""), data.get("self_recall_at_10", ""), data.get("windows", ""))
+        break
+'
+}
+# Returns 0 both gates pass, 10 the memory gate failed, 11 the quality gate failed, 12 the quality gate could not run.
+semantic_gates() {
+    local available swap_before swap_after samples sampler minimum out status=0 parsed verdict mean recall windows stats
+    available="$(mem_field_mib MemAvailable)"
+    swap_before="$(swap_used_mib)"
+    stats="$(docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' 2>/dev/null | tr '\n' ';' | cut -c1-240 || true)"
+    say "memory gate, at rest: ${available} MiB available, swap in use ${swap_before} MiB; ${stats:-no container figures}"
+    if [ "${available:-0}" -le "$SEMANTIC_MIN_AVAILABLE_MIB" ]; then
+        SEM_REASON="only ${available:-0} MiB of memory are available at rest (it must stay above $SEMANTIC_MIN_AVAILABLE_MIB MiB)"
+        return 10
+    fi
+    say "quality gate: semantic_check on $SEMANTIC_WINDOWS windows of the current snapshot (about five minutes); memory is watched meanwhile"
+    samples="$(mktemp)"
+    ( while :; do mem_field_mib MemAvailable >> "$samples"; sleep "$SAMPLE_SECONDS"; done ) &
+    sampler=$!
+    out="$(semantic_compose exec -T worker python -m auditmanager.norms.semantic_check --url "$SEMANTIC_URL" --windows "$SEMANTIC_WINDOWS" 2>&1)" || status=$?
+    kill "$sampler" 2>/dev/null || true
+    wait "$sampler" 2>/dev/null || true
+    minimum="$(sort -n "$samples" | head -n 1 || true)"
+    rm -f "$samples"
+    swap_after="$(swap_used_mib)"
+    printf '%s\n' "$out" | tail -n 3 | cut -c1-300
+    say "memory gate, under load: at least ${minimum:-$available} MiB were available, swap in use ${swap_after} MiB (it was ${swap_before} MiB)"
+    if [ "${minimum:-$available}" -le "$SEMANTIC_MIN_AVAILABLE_MIB" ]; then
+        SEM_REASON="available memory fell to ${minimum} MiB while the embedder worked (it must stay above $SEMANTIC_MIN_AVAILABLE_MIB MiB)"
+        return 10
+    fi
+    if [ "$swap_after" -gt "$swap_before" ]; then
+        SEM_REASON="swap grew from ${swap_before} MiB to ${swap_after} MiB while the embedder worked (it must not grow)"
+        return 10
+    fi
+    parsed="$(semantic_json "$out")"
+    if [ -z "$parsed" ]; then
+        SEM_REASON="$(oneline "$(last_line "$out")" 200) (status $status)"
+        return 12
+    fi
+    read -r verdict mean recall windows <<<"$parsed"
+    if [ "$verdict" != PASS ] || [ "$status" -ne 0 ]; then
+        SEM_REASON="mean inner product $mean (it must be 0.97 or more) and self-recall@10 $recall (0.90 or more) on $windows windows"
+        return 11
+    fi
+    say "quality gate: PASS (mean inner product $mean, self-recall@10 $recall, $windows windows)"
+    return 0
+}
+stage_semantic() {
+    local embed url status=0
+    embed="$(env_get ALPHA_NORM_EMBED)"
+    url="$(env_get AUDITMANAGER_NORM_EMBED_URL)"
+    if [ "${embed:-no}" != yes ]; then
+        # The owner's choice (--set ALPHA_NORM_EMBED=no): the document's rollback, step 5 of "Rollback".
+        say "semantic norm lookup is off: ALPHA_NORM_EMBED is ${embed:-no} in alpha.env (the owner's choice); the stack works on word search"
+        keep_semantic_off
+        if [ -n "$(semantic_compose ps --quiet norm-embed 2>/dev/null | head -n 1 || true)" ]; then
+            semantic_compose rm -sf norm-embed >/dev/null 2>&1 || warn "the norm-embed service could not be removed"
+        fi
+        return 0
+    fi
+    if ! state_has s5.designated; then
+        STAGE_DONE=no
+        say "semantic norm lookup stays off for now: there is no norms snapshot, so the gates cannot run. The stack works on word search."
+        say "it turns on by itself when the installer is run again with --norms-bundle DIRECTORY"
+        return 0
+    fi
+    semantic_gates || status=$?
+    case "$status" in
+        0) ;;
+        10) keep_semantic_off; stop semantic_memory_low "$SEM_REASON" ;;
+        11) keep_semantic_off; stop semantic_quality_failed "$SEM_REASON" "$(command_line) --set ALPHA_NORM_EMBED=no" ;;
+        *) keep_semantic_off; stop semantic_check_failed "$SEM_REASON" ;;
+    esac
+    set_embed_url "$SEMANTIC_URL"
+    if ! restart_worker; then
+        set_embed_url ""
+        restart_worker || true
+        stop semantic_worker_failed "$SEM_REASON"
+    fi
+    say "both gates passed: AUDITMANAGER_NORM_EMBED_URL is $SEMANTIC_URL and the worker was restarted; semantic norm lookup is on"
+}
+semantic_summary() { # one phrase for the DONE line, from the environment as it is now
+    if [ -n "$(env_get AUDITMANAGER_NORM_EMBED_URL)" ]; then printf 'on'
+    elif [ "$(env_get ALPHA_NORM_EMBED)" != yes ]; then printf "off (the owner's choice)"
+    else printf 'off until the installer is run again with --norms-bundle (word search works)'
+    fi
+}
+
+# ------------------------------------------------------------------------------------------------------- 11 marker
 stage_marker() {
     local when sha
     when="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -852,10 +1445,11 @@ stage_marker() {
         printf 'date=%s\ninstance=%s\nsha=%s\nrepo=%s\n' "$when" "$INSTANCE" "$sha" "$REPO"
         printf 'domain=%s\nadmin_login=%s\n' "${OPT_DOMAIN:-none}" "$(admin_login)"
         printf 'stage_1_preflight=ok\nstage_2_env=ok\nstage_3_deploy=ok\nstage_4_admin=ok\n'
-        printf 'stage_5_norms=%s\n' "$([ -n "$OPT_BUNDLE" ] && echo ok || echo skipped)"
+        printf 'stage_5_norms=%s\n' "$(state_has s5.designated && echo ok || echo skipped)"
         printf 'stage_6_https=%s\n' "$([ -n "$OPT_DOMAIN" ] && echo ok || echo skipped)"
         printf 'stage_7_executors=%s\n' "$([ "$OPT_SKIP_EXECUTORS" = yes ] && echo skipped || echo ok)"
         printf 'stage_8_verify=ok\nstage_9_github=printed\n'
+        printf 'stage_10_semantic=%s\n' "$(semantic_summary)"
     } > "$MARKER.tmp"
     mv -f "$MARKER.tmp" "$MARKER"
     say "marker written: $MARKER"
@@ -867,7 +1461,7 @@ admin_login() { # the login line of the password file, which is not a secret (th
 
 # ----------------------------------------------------------------------------------------------------------- runner
 STAGE_TITLES=(
-    "preflight: root, tools, Docker, disk, memory, ports, a clean clone"
+    "preflight: root, tools, Docker, the deploy clone, disk, memory, ports"
     "env: alpha.env and provider.env from the examples, every secret generated (mode 600)"
     "deploy: the first deploy.sh, without published HTTPS"
     "admin: the administrator's password and profile through the loopback API; deploy.sh again"
@@ -876,19 +1470,23 @@ STAGE_TITLES=(
     "executors: connect this server's own claude / codex subscriptions"
     "verify: verify-deployed.sh must exit 0"
     "github: what to paste into GitHub, and the deploy key"
+    "semantic: the memory and quality gates, then the embedder address for the worker"
     "marker: write the done marker; a second run refuses"
 )
 
+STAGE_DONE=yes
 run_stage() { # run_stage N FUNCTION
     local n="$1" fn="$2"
     stage_header "$n" "${STAGE_TITLES[$((n - 1))]}"
-    # Stages 1 and 2 are cheap and always run: the server and the environment file may have changed since the last run.
-    if [ "$n" -gt 2 ] && [ "$n" -lt 9 ] && state_has "s$n"; then
+    # Stages 1 and 2 are cheap and always run: the server and the environment file may have changed since the last run. Stage 9
+    # (the values for GitHub) and 11 (the marker) are printed or written again each time.
+    if [ "$n" -gt 2 ] && [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && state_has "s$n"; then
         say "done before: skipped"
         return 0
     fi
+    STAGE_DONE=yes
     "$fn"
-    if [ "$n" -lt 9 ]; then state_mark "s$n"; fi
+    if [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && [ "$STAGE_DONE" = yes ]; then state_mark "s$n"; fi
     return 0
 }
 
@@ -902,67 +1500,98 @@ run_all() {
     if [ "$OPT_SKIP_EXECUTORS" = no ]; then run_stage 7 stage_executors; else stage_header 7 "${STAGE_TITLES[6]}"; say "skipped: --skip-executors"; fi
     run_stage 8 stage_verify
     run_stage 9 stage_github
-    run_stage 10 stage_marker
+    run_stage 10 stage_semantic
+    run_stage 11 stage_marker
     local login
     login="$(admin_login)"
     printf '\n'
-    printf 'DONE: %s is installed at %s (%s). Administrator login %s; its password is in %s (owner only, do not read it).%s Full output: %s\n' \
-        "$INSTANCE" "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "${login:-unknown}" "$(password_file)" \
+    printf 'DONE: %s is installed at %s (%s). Administrator login %s; its password is in %s (owner only, do not read it). Semantic norm lookup: %s.%s Full output: %s\n' \
+        "$INSTANCE" "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "${login:-unknown}" "$(password_file)" "$(semantic_summary)" \
         "$([ -n "$OPT_DOMAIN" ] && echo " Open https://$OPT_DOMAIN." || echo " Open it through: ssh -L $HTTP_PORT:127.0.0.1:$HTTP_PORT <this server> then http://127.0.0.1:$HTTP_PORT.")" \
         "$LOG_FILE"
 }
 
 # --------------------------------------------------------------------------------------------------------- dry run
 print_plan() {
-    local n done_text
+    local n done_text deploy_text
+    if [ "$REPO_REAL" = "$DEPLOY_REAL" ]; then
+        deploy_text="this clone is the deploy clone"
+    elif [ -e "$DEPLOY_PATH" ] && [ -n "$(ls -A "$DEPLOY_PATH" 2>/dev/null || true)" ]; then
+        deploy_text="$DEPLOY_PATH exists: it would be checked (this repository, clean) and used; this clone is only where it was started"
+    else
+        deploy_text="$DEPLOY_PATH would be made from the origin of this clone at its commit, and the installer would continue there; this clone is not touched"
+    fi
     printf 'first-install: DRY RUN -- nothing below is done; nothing on this server is changed.\n'
-    printf '  instance         %s\n  clone            %s\n  environment      %s\n' "$INSTANCE" "$REPO" "$ENV_FILE"
+    printf '  instance         %s\n  started in       %s\n  deploy clone     %s\n  environment      %s/infra/deploy/env/alpha.env\n' "$INSTANCE" "$REPO" "$deploy_text" "$DEPLOY_PATH"
     printf '  application port %s (loopback only)\n  domain           %s\n  administrator    %s\n' "$HTTP_PORT" "${OPT_DOMAIN:-none (no HTTPS)}" "${OPT_EMAIL:-<--email is required>}"
     printf '  norms bundle     %s\n  deploy user      %s\n' "${OPT_BUNDLE:-none}" "$OPT_DEPLOY_USER"
     printf '  state            %s\n  marker           %s\n  password file    %s\n  transcript       %s\n' "$STATE_FILE" "$MARKER" "$(password_file)" "$LOG_FILE"
     if [ -f "$MARKER" ] && [ -z "$OPT_RESUME" ]; then printf '  NOTE: the marker exists: a real run would stop with STOP [already_installed].\n'; fi
     local would=(
-        "check that this is root, that git curl flock tar python3 ssh-keygen are present, that Docker 20+ and compose v2 answer, that at least $MIN_FREE_GIB GiB of disk and $STOP_RAM_AVAILABLE_MIB MiB of memory are free, that the clone is clean, and (with --domain) that ports 80 and 443 are free"
-        "create $ENV_FILE and $PROVIDER_FILE from the examples if they are absent (mode 600; every secret generated, in every place it is written; an existing file is never changed)"
+        "check that this is root, that git curl flock tar python3 ssh-keygen are present (installed with apt-get on Debian and Ubuntu if not), that Docker 20+ and compose v2 answer (installed from Docker's apt repository, key fingerprint pinned, if not), that at least $MIN_FREE_GIB GiB of disk and $STOP_RAM_AVAILABLE_MIB MiB of memory are free, that the deploy clone is clean, and (with --domain) that ports 80 and 443 are free"
+        "create $DEPLOY_PATH/infra/deploy/env/alpha.env and provider.env from the examples if they are absent (mode 600; every secret generated, in every place it is written; ALPHA_NORM_EMBED=yes with its address empty; an existing file is never changed)"
         "run infra/deploy/deploy.sh; on a fresh database it ends [default_credential], which is expected"
         "generate the administrator's password into $(password_file) (mode 600), change it through the API, complete the profile with ${OPT_EMAIL:-the --email address}, run deploy.sh again"
         "$([ -n "$OPT_BUNDLE" ] && echo "verify $OPT_BUNDLE, stream it into receive-bundle.sh on this host, open a test-data waiver with copy-serve.sh, import, report, resume, designate the snapshot" || echo "skipped (no --norms-bundle)")"
         "$([ -n "$OPT_DOMAIN" ] && echo "check that DNS $OPT_DOMAIN points here; set the name; deploy with the test certificate, then the real one, then ALPHA_PUBLISH_HTTPS=yes" || echo "skipped (no --domain)")"
         "$([ "$OPT_SKIP_EXECUTORS" = no ] && echo "connect the claude / codex subscriptions of this server through local-agent.sh; stop with a printed instruction when none is signed in" || echo "skipped (--skip-executors)")"
-        "run infra/deploy/verify-deployed.sh; it must exit 0"
-        "print DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
+        "run infra/deploy/verify-deployed.sh; it must exit 0 (the proxy is reloaded once and it is asked again if it does not)"
+        "print DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH=$DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
+        "$([ -n "$OPT_BUNDLE" ] && echo "run the two gates of NORM-VECTOR-TEMP-01 (memory above $SEMANTIC_MIN_AVAILABLE_MIB MiB with swap not growing; semantic_check on $SEMANTIC_WINDOWS windows); when both pass set AUDITMANAGER_NORM_EMBED_URL=$SEMANTIC_URL and restart the worker; otherwise leave it empty" || echo "not yet: the gates need the norms corpus (run again with --norms-bundle); the address stays empty and word search works")"
         "write the marker $MARKER and print the DONE line"
     )
-    for n in $(seq 1 10); do
+    for n in $(seq 1 "$STAGE_COUNT"); do
         done_text=""
-        if [ "$n" -eq 2 ] && [ -f "$ENV_FILE" ]; then done_text=" [already there: kept]"; fi
-        if [ "$n" -gt 2 ] && [ "$n" -lt 9 ] && state_has "s$n"; then done_text=" [done before: would be skipped]"; fi
-        printf '\n[%s/10] %s%s\n      would: %s\n' "$n" "${STAGE_TITLES[$((n - 1))]%%:*}" "$done_text" "${would[$((n - 1))]}"
+        if [ "$n" -eq 2 ] && [ -f "$DEPLOY_PATH/infra/deploy/env/alpha.env" ]; then done_text=" [already there: kept]"; fi
+        if [ "$n" -gt 2 ] && [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && state_has "s$n"; then done_text=" [done before: would be skipped]"; fi
+        printf '\n[%s/%s] %s%s\n      would: %s\n' "$n" "$STAGE_COUNT" "${STAGE_TITLES[$((n - 1))]%%:*}" "$done_text" "${would[$((n - 1))]}"
     done
     printf '\nfirst-install: end of the dry run.\n'
 }
 
 main() {
+    ORIG_ARGS=("$@")
     parse_args "$@"
     validate_args
     resolve_instance
+    decide_deploy_path
+    if [ -z "$OPT_DOMAIN" ] && state_has s6 && [ -f "$ENV_FILE" ]; then OPT_DOMAIN="$(env_get ALPHA_CERT_NAME)"; fi
     if [ "$OPT_DRY_RUN" = yes ]; then
         print_plan
         exit 0
     fi
     if [ -f "$MARKER" ] && [ -z "$OPT_RESUME" ]; then
-        stop already_installed "$(sed -n 's/^date=//p' "$MARKER" | head -n 1)" "$MARKER"
+        # An installation made without a norms bundle is finished by running the installer again with one.
+        if [ -n "$OPT_BUNDLE" ] && ! state_has s5.designated && ! state_has s10; then
+            say "this server was installed without a norms bundle: adding it, and then the semantic norm lookup"
+        else
+            stop already_installed "$(sed -n 's/^date=//p' "$MARKER" | head -n 1)" "$MARKER"
+        fi
     fi
     [ "$(id -u)" -eq 0 ] || [ "$TEST_MODE" = yes ] || stop not_root
     mkdir -p "$LOG_DIR"
-    # One run at a time: an agent whose tool timed out may start the command again while the first still works.
+    # One run at a time: an agent whose tool timed out may start the command again while the first still works. A run started in
+    # another clone holds the lock across its `exec` into the deploy clone and says so in the environment.
     private_dir "$STATE_DIR"
-    exec 200>"$STATE_DIR/first-install.lock"
-    flock -n 200 || stop already_running "$LOG_FILE"
+    if [ "${FIRST_INSTALL_LOCK_HELD:-}" = 1 ] && [ -e "/proc/$$/fd/200" ]; then
+        :
+    else
+        exec 200>"$STATE_DIR/first-install.lock"
+        flock -n 200 || stop already_running "$LOG_FILE"
+    fi
+    unset FIRST_INSTALL_LOCK_HELD
+    local rc=0
+    if [ "$REPO_REAL" != "$DEPLOY_REAL" ]; then
+        # Started in the owner's working copy: make (or check) the deploy clone and continue in it with the same arguments.
+        [ "${FIRST_INSTALL_REEXEC:-}" != 1 ] || stop unexpected "the deploy clone $DEPLOY_PATH is not where the script runs ($REPO)"
+        { start_in_deploy_clone; } 2>&1 | tee -a "$LOG_FILE" || rc="${PIPESTATUS[0]}"
+        [ "$rc" -eq 0 ] || exit "$rc"
+        export FIRST_INSTALL_LOCK_HELD=1 FIRST_INSTALL_REEXEC=1
+        exec "$DEPLOY_PATH/infra/deploy/first-install.sh" "${ORIG_ARGS[@]}"
+    fi
     if [ -n "$OPT_RESUME" ]; then
         state_clear_from "$OPT_RESUME"
     fi
-    local rc=0
     { run_all; } 2>&1 | tee -a "$LOG_FILE" || rc="${PIPESTATUS[0]}"
     exit "$rc"
 }

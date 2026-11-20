@@ -66,6 +66,9 @@ def save():
     json.dump(state, open(state_path, "w"))
 
 
+if argv[:1] == ["inspect"]:
+    print("running")
+    sys.exit(0)
 if argv[:1] == ["info"]:
     if argv[1:2] == ["--format"]:
         print(os.environ["STUB_DOCKER_ROOT"])
@@ -92,6 +95,9 @@ if sub == "start":
     sys.exit(0)
 if sub == "exec":
     command = rest[2:]
+    if "auditmanager.norms.semantic_check" in command:
+        sys.stdout.write(state.get("semantic_out", ""))
+        sys.exit(int(state.get("semantic_exit", 0)))
     if command[0] == "psql":
         if "--command" in command:
             sql = command[command.index("--command") + 1]
@@ -106,12 +112,20 @@ if sub == "run" and "auditmanager.norms.bundle" in rest:
     if action == "import":
         print("bundle: verified")
         print("importer stand-in finished")
+        sequence = state.get("import_exit_sequence") or []
+        if sequence:
+            code = sequence.pop(0)
+            state["import_exit_sequence"] = sequence
+            save()
+            sys.exit(int(code))
         sys.exit(int(state.get("import_exit", 0)))
     if action == "report":
         print("report: full match" if int(state.get("report_exit", 0)) == 0 else "report: DIFFERS")
         sys.exit(int(state.get("report_exit", 0)))
 sys.exit(0)
 '''
+SEMANTIC_PASS = ('{"min_mean_inner_product": 0.97, "min_self_recall_at_10": 0.9, "mean_inner_product": 0.9812, "p05_inner_product": 0.95, '
+                 '"self_recall_at_10": 0.934, "verdict": "PASS", "windows": 500}\n')
 DF_STUB = "#!/usr/bin/env bash\nprintf 'Avail\\n%s\\n' \"${STUB_DF_BYTES:-200000000000}\"\n"
 
 
@@ -166,7 +180,8 @@ class NormsRig:
         df = self.bin / "df"
         df.write_text(DF_STUB)
         df.chmod(0o755)
-        self.set_state(running=["postgres", "s3", "web", "api", "worker", "proxy"], fingerprint=FINGERPRINT)
+        self.set_state(running=["postgres", "s3", "web", "api", "worker", "proxy"], fingerprint=FINGERPRINT,
+                       semantic_out=SEMANTIC_PASS, semantic_exit=0)
         self.stack, self._stop = fake_stack.serve()
         self.password_file = self.secret_dir / "auditmanager-admin-password.txt"
         done = fia.admin(fia.Client(self.stack.base, timeout=5, sleep=lambda _s: None), self.password_file, "owner@auditco.net",
@@ -195,7 +210,7 @@ class NormsRig:
             "FIRST_INSTALL_STATE_ROOT": str(self.tmp / "var-lib"), "FIRST_INSTALL_LOG_DIR": str(self.tmp / "var-log"),
             "FIRST_INSTALL_POLL_SECONDS": "1", "FIRST_INSTALL_MEMINFO": str(self.tmp / "meminfo"),
             "STUB_STATE": str(self.stub), "STUB_DOCKER_ROOT": str(self.tmp),
-            "BUNDLE_STAGING_MARGIN_BYTES": "0",
+            "BUNDLE_STAGING_MARGIN_BYTES": "0", "FIRST_INSTALL_SAMPLE_SECONDS": "0.1",
         }
         (self.tmp / "meminfo").write_text("MemTotal:  8000000 kB\nMemAvailable:  6000000 kB\n")
         environment.update(extra)
@@ -208,6 +223,13 @@ class NormsRig:
                   f'STATE_FILE="$STATE_DIR/first-install.state"; mkdir -p "$STATE_DIR"; stage_norms')
         return subprocess.run(["bash", "-c", driver], capture_output=True, text=True, env=self.env(**extra), cwd=self.repo,
                               timeout=120)
+
+    def stage_and_semantic(self, bundle: Path, **extra: str) -> subprocess.CompletedProcess[str]:
+        """The norms stage and then the semantic stage, in one shell, as the runner would run them."""
+        driver = (f'source "{self.repo}/infra/deploy/first-install.sh"; OPT_BUNDLE="{bundle}"; INSTANCE=auditmanager; '
+                  f'HTTP_PORT=31500; ALPHA_BASE="{self.stack.base}"; STATE_DIR="{self.tmp}/var-lib/auditmanager"; '
+                  f'STATE_FILE="$STATE_DIR/first-install.state"; mkdir -p "$STATE_DIR"; stage_norms; stage_semantic')
+        return subprocess.run(["bash", "-c", driver], capture_output=True, text=True, env=self.env(**extra), cwd=self.repo, timeout=120)
 
     def docker_verbs(self) -> list[str]:
         verbs = []
@@ -224,6 +246,8 @@ class NormsRig:
                 verbs.append(f"{sub} {' '.join(argv[position + 1:])}")
             elif sub == "run" and "auditmanager.norms.bundle" in argv:
                 verbs.append(argv[argv.index("auditmanager.norms.bundle") + 1])
+            elif sub == "up" and "worker" in argv:
+                verbs.append("restart worker")
         return verbs
 
     def record(self) -> dict:
@@ -289,16 +313,72 @@ def test_a_rerun_after_an_interruption_does_not_receive_or_attest_again(norms: N
     assert norms.docker_verbs().count("stop web api worker") == 1
 
 
-def test_an_unfinished_admission_exit_75_is_imported_again_under_the_same_waiver(norms: NormsRig) -> None:
+def test_an_unfinished_admission_exit_75_is_imported_again_by_the_stage_itself_under_the_same_waiver(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    norms.set_state(import_exit_sequence=[75, 0])
+    done = norms.stage(bundle)
+    assert done.returncode == 0, done.stdout[-2500:]
+    assert "importing again, which is safe" in done.stdout
+    assert norms.docker_verbs().count("stop web api worker") == 1 and norms.docker_verbs().count("import") == 2
+
+
+def test_an_importer_that_always_ends_unfinished_stops_after_three_attempts_with_a_wait_and_run_again(norms: NormsRig) -> None:
     bundle = _make_bundle(norms.bundles)
     norms.set_state(import_exit=75)
-    first = norms.stage(bundle)
-    assert _stop_codes(first) == ["norms_import_failed"] and "75" in first.stdout
+    done = norms.stage(bundle)
+    assert done.returncode == 10 and _stop_codes(done) == ["norms_import_unfinished"], done.stdout[-1500:]
+    assert norms.docker_verbs().count("import") == 3 and "ASK" not in done.stdout.splitlines()[-1]
     norms.set_state(import_exit=0)
-    second = norms.stage(bundle)
-    assert second.returncode == 0, second.stdout[-2000:]
+    again = norms.stage(bundle)
+    assert again.returncode == 0, again.stdout[-1500:]
     assert norms.docker_verbs().count("stop web api worker") == 1
-    assert norms.docker_verbs().count("import") == 2
+
+
+def test_an_import_that_the_server_restart_interrupted_is_started_again_without_a_question(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    norms.set_state(import_exit=2)
+    assert _stop_codes(norms.stage(bundle)) == ["norms_import_failed"]
+    (norms.staging / "logs" / f"{bundle.name}.import.exit").unlink()        # started, no exit status, the lock free: a restart
+    norms.set_state(import_exit=0)
+    done = norms.stage(bundle)
+    assert done.returncode == 0, done.stdout[-2000:]
+    assert "importing again, which is safe" in done.stdout
+    assert norms.docker_verbs().count("import") == 2 and norms.docker_verbs().count("stop web api worker") == 1
+
+
+def test_a_lock_held_by_another_step_is_a_wait_and_not_a_report(norms: NormsRig) -> None:
+    import fcntl
+
+    bundle = _make_bundle(norms.bundles)
+    norms.staging.mkdir(mode=0o700)
+    with open(norms.staging / "receive.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        done = norms.stage(bundle)
+    assert _stop_codes(done) == ["norms_wait"], done.stdout[-1500:]
+    assert "Wait five minutes" in done.stdout.splitlines()[-1] and "REPORT" not in done.stdout.splitlines()[-1]
+
+
+def test_after_the_snapshot_is_current_the_gates_run_and_the_worker_is_pointed_at_the_embedder(norms: NormsRig) -> None:
+    """The bundle given, the lookup turns on in the same run: norms stage, then the two gates, then the address."""
+    bundle = _make_bundle(norms.bundles)
+    done = norms.stage_and_semantic(bundle)
+    assert done.returncode == 0, done.stdout[-3000:]
+    assert norms.stack.snapshots[0]["current"] is True
+    env = (norms.repo / "infra/deploy/env/alpha.env").read_text()
+    assert "\nAUDITMANAGER_NORM_EMBED_URL=http://norm-embed:8080\n" in env and "\nALPHA_NORM_EMBED=yes\n" in env
+    assert norms.docker_verbs() == ["stop web api worker", "import", "report", "start web api worker", "restart worker"]
+    assert "both gates passed" in done.stdout
+
+
+def test_a_failed_quality_gate_after_a_good_import_leaves_the_corpus_in_and_the_address_empty(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    norms.set_state(semantic_out=SEMANTIC_PASS.replace('"mean_inner_product": 0.9812', '"mean_inner_product": 0.91').replace("PASS", "FAIL"),
+                    semantic_exit=1)
+    done = norms.stage_and_semantic(bundle)
+    assert done.returncode == 10 and _stop_codes(done) == ["semantic_quality_failed"], done.stdout[-2000:]
+    assert norms.stack.snapshots[0]["current"] is True            # the norms stay current: word search works on them
+    assert "\nAUDITMANAGER_NORM_EMBED_URL=\n" in (norms.repo / "infra/deploy/env/alpha.env").read_text()
+    assert "restart worker" not in norms.docker_verbs()
 
 
 def test_a_report_that_differs_stops_and_leaves_the_record_open_and_the_writers_stopped(norms: NormsRig) -> None:
