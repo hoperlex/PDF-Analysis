@@ -45,6 +45,8 @@ def _load(name: str, path: Path):
 
 
 fake_stack = _load("first_install_fake_stack_for_norms_tests", Path(__file__).with_name("fake_stack.py"))
+fake_github = _load("first_install_fake_github_for_norms_tests", Path(__file__).with_name("fake_github.py"))
+publisher = _load("publish_bundle_release_for_norms_tests", ROOT / "infra" / "norms" / "publish_bundle_release.py")
 fia = _load("first_install_api_for_norms_tests", DEPLOY / "lib" / "first_install_api.py")
 
 CONTENT_KEY = fake_stack.CONTENT_KEY
@@ -189,9 +191,38 @@ class NormsRig:
         assert done == 0
         self.bundles = tmp_path / "bundles-source"
         self.bundles.mkdir()
+        self.github = fake_github.FakeGithub("acme-co/audit-install")
+        self.upload_token = tmp_path / "upload-token"
+        self.upload_token.write_text(self.github.token + "\n")
+        self.upload_token.chmod(0o600)
+        self.lock_path = self.repo / "infra/norms/bundle-release.lock"
 
     def close(self) -> None:
         self._stop()
+        self.github.close()
+
+    def publish(self, bundle: Path, part_size: int = 200) -> dict:
+        """The real publisher against the stand-in GitHub; the lock goes into the clone and is committed (the clone stays clean)."""
+        done = publisher.main(["--bundle", str(bundle), "--repo", "acme-co/audit-install", "--token-file", str(self.upload_token),
+                               "--lock", str(self.lock_path), "--work-dir", str(self.tmp / "publish-work"), "--api-base", self.github.base,
+                               "--part-size-bytes", str(part_size), "--allow-small-disk"])
+        assert done == 0
+        git = ["git", "-C", str(self.repo), "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run([*git, "add", "-f", "infra/norms/bundle-release.lock"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "the lock"], check=True)
+        tag = next(iter(self.github.releases))
+        return {"tag": tag, "parts": [a["name"] for a in self.github.release(tag)["assets"]]}
+
+    def release_stage(self, **extra: str) -> subprocess.CompletedProcess[str]:
+        """Stage 5 with no --norms-bundle: the lock file in the clone decides."""
+        driver = (f'source "{self.repo}/infra/deploy/first-install.sh"; OPT_BUNDLE=""; INSTANCE=auditmanager; '
+                  f'HTTP_PORT=31500; ALPHA_BASE="{self.stack.base}"; STATE_DIR="{self.tmp}/var-lib/auditmanager"; '
+                  f'STATE_FILE="$STATE_DIR/first-install.state"; mkdir -p "$STATE_DIR"; stage_norms')
+        return subprocess.run(["bash", "-c", driver], capture_output=True, text=True, env=self.env(**extra), cwd=self.repo, timeout=180)
+
+    def downloaded_parts(self, tag: str) -> list[str]:
+        directory = self.staging / "download" / tag
+        return sorted(p.name for p in directory.iterdir()) if directory.exists() else []
 
     def set_state(self, **values) -> None:
         path = self.stub / "docker.json"
@@ -211,6 +242,8 @@ class NormsRig:
             "FIRST_INSTALL_POLL_SECONDS": "1", "FIRST_INSTALL_MEMINFO": str(self.tmp / "meminfo"),
             "STUB_STATE": str(self.stub), "STUB_DOCKER_ROOT": str(self.tmp),
             "BUNDLE_STAGING_MARGIN_BYTES": "0", "FIRST_INSTALL_SAMPLE_SECONDS": "0.1",
+            "FIRST_INSTALL_RELEASE_BASE": self.github.base, "FIRST_INSTALL_RELEASE_API_BASE": self.github.base,
+            "FIRST_INSTALL_RELEASE_RETRIES": "2", "FIRST_INSTALL_RELEASE_RETRY_DELAY": "1",
         }
         (self.tmp / "meminfo").write_text("MemTotal:  8000000 kB\nMemAvailable:  6000000 kB\n")
         environment.update(extra)
@@ -449,3 +482,175 @@ def test_the_directories_the_scripts_require_are_made_private_and_outside_the_cl
     status = subprocess.run(["git", "-C", str(norms.repo), "status", "--porcelain", "--untracked-files=all"],
                             capture_output=True, text=True).stdout
     assert status == ""
+
+
+# ------------------------------------------------------------------ the bundle comes from the repository's release (FIRST-INSTALL-02)
+
+
+def _downloads(norms: NormsRig) -> list[dict]:
+    return [r for r in norms.github.requests if "/releases/download/" in r["path"] or "/releases/assets/" in r["path"]]
+
+
+def test_the_release_is_downloaded_checked_streamed_into_receive_and_imported_by_the_unchanged_flow(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    published = norms.publish(bundle)
+    assert len(published["parts"]) >= 3, "the fixture must make several parts"
+    done = norms.release_stage()
+    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-2000:]
+    key = bundle.name
+    # no --norms-bundle: the lock chose the release, and the received bundle is the directory's digest and the name's
+    assert "norms: the release" in done.stdout and "norms: the bundle directory" not in done.stdout
+    assert (norms.staging / "bundles" / key / "SHA256SUMS").is_file()
+    assert hashlib.sha256((norms.staging / "bundles" / key / "SHA256SUMS").read_bytes()).hexdigest() == key.rsplit("+", 1)[1]
+    assert "the digest of its SHA256SUMS is the lock's and the directory name's" in done.stdout
+    # the import is the one flow, verb for verb
+    assert norms.docker_verbs() == ["stop web api worker", "import", "report", "start web api worker"]
+    assert norms.stack.snapshots[0]["current"] is True and norms.record()["state"] == "closed"
+    # the public path asked for no credential, every part once (and a probe for its first byte)
+    fetched = [r for r in _downloads(norms) if r["range"] != "bytes=0-0"]
+    assert [r["path"].rsplit("/", 1)[1] for r in fetched] == published["parts"]
+    assert all(r["anonymous"] for r in _downloads(norms))
+    # the parts are deleted once the import succeeded, and nothing was written in the clone
+    assert norms.downloaded_parts(published["tag"]) == []
+    status = subprocess.run(["git", "-C", str(norms.repo), "status", "--porcelain", "--untracked-files=all"], capture_output=True, text=True).stdout
+    assert status == ""
+
+
+def test_a_second_run_after_the_import_downloads_nothing(norms: NormsRig) -> None:
+    norms.publish(_make_bundle(norms.bundles))
+    assert norms.release_stage().returncode == 0
+    before = len(norms.github.requests)
+    again = norms.release_stage()
+    assert again.returncode == 0 and "designated by an earlier run" in again.stdout and len(norms.github.requests) == before
+
+
+def test_a_partial_download_is_resumed_with_a_range_request_and_a_cut_connection_is_resumed_by_curl(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    published = norms.publish(bundle)
+    first, second = published["parts"][0], published["parts"][1]
+    directory = norms.staging / "download" / published["tag"]
+    directory.mkdir(parents=True)
+    (directory / first).write_bytes(norms.github.asset_bytes(published["tag"], first)[:40])      # a run that was cut off
+    norms.github.drop_download[second] = 25                                                       # a connection cut after 25 bytes, once
+    done = norms.release_stage()
+    assert done.returncode == 0, done.stdout[-2500:] + done.stderr[-1500:]
+    ranges = [(r["path"].rsplit("/", 1)[1], r["range"]) for r in _downloads(norms)]
+    assert (first, "bytes=40-") in ranges and (second, "bytes=25-") in ranges
+    assert hashlib.sha256((norms.staging / "bundles" / bundle.name / "SHA256SUMS").read_bytes()).hexdigest() == bundle.name.rsplit("+", 1)[1]
+
+
+def test_a_part_that_never_arrives_whole_is_a_run_again_and_the_rerun_keeps_what_it_has(norms: NormsRig) -> None:
+    published = norms.publish(_make_bundle(norms.bundles))
+    second = published["parts"][1]
+    norms.github.drop_always[second] = 20
+    done = norms.release_stage()
+    assert done.returncode == 10 and _stop_codes(done) == ["norms_download_failed"], done.stdout[-1500:]
+    assert "resumes where it stopped" in done.stdout.splitlines()[-1] and "REPORT" not in done.stdout.splitlines()[-1]
+    assert norms.docker_verbs() == [] and not (norms.staging / "bundles").exists() or not list((norms.staging / "bundles").iterdir())
+    kept = norms.downloaded_parts(published["tag"])
+    assert published["parts"][0] in kept
+    norms.github.drop_always.clear()
+    again = norms.release_stage()
+    assert again.returncode == 0, again.stdout[-2000:]
+
+
+def test_a_part_with_the_wrong_checksum_is_downloaded_again_once_and_then_reported_and_nothing_is_imported(norms: NormsRig) -> None:
+    published = norms.publish(_make_bundle(norms.bundles))
+    second = published["parts"][1]
+    good = norms.github.asset_bytes(published["tag"], second)
+    norms.github.altered[second] = bytes([good[0] ^ 1]) + good[1:]            # the same size, one bit different
+    done = norms.release_stage()
+    assert done.returncode == 10 and _stop_codes(done) == ["norms_download_corrupt"], done.stdout[-1500:]
+    last = done.stdout.splitlines()[-1]
+    assert last.startswith("STOP [norms_download_corrupt]: REPORT TO THE OWNER") and second in last
+    assert hashlib.sha256(good).hexdigest() in last and "downloading it again" in done.stdout
+    assert len([r for r in _downloads(norms) if r["path"].endswith(second) and r["range"] != "bytes=0-0"]) == 2
+    assert norms.docker_verbs() == [] and not (norms.staging / "download" / published["tag"] / second).exists()
+    # a bad copy that is good on the second download is a recovery, not a stop
+    norms.github.altered.clear()
+    norms.github.altered_once[second] = bytes([good[0] ^ 1]) + good[1:]
+    assert norms.release_stage().returncode == 0
+
+
+def test_an_asset_that_is_not_in_the_release_is_a_report_that_names_it(norms: NormsRig) -> None:
+    published = norms.publish(_make_bundle(norms.bundles))
+    gone = published["parts"][1]
+    norms.github.missing.add(gone)
+    done = norms.release_stage()
+    assert done.returncode == 10 and _stop_codes(done) == ["norms_release_missing"], done.stdout[-1500:]
+    last = done.stdout.splitlines()[-1]
+    assert last.startswith("STOP [norms_release_missing]: REPORT TO THE OWNER") and gone in last and published["tag"] in last
+    assert "publish-bundle-release.sh" in last and norms.docker_verbs() == []
+    # a release that was deleted altogether says the same
+    norms.github.missing.clear()
+    norms.github.releases.clear()
+    assert _stop_codes(norms.release_stage()) == ["norms_release_missing"]
+
+
+def test_a_directory_given_with_norms_bundle_wins_over_the_lock_and_nothing_is_downloaded(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    norms.publish(bundle)
+    done = norms.stage(bundle)                        # `stage()` sets OPT_BUNDLE, and the clone carries a lock
+    assert done.returncode == 0, done.stdout[-2500:]
+    assert "norms: the bundle directory" in done.stdout and "norms: the release" not in done.stdout
+    assert _downloads(norms) == [] and norms.docker_verbs() == ["stop web api worker", "import", "report", "start web api worker"]
+
+
+def test_a_lock_that_does_not_hold_together_is_reported_before_anything_is_fetched(norms: NormsRig) -> None:
+    bundle = _make_bundle(norms.bundles)
+    norms.publish(bundle)
+    good = norms.lock_path.read_text()
+    broken = {
+        "the digest is not the name's": good.replace("bundle_sums_sha256=" + bundle.name.rsplit("+", 1)[1], "bundle_sums_sha256=" + "0" * 64),
+        "the total is not the sum": re.sub(r"total_bytes=\d+", "total_bytes=1", good),
+        "a part line is short": re.sub(r"(part=\S+ \d+ [0-9a-f]{64}) \d+", r"\1", good),
+        "an unknown version": good.replace("lock_version=1", "lock_version=2"),
+        "no parts": "\n".join(line for line in good.splitlines() if not line.startswith("part=")),
+    }
+    for why, text in broken.items():
+        norms.lock_path.write_text(text)
+        done = norms.release_stage()
+        assert _stop_codes(done) == ["norms_lock_invalid"], (why, done.stdout[-600:])
+        assert done.stdout.splitlines()[-1].startswith("STOP [norms_lock_invalid]: REPORT TO THE OWNER")
+    assert _downloads(norms) == [] and norms.docker_verbs() == []
+
+
+def test_a_private_repository_is_read_with_a_token_that_travels_in_a_header_file_never_in_an_argument(norms: NormsRig, tmp_path: Path) -> None:
+    published = norms.publish(_make_bundle(norms.bundles))
+    norms.github.require_download_token = True
+    token_file = tmp_path / "read-token"
+    token_file.write_text(norms.github.token + "\n")
+    token_file.chmod(0o600)
+    done = norms.release_stage(FIRST_INSTALL_NORMS_READ_TOKEN_FILE=str(token_file))
+    assert done.returncode == 0, done.stdout[-2500:]
+    assert norms.github.token not in done.stdout + done.stderr
+    api = [r for r in norms.github.requests if "/releases/assets/" in r["path"] and r["method"] == "GET"]
+    assert api and all(r["authorized"] and r["accept"] == "application/octet-stream" for r in api)
+    assert not [r for r in norms.github.requests if "/releases/download/" in r["path"]]       # the public URL was not used
+    # the script's only use of the token is a printf into a mode-600 header file that curl reads with -H @file
+    script = (ROOT / "infra/deploy/first-install.sh").read_text()
+    assert script.count("Bearer") == 1 and 'RELEASE_CURL+=(-H "@$RELEASE_HEADER")' in script
+    assert published["tag"] in done.stdout
+
+
+def test_the_download_counts_in_the_disk_the_stage_asks_for(norms: NormsRig) -> None:
+    driver = (f'source "{norms.repo}/infra/deploy/first-install.sh"; STATE_DIR="{norms.tmp}/var-lib/auditmanager"; '
+              f'STATE_FILE="$STATE_DIR/first-install.state"; mkdir -p "$STATE_DIR"; norms_check_disk 1000 "$1" 0')
+    env = norms.env(STUB_DF_BYTES=str(10 * 1024**3))
+    without = subprocess.run(["bash", "-c", driver, "x", "0"], capture_output=True, text=True, env=env, cwd=norms.repo)
+    assert without.returncode == 0, without.stdout
+    with_download = subprocess.run(["bash", "-c", driver, "x", str(3 * 1024**3)], capture_output=True, text=True, env=env, cwd=norms.repo)
+    assert with_download.returncode == 10 and "STOP [norms_disk_low]" in with_download.stdout
+    assert "10 GiB are free" in with_download.stdout and "12 GiB are needed" in with_download.stdout
+    again = subprocess.run(["bash", "-c", driver, "x", str(3 * 1024**3)], capture_output=True, text=True, env=env, cwd=norms.repo)
+    assert "STOP [norms_disk_too_small]: ASK THE OWNER" in again.stdout
+
+
+def test_the_lock_is_the_only_thing_the_installer_trusts_about_the_release(norms: NormsRig) -> None:
+    """A part of the right size whose bytes were replaced after publication is caught by the lock's sha256, never imported."""
+    published = norms.publish(_make_bundle(norms.bundles))
+    name = published["parts"][-1]
+    asset = next(a for a in norms.github.release(published["tag"])["assets"] if a["name"] == name)
+    asset["_content"] = bytes(len(asset["_content"]))                          # zeros: the same size
+    done = norms.release_stage()
+    assert _stop_codes(done) == ["norms_download_corrupt"] and norms.docker_verbs() == []

@@ -50,6 +50,7 @@ API_HELPER="$DEPLOY_DIR/lib/first_install_api.py"
 LISTENERS_LIB="$DEPLOY_DIR/lib/proxy-listeners.sh"
 ACME_OVERLAY="$REPO/infra/acme/compose.acme.yml"
 ACME_PIN="$REPO/infra/acme/client.pin"
+RELEASE_LOCK="$REPO/infra/norms/bundle-release.lock"
 COMPOSE_FILE="$DEPLOY_DIR/compose.server.yml"
 
 # ------------------------------------------------------------------------------------------------ seams for the tests
@@ -75,6 +76,10 @@ APT_SOURCES_DIR="$(seam APT_SOURCES_DIR /etc/apt/sources.list.d)"
 SAMPLE_SECONDS="$(seam SAMPLE_SECONDS 2)"
 DOCKER_WAIT_SECONDS="$(seam DOCKER_WAIT_SECONDS 30)"
 DEPLOY_ROOT="$(seam DEPLOY_ROOT /srv)"
+RELEASE_BASE="$(seam RELEASE_BASE https://github.com)"             # where a public release's assets are downloaded from
+RELEASE_API_BASE="$(seam RELEASE_API_BASE https://api.github.com)" # used only with a read token, for a private repository
+RELEASE_RETRIES="$(seam RELEASE_RETRIES 3)"
+RELEASE_RETRY_DELAY="$(seam RELEASE_RETRY_DELAY 5)"
 PROC_NET="$(seam PROC_NET /proc/net)"
 MEMINFO="$(seam MEMINFO /proc/meminfo)"
 HOST_KEY_PUB="$(seam HOST_KEY_PUB /etc/ssh/ssh_host_ed25519_key.pub)"
@@ -161,6 +166,10 @@ admin_unknown_password|ASK THE OWNER to write the administrator's current login 
 norms_bundle_invalid|ASK THE OWNER for the norms bundle directory: %s is not usable (%s).
 norms_disk_low|Free disk space is too small for the norms import: %s GiB are free on %s and about %s GiB are needed. Run this command: docker builder prune -af   and then run the same command again.
 norms_disk_too_small|ASK THE OWNER for a larger disk: %s GiB are free on %s, about %s GiB are needed for the norms import, and clearing the build cache did not help. It costs money, so only the owner decides.
+norms_lock_invalid|REPORT TO THE OWNER: infra/norms/bundle-release.lock is not a lock this installer reads (%s). The owner publishes the bundle again with infra/norms/publish-bundle-release.sh and commits the lock file it writes.
+norms_release_missing|REPORT TO THE OWNER: the norms release %s of the repository %s has no asset %s, or the release is gone. The owner publishes the bundle again with infra/norms/publish-bundle-release.sh and commits the lock file it writes.
+norms_download_failed|The norms download did not finish (%s). Wait a few minutes, then run the same command again: it resumes where it stopped.
+norms_download_corrupt|REPORT TO THE OWNER: the downloaded norms part %s has the sha256 %s but the lock file says %s, also after it was downloaded again. The release asset is not what was published; nothing was imported.
 norms_busy|REPORT TO THE OWNER: another copy or import is open (%s) and was not touched.
 norms_wait|Another copy or import step holds a lock (%s). Wait five minutes, then run the same command again.
 norms_refused|REPORT TO THE OWNER: the norms transfer or import was refused: %s
@@ -532,7 +541,7 @@ MISSING_TOOLS=""
 find_missing_tools() {
     local tool
     MISSING_TOOLS=""
-    for tool in git curl sed awk flock tar sha256sum python3 ssh-keygen getent df stat; do
+    for tool in git curl sed awk flock tar sha256sum python3 ssh-keygen getent df stat zstd; do
         tool_present "$tool" || MISSING_TOOLS="$MISSING_TOOLS $tool"
     done
     MISSING_TOOLS="${MISSING_TOOLS# }"
@@ -777,6 +786,11 @@ stage_preflight() {
     total="$(mem_field_mib MemTotal)"
     if [ "${available:-0}" -lt "$STOP_RAM_AVAILABLE_MIB" ]; then escalate ram_low ram_too_small "${available:-0}" "$STOP_RAM_AVAILABLE_MIB"; fi
     state_unset s1.hint_ram_low
+    # A bundle that is downloaded from the release adds its parts to what the import needs: asked now, before the images are built.
+    if [ -z "$OPT_BUNDLE" ] && [ -f "$RELEASE_LOCK" ] && ! state_has s5.designated; then
+        read_release_lock
+        norms_check_disk "$LOCK_TAR_BYTES" "$LOCK_TOTAL" "$MIN_FREE_GIB"
+    fi
     say "disk free $free GiB on $root; memory ${available} MiB available of ${total} MiB"
     if [ "${total:-0}" -lt "$WARN_RAM_TOTAL_MIB" ]; then
         warn "this server has ${total} MiB of memory; the image build can be slow, and deploy.sh stops an overloaded build by itself (a STOP [host_overloaded] then says to wait and run again)"
@@ -1029,12 +1043,214 @@ norms_start_import() { # norms_start_import KEY: the test-data waiver (a new one
     printf '%s\n' "$out"
 }
 
-stage_norms() {
-    local bundle key parent size out status stamp
-    bundle="$(cd "$OPT_BUNDLE" && pwd -P)"
-    key="${bundle##*/}"
+# ---- where the bundle comes from: --norms-bundle DIRECTORY (it wins), else the release the repository's lock file names ----
+norms_wanted() { [ -n "$OPT_BUNDLE" ] || [ -f "$RELEASE_LOCK" ]; }
+existing_dir() { # the nearest directory of PATH that exists (the staging directory may not be made yet, in the preflight)
+    local dir="$1"
+    while [ ! -d "$dir" ] && [ "$dir" != / ]; do dir="$(dirname "$dir")"; done
+    printf '%s' "$dir"
+}
+# norms_check_disk TAR_BYTES DOWNLOAD_BYTES BASE_GIB: STAND-NORMS-IMPORT-RUNBOOK-01.md section 0 item 4. Staging holds the tar and
+# its extraction (2 x size + 2 GiB) and, from a release, the downloaded parts; Docker's volumes grow by the objects (size),
+# PostgreSQL with its WAL (2.5 GB) and 2 GiB, each +25 %, and BASE_GIB more where the images are not built yet.
+norms_check_disk() {
+    local size="$1" download="$2" base="${3:-0}" gib=1073741824 staging_free docker_root docker_free need_staging need_docker staging_dir
+    need_staging=$(( (2 * size + 2 * gib + download) / gib + 1 ))
+    need_docker=$(( ((size + 5 * gib / 2 + 2 * gib) * 5 / 4) / gib + 1 + base ))
+    staging_dir="$(existing_dir "$NORMS_STAGING")"
+    staging_free="$(free_gib "$staging_dir")"
+    docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+    [ -d "$docker_root" ] || docker_root="$REPO"
+    docker_free="$(free_gib "$docker_root")"
+    if [ "$(stat -c %d "$staging_dir")" = "$(stat -c %d "$docker_root")" ]; then
+        if [ "$staging_free" -lt $(( need_staging + need_docker )) ]; then
+            escalate norms_disk_low norms_disk_too_small "$staging_free" "$NORMS_STAGING" $(( need_staging + need_docker ))
+        fi
+    else
+        if [ "$staging_free" -lt "$need_staging" ]; then escalate norms_disk_low norms_disk_too_small "$staging_free" "$NORMS_STAGING" "$need_staging"; fi
+        if [ "$docker_free" -lt "$need_docker" ]; then escalate norms_disk_low norms_disk_too_small "$docker_free" "$docker_root" "$need_docker"; fi
+    fi
+    state_unset s1.hint_norms_disk_low
+}
+
+# The lock file (`infra/norms/bundle-release.lock`, written by infra/norms/publish-bundle-release.sh): read as data, never sourced.
+LOCK_REPO="" LOCK_TAG="" LOCK_BUNDLE="" LOCK_DIGEST="" LOCK_TAR_BYTES="" LOCK_TOTAL=""
+LOCK_NAMES=() LOCK_SIZES=() LOCK_SHAS=() LOCK_IDS=()
+lock_value() { sed -n "s/^$1=//p" "$RELEASE_LOCK" | tail -n 1; }
+read_release_lock() {
+    local line name size sha id sum=0 count
+    [ -r "$RELEASE_LOCK" ] || stop norms_lock_invalid "it cannot be read"
+    # shellcheck source=infra/deploy/lib/forced-command.sh
+    . "$DEPLOY_DIR/lib/forced-command.sh"
+    [ "$(lock_value lock_version)" = 1 ] || stop norms_lock_invalid "its lock_version is not 1"
+    LOCK_REPO="$(lock_value repo)"; LOCK_TAG="$(lock_value tag)"; LOCK_BUNDLE="$(lock_value bundle)"
+    LOCK_DIGEST="$(lock_value bundle_sums_sha256)"; LOCK_TAR_BYTES="$(lock_value tar_bytes)"; LOCK_TOTAL="$(lock_value total_bytes)"
+    [[ "$LOCK_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || stop norms_lock_invalid "repo is not owner/name"
+    [[ "$LOCK_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]] || stop norms_lock_invalid "tag is not a release tag"
+    [[ "$LOCK_BUNDLE" =~ ^${FC_BUNDLE_KEY_ERE}$ ]] || stop norms_lock_invalid "bundle is not a bundle directory name"
+    if ! [[ "$LOCK_DIGEST" =~ ^[0-9a-f]{64}$ ]] || [ "$LOCK_DIGEST" != "${LOCK_BUNDLE##*+}" ]; then
+        stop norms_lock_invalid "bundle_sums_sha256 is not the digest the bundle's name ends with"
+    fi
+    [[ "$LOCK_TAR_BYTES" =~ ^[1-9][0-9]{0,11}$ ]] || stop norms_lock_invalid "tar_bytes is not a byte count"
+    LOCK_NAMES=() LOCK_SIZES=() LOCK_SHAS=() LOCK_IDS=()
+    while IFS= read -r line; do
+        read -r name size sha id <<<"$line"
+        if ! [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || ! [[ "$size" =~ ^[1-9][0-9]{0,11}$ ]] \
+            || ! [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || ! [[ "$id" =~ ^[0-9]{1,20}$ ]]; then
+            stop norms_lock_invalid "a part= line is not <name> <size> <sha256> <asset id>"
+        fi
+        LOCK_NAMES+=("$name"); LOCK_SIZES+=("$size"); LOCK_SHAS+=("$sha"); LOCK_IDS+=("$id")
+        sum=$(( sum + size ))
+    done < <(sed -n 's/^part=//p' "$RELEASE_LOCK")
+    count="${#LOCK_NAMES[@]}"
+    if [ "$count" -lt 1 ] || [ "$(lock_value part_count)" != "$count" ]; then stop norms_lock_invalid "part_count is not the number of part= lines"; fi
+    [ "$LOCK_TOTAL" = "$sum" ] || stop norms_lock_invalid "total_bytes is not the sum of the parts"
+}
+
+release_dir() { printf '%s/download/%s' "$NORMS_STAGING" "$LOCK_TAG"; }
+release_url() { # release_url INDEX: public download URL; with a read token (a private repository) the API's asset endpoint
+    if [ -n "${FIRST_INSTALL_NORMS_READ_TOKEN_FILE:-}" ]; then
+        printf '%s/repos/%s/releases/assets/%s' "$RELEASE_API_BASE" "$LOCK_REPO" "${LOCK_IDS[$1]}"
+    else
+        printf '%s/%s/releases/download/%s/%s' "$RELEASE_BASE" "$LOCK_REPO" "$LOCK_TAG" "${LOCK_NAMES[$1]}"
+    fi
+}
+file_size() { stat -c %s "$1" 2>/dev/null || echo 0; }
+file_sha() { sha256sum "$1" | cut -c1-64; }
+
+# One part: present, complete and the right sha256 -- or downloaded (resuming a partial file with curl -C -) until it is. The token,
+# when there is one, goes to curl through a header FILE, never an argument.
+RELEASE_CURL=()
+release_curl_setup() {
+    RELEASE_CURL=(--silent --show-error --location --connect-timeout 30 --speed-limit 10000 --speed-time 120)
+    RELEASE_HEADER=""
+    if [ -n "${FIRST_INSTALL_NORMS_READ_TOKEN_FILE:-}" ]; then
+        [ -r "$FIRST_INSTALL_NORMS_READ_TOKEN_FILE" ] || stop norms_download_failed "the read token file named by FIRST_INSTALL_NORMS_READ_TOKEN_FILE cannot be read"
+        RELEASE_HEADER="$(mktemp)"
+        printf 'Authorization: Bearer %s\nAccept: application/octet-stream\n' "$(tr -d '[:space:]' < "$FIRST_INSTALL_NORMS_READ_TOKEN_FILE")" > "$RELEASE_HEADER"
+        RELEASE_CURL+=(-H "@$RELEASE_HEADER")
+    fi
+}
+release_curl_done() { [ -z "$RELEASE_HEADER" ] || rm -f "$RELEASE_HEADER"; RELEASE_HEADER=""; }
+download_part() { # download_part INDEX
+    local index="$1" file name size sha url code status attempt got try
+    name="${LOCK_NAMES[$index]}"; size="${LOCK_SIZES[$index]}"; sha="${LOCK_SHAS[$index]}"
+    file="$(release_dir)/$name"
+    url="$(release_url "$index")"
+    for attempt in 1 2; do
+        got="$(file_size "$file")"
+        if [ "$got" -gt "$size" ]; then rm -f "$file"; got=0; fi
+        if [ "$got" -lt "$size" ]; then
+            # Is the asset there at all? A one-byte range answers 206 (or 200) for an asset, 404 for a missing one.
+            code="$(curl "${RELEASE_CURL[@]}" --max-time 60 -r 0-0 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+            case "$code" in
+                200|206) ;;
+                404) release_curl_done; stop norms_release_missing "$LOCK_TAG" "$LOCK_REPO" "$name" ;;
+                *) release_curl_done; stop norms_download_failed "the answer for $name was ${code:-none}" ;;
+            esac
+            say "downloading part $((index + 1)) of ${#LOCK_NAMES[@]}, $name ($(( (size - got) / 1048576 )) MiB to go)"
+            # Each try resumes at what the file already holds (curl's own --retry would start the transfer again from the first byte).
+            for try in $(seq 1 "$RELEASE_RETRIES"); do
+                status=0
+                curl "${RELEASE_CURL[@]}" --fail --continue-at - -o "$file" "$url" || status=$?
+                [ "$status" -ne 0 ] || break
+                [ "$try" -ge "$RELEASE_RETRIES" ] || sleep "$RELEASE_RETRY_DELAY"
+            done
+            if [ "$status" -ne 0 ]; then release_curl_done; stop norms_download_failed "curl ended with status $status for $name"; fi
+            got="$(file_size "$file")"
+            if [ "$got" -ne "$size" ]; then
+                if [ "$got" -gt "$size" ]; then rm -f "$file"; continue; fi
+                release_curl_done; stop norms_download_failed "$name has $got of $size bytes"
+            fi
+        fi
+        if [ "$(file_sha "$file")" = "$sha" ]; then return 0; fi
+        say "part $name does not have the sha256 of the lock: downloading it again"
+        got="$(file_sha "$file")"
+        rm -f "$file"
+    done
+    release_curl_done
+    stop norms_download_corrupt "$name" "${got:-unknown}" "$sha"
+}
+
+norms_receive_directory() { # norms_receive_directory BUNDLE KEY: verified here (push-bundle.sh --dry-run), then streamed into `receive`
+    local bundle="$1" key="$2" parent size out status
     parent="${bundle%/*}"
+    norms_status
+    if [ "$(norms_import_state "$key")" = absent ]; then
+        out="$("$DEPLOY_DIR/push-bundle.sh" --dry-run "$bundle" 2>&1)" \
+            || stop norms_bundle_invalid "$bundle" "$(oneline "$(last_line "$out")" 200)"
+        size="$(printf '%s\n' "$out" | sed -n 's/.*would send \([0-9][0-9]*\) bytes as.*/\1/p' | tail -n 1)"
+        [[ "$size" =~ ^[0-9]+$ ]] || stop norms_bundle_invalid "$bundle" "its size could not be read"
+        norms_check_disk "$size" 0 0
+        say "sending $key ($size bytes) into the on-host receive; this takes minutes"
+        status=0
+        out="$(mktemp)"
+        bundle_tar "$parent" "$key" | inbound receive "$key" "$size" 2>&1 | tee "$out" || status="${PIPESTATUS[1]}"
+        if [ "$status" -ne 0 ]; then
+            local refusal
+            refusal="$(cat "$out")"
+            rm -f "$out"
+            norms_refusal "$refusal"
+        fi
+        rm -f "$out"
+    else
+        say "the bundle $key is already received"
+    fi
+}
+
+# From the release: the parts are downloaded and checked, and then `cat parts | zstd -dc` is the tar that `receive <KEY> <bytes>`
+# takes on its standard input -- the very stream the directory path sends. Nothing is extracted a second time: `receive` writes the
+# tar into staging, checks the members, extracts, and re-hashes every file against SHA256SUMS, whose digest is the directory name's.
+norms_receive_release() {
+    local key="$LOCK_BUNDLE" dir index have remaining=0 out refusal sums
+    local -a files=() codes=()
+    norms_status
+    if [ "$(norms_import_state "$key")" != absent ]; then say "the bundle $key is already received"; return 0; fi
+    dir="$(release_dir)"
+    mkdir -p "$dir"
+    for index in "${!LOCK_NAMES[@]}"; do
+        have="$(file_size "$dir/${LOCK_NAMES[$index]}")"
+        [ "$have" -ge "${LOCK_SIZES[$index]}" ] || remaining=$(( remaining + LOCK_SIZES[index] - have ))
+    done
+    norms_check_disk "$LOCK_TAR_BYTES" "$remaining" 0
+    release_curl_setup
+    for index in "${!LOCK_NAMES[@]}"; do download_part "$index"; files+=("$dir/${LOCK_NAMES[$index]}"); done
+    release_curl_done
+    say "the ${#files[@]} parts of $LOCK_TAG are downloaded and match the lock; streaming them into the on-host receive ($LOCK_TAR_BYTES bytes); this takes minutes"
+    out="$(mktemp)"
+    cat "${files[@]}" | zstd -dc | inbound receive "$key" "$LOCK_TAR_BYTES" 2>&1 | tee "$out" || codes=("${PIPESTATUS[@]}")
+    refusal="$(cat "$out")"
+    rm -f "$out"
+    if [ "${codes[1]:-0}" -ne 0 ]; then stop norms_refused "the downloaded archive does not decompress (zstd status ${codes[1]}); the parts match the lock, so the published archive is damaged"; fi
+    if [ "${#codes[@]}" -gt 0 ]; then norms_refusal "$refusal"; fi
+    sums="$(file_sha "$NORMS_STAGING/bundles/$key/SHA256SUMS")"
+    if [ "$sums" != "$LOCK_DIGEST" ] || [ "$sums" != "${key##*+}" ]; then
+        stop norms_refused "the received bundle's SHA256SUMS has the digest $sums, not the lock's or the name's"
+    fi
+    say "received $key: the digest of its SHA256SUMS is the lock's and the directory name's"
+}
+norms_remove_parts() { # after the import succeeded: the downloaded parts, and only those the lock names
+    local index part_file
+    [ -z "$OPT_BUNDLE" ] && [ -n "$LOCK_TAG" ] || return 0
+    for index in "${!LOCK_NAMES[@]}"; do
+        part_file="$(release_dir)/${LOCK_NAMES[$index]}"
+        if [ -f "$part_file" ]; then rm -f "$part_file"; fi
+    done
+    rmdir "$(release_dir)" 2>/dev/null || true
+}
+
+stage_norms() {
+    local key bundle out status stamp
     if state_has s5.designated; then say "the norms snapshot was designated by an earlier run"; return 0; fi
+    if [ -n "$OPT_BUNDLE" ]; then
+        bundle="$(cd "$OPT_BUNDLE" && pwd -P)"
+        key="${bundle##*/}"
+        say "norms: the bundle directory $bundle (--norms-bundle)"
+    else
+        read_release_lock
+        key="$LOCK_BUNDLE"
+        say "norms: the release $LOCK_TAG of $LOCK_REPO, as infra/norms/bundle-release.lock names it"
+    fi
     norms_ensure_dirs
     local available
     available="$(mem_field_mib MemAvailable)"
@@ -1050,45 +1266,8 @@ stage_norms() {
         stop norms_busy "record $NORMS_REC_STAMP, kind $NORMS_REC_KIND"
     fi
 
-    # 1. the bundle: verified here (push-bundle.sh --dry-run applies the one bundle rule), then streamed into `receive`
-    norms_status
-    if [ "$(norms_import_state "$key")" = absent ]; then
-        out="$("$DEPLOY_DIR/push-bundle.sh" --dry-run "$bundle" 2>&1)" \
-            || stop norms_bundle_invalid "$bundle" "$(oneline "$(last_line "$out")" 200)"
-        size="$(printf '%s\n' "$out" | sed -n 's/.*would send \([0-9][0-9]*\) bytes as.*/\1/p' | tail -n 1)"
-        [[ "$size" =~ ^[0-9]+$ ]] || stop norms_bundle_invalid "$bundle" "its size could not be read"
-        # STAND-NORMS-IMPORT-RUNBOOK-01.md section 0 item 4: staging holds the tar and its extraction (2 x size + 2 GiB);
-        # Docker's volumes grow by the objects (size), PostgreSQL with its WAL (2.5 GB) and 2 GiB, each +25 %.
-        local gib=1073741824 staging_free docker_root docker_free need_staging need_docker
-        need_staging=$(( (2 * size + 2 * gib) / gib + 1 ))
-        need_docker=$(( ((size + 5 * gib / 2 + 2 * gib) * 5 / 4) / gib + 1 ))
-        staging_free="$(free_gib "$NORMS_STAGING")"
-        docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
-        [ -d "$docker_root" ] || docker_root="$REPO"
-        docker_free="$(free_gib "$docker_root")"
-        if [ "$(stat -c %d "$NORMS_STAGING")" = "$(stat -c %d "$docker_root")" ]; then
-            if [ "$staging_free" -lt $(( need_staging + need_docker )) ]; then
-                escalate norms_disk_low norms_disk_too_small "$staging_free" "$NORMS_STAGING" $(( need_staging + need_docker ))
-            fi
-        else
-            if [ "$staging_free" -lt "$need_staging" ]; then escalate norms_disk_low norms_disk_too_small "$staging_free" "$NORMS_STAGING" "$need_staging"; fi
-            if [ "$docker_free" -lt "$need_docker" ]; then escalate norms_disk_low norms_disk_too_small "$docker_free" "$docker_root" "$need_docker"; fi
-        fi
-        state_unset s1.hint_norms_disk_low
-        say "sending $key ($size bytes) into the on-host receive; this takes minutes"
-        status=0
-        out="$(mktemp)"
-        bundle_tar "$parent" "$key" | inbound receive "$key" "$size" 2>&1 | tee "$out" || status="${PIPESTATUS[1]}"
-        if [ "$status" -ne 0 ]; then
-            local refusal
-            refusal="$(cat "$out")"
-            rm -f "$out"
-            norms_refusal "$refusal"
-        fi
-        rm -f "$out"
-    else
-        say "the bundle $key is already received"
-    fi
+    # 1. the bundle into staging
+    if [ -n "$OPT_BUNDLE" ]; then norms_receive_directory "$bundle" "$key"; else norms_receive_release; fi
 
     # 2. the waiver and the importer, started again (it is re-entrant) when it ended unfinished or was interrupted
     local import_state attempt=0 restart=no
@@ -1137,6 +1316,7 @@ stage_norms() {
     out="$(python3 -I "$API_HELPER" designate --base "$ALPHA_BASE" --password-file "$(password_file)" --content-key "$content_key" 2>&1)" || status=$?
     printf '%s\n' "$out"
     [ "$status" -eq 0 ] || stop norms_designate_failed "$(oneline "$(last_line "$out")" 300)"
+    norms_remove_parts
     state_mark s5.designated
 }
 
@@ -1271,7 +1451,7 @@ stage_github() {
     fi
     printf '  the server deploys only the repository it was cloned from: %s\n' "$repo_name"
     if [ "$(env_get ALPHA_NORM_EMBED)" = yes ] && ! state_has s5.designated; then
-        printf '  note     semantic norm lookup is not on yet: it turns on by itself when the installer is run again with --norms-bundle (sudo infra/deploy/first-install.sh --norms-bundle DIRECTORY)\n'
+        printf '  note     the norms are not imported and the semantic norm lookup is not on yet: this repository publishes no norms bundle (no infra/norms/bundle-release.lock). It turns on by itself when the installer is run again with --norms-bundle DIRECTORY, or without it once the repository carries the lock file (sudo infra/deploy/first-install.sh)\n'
     fi
 }
 
@@ -1412,7 +1592,7 @@ stage_semantic() {
     if ! state_has s5.designated; then
         STAGE_DONE=no
         say "semantic norm lookup stays off for now: there is no norms snapshot, so the gates cannot run. The stack works on word search."
-        say "it turns on by itself when the installer is run again with --norms-bundle DIRECTORY"
+        say "it turns on by itself when the installer is run again with --norms-bundle DIRECTORY, or without it once the repository carries infra/norms/bundle-release.lock"
         return 0
     fi
     semantic_gates || status=$?
@@ -1433,7 +1613,7 @@ stage_semantic() {
 semantic_summary() { # one phrase for the DONE line, from the environment as it is now
     if [ -n "$(env_get AUDITMANAGER_NORM_EMBED_URL)" ]; then printf 'on'
     elif [ "$(env_get ALPHA_NORM_EMBED)" != yes ]; then printf "off (the owner's choice)"
-    else printf 'off until the installer is run again with --norms-bundle (word search works)'
+    else printf 'off until the installer is run again with the norms bundle (word search works)'
     fi
 }
 
@@ -1468,7 +1648,7 @@ STAGE_TITLES=(
     "env: alpha.env and provider.env from the examples, every secret generated (mode 600)"
     "deploy: the first deploy.sh, without published HTTPS"
     "admin: the administrator's password and profile through the loopback API; deploy.sh again"
-    "norms: import the norms bundle on this host and make it the current snapshot"
+    "norms: get the norms bundle (a directory, or the release the repository names), import it, make it the current snapshot"
     "https: DNS, test certificate, real certificate, public port 443"
     "executors: connect this server's own claude / codex subscriptions"
     "verify: verify-deployed.sh must exit 0"
@@ -1498,7 +1678,7 @@ run_all() {
     run_stage 2 stage_env
     run_stage 3 stage_deploy
     run_stage 4 stage_admin
-    if [ -n "$OPT_BUNDLE" ]; then run_stage 5 stage_norms; else stage_header 5 "${STAGE_TITLES[4]}"; say "skipped: no --norms-bundle"; fi
+    if norms_wanted; then run_stage 5 stage_norms; else stage_header 5 "${STAGE_TITLES[4]}"; say "skipped: no --norms-bundle, and the repository publishes none (no infra/norms/bundle-release.lock)"; fi
     if [ -n "$OPT_DOMAIN" ]; then run_stage 6 stage_https; else stage_header 6 "${STAGE_TITLES[5]}"; say "skipped: no --domain (the stack answers on 127.0.0.1:$HTTP_PORT; reach it with: ssh -L $HTTP_PORT:127.0.0.1:$HTTP_PORT <this server>)"; fi
     if [ "$OPT_SKIP_EXECUTORS" = no ]; then run_stage 7 stage_executors; else stage_header 7 "${STAGE_TITLES[6]}"; say "skipped: --skip-executors"; fi
     run_stage 8 stage_verify
@@ -1515,6 +1695,15 @@ run_all() {
 }
 
 # --------------------------------------------------------------------------------------------------------- dry run
+norms_plan_text() {
+    if [ -n "$OPT_BUNDLE" ]; then
+        echo "verify $OPT_BUNDLE, stream it into receive-bundle.sh on this host, open a test-data waiver with copy-serve.sh, import, report, resume, designate the snapshot"
+    elif [ -f "$RELEASE_LOCK" ]; then
+        echo "download the parts of the release infra/norms/bundle-release.lock names (curl, resumable, sha256 checked), stream them through zstd into receive-bundle.sh, open a test-data waiver, import, report, resume, designate the snapshot, delete the parts"
+    else
+        echo "skipped (no --norms-bundle, and the repository publishes none)"
+    fi
+}
 print_plan() {
     local n done_text deploy_text
     if [ "$REPO_REAL" = "$DEPLOY_REAL" ]; then
@@ -1535,12 +1724,12 @@ print_plan() {
         "create $DEPLOY_PATH/infra/deploy/env/alpha.env and provider.env from the examples if they are absent (mode 600; every secret generated, in every place it is written; ALPHA_NORM_EMBED=yes with its address empty; an existing file is never changed)"
         "run infra/deploy/deploy.sh; on a fresh database it ends [default_credential], which is expected"
         "generate the administrator's password into $(password_file) (mode 600), change it through the API, complete the profile with ${OPT_EMAIL:-the --email address}, run deploy.sh again"
-        "$([ -n "$OPT_BUNDLE" ] && echo "verify $OPT_BUNDLE, stream it into receive-bundle.sh on this host, open a test-data waiver with copy-serve.sh, import, report, resume, designate the snapshot" || echo "skipped (no --norms-bundle)")"
+        "$(norms_plan_text)"
         "$([ -n "$OPT_DOMAIN" ] && echo "check that DNS $OPT_DOMAIN points here; set the name; deploy with the test certificate, then the real one, then ALPHA_PUBLISH_HTTPS=yes" || echo "skipped (no --domain)")"
         "$([ "$OPT_SKIP_EXECUTORS" = no ] && echo "connect the claude / codex subscriptions of this server through local-agent.sh; stop with a printed instruction when none is signed in" || echo "skipped (--skip-executors)")"
         "run infra/deploy/verify-deployed.sh; it must exit 0 (the proxy is reloaded once and it is asked again if it does not)"
         "print DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH=$DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
-        "$([ -n "$OPT_BUNDLE" ] && echo "run the two gates of NORM-VECTOR-TEMP-01 (memory above $SEMANTIC_MIN_AVAILABLE_MIB MiB with swap not growing; semantic_check on $SEMANTIC_WINDOWS windows); when both pass set AUDITMANAGER_NORM_EMBED_URL=$SEMANTIC_URL and restart the worker; otherwise leave it empty" || echo "not yet: the gates need the norms corpus (run again with --norms-bundle); the address stays empty and word search works")"
+        "$(norms_wanted && echo "run the two gates of NORM-VECTOR-TEMP-01 (memory above $SEMANTIC_MIN_AVAILABLE_MIB MiB with swap not growing; semantic_check on $SEMANTIC_WINDOWS windows); when both pass set AUDITMANAGER_NORM_EMBED_URL=$SEMANTIC_URL and restart the worker; otherwise leave it empty" || echo "not yet: the gates need the norms corpus (run again with --norms-bundle); the address stays empty and word search works")"
         "write the marker $MARKER and print the DONE line"
     )
     for n in $(seq 1 "$STAGE_COUNT"); do
@@ -1565,8 +1754,8 @@ main() {
     fi
     if [ -f "$MARKER" ] && [ -z "$OPT_RESUME" ]; then
         # An installation made without a norms bundle is finished by running the installer again with one.
-        if [ -n "$OPT_BUNDLE" ] && ! state_has s5.designated && ! state_has s10; then
-            say "this server was installed without a norms bundle: adding it, and then the semantic norm lookup"
+        if norms_wanted && ! state_has s5.designated && ! state_has s10; then
+            say "this server was installed without the norms: adding them, and then the semantic norm lookup"
         else
             stop already_installed "$(sed -n 's/^date=//p' "$MARKER" | head -n 1)" "$MARKER"
         fi

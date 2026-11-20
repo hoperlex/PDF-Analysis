@@ -50,6 +50,8 @@ class FakeGithub:
         self.fail_uploads: dict[str, int] = {}           # asset name -> how many uploads of it answer 500
         self.starter_on_failure = False                  # a failed upload leaves a half-made asset behind
         self.drop_download: dict[str, int] = {}          # asset name -> bytes sent before the connection is cut, once
+        self.drop_always: dict[str, int] = {}            # ... on every download
+        self.altered_once: dict[str, bytes] = {}         # asset name -> bytes served instead of the real ones, for one download
         self.missing: set[str] = set()                   # asset names answered 404
         self.altered: dict[str, bytes] = {}              # asset name -> bytes served instead of the real ones
         self.require_download_token = False              # the asset endpoint wants the token (a private repository)
@@ -124,6 +126,18 @@ class FakeGithub:
                     return False
                 return True
 
+            def _served(self, name: str) -> tuple[bytes, int | None]:
+                """The bytes of an asset for THIS request and where the connection is cut (a probe for one byte spends no fault)."""
+                real = next(a["_content"] for r in fake.releases.values() for a in r["assets"] if a["name"] == name)
+                probe = self.headers.get("Range") == "bytes=0-0"
+                content = fake.altered.get(name, real)
+                if name in fake.altered_once and not probe:
+                    content = fake.altered_once.pop(name)
+                drop = fake.drop_always.get(name)
+                if drop is None and name in fake.drop_download and not probe:
+                    drop = fake.drop_download.pop(name)
+                return content, drop
+
             def _bytes(self, content: bytes, *, drop_after: int | None = None) -> None:
                 total = len(content)
                 start, end, status = 0, total - 1, 200
@@ -177,8 +191,8 @@ class FakeGithub:
                             if asset["id"] == int(match.group(1)):
                                 if asset["name"] in fake.missing:
                                     return self._json(404, {"message": "Not Found"})
-                                content = fake.altered.get(asset["name"], asset["_content"])
-                                return self._bytes(content, drop_after=fake.drop_download.pop(asset["name"], None))
+                                content, drop = self._served(asset["name"])
+                                return self._bytes(content, drop_after=drop)
                     return self._json(404, {"message": "Not Found"})
                 match = re.fullmatch(rf"/{re.escape(fake.repo)}/releases/download/([^/]+)/(.+)", path)
                 if match:
@@ -186,8 +200,8 @@ class FakeGithub:
                     name = match.group(2)
                     if release is None or name in fake.missing or not any(a["name"] == name for a in release["assets"]):
                         return self._json(404, {"message": "Not Found"})
-                    content = fake.altered.get(name) or fake.asset_bytes(match.group(1), name)
-                    return self._bytes(content, drop_after=fake.drop_download.pop(name, None))
+                    content, drop = self._served(name)
+                    return self._bytes(content, drop_after=drop)
                 self._json(404, {"message": "Not Found"})
 
             do_HEAD = do_GET  # noqa: N815

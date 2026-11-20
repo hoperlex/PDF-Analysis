@@ -268,6 +268,20 @@ class Rig:
             subprocess.run(["git", "-C", str(self.repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am",
                             f"pin {value}"], check=True)
 
+    def write_lock(self, text: str | None = None, *, tar_bytes: int = 5_400_000_000, parts: int = 3, part_bytes: int = 1_300_000_000) -> None:
+        """`infra/norms/bundle-release.lock` in the clone, committed so that the clone stays clean."""
+        digest = "7" * 64
+        key = f"2026-07-23..2026-08-20+17d+121r.0a1bafe103ff+{digest}"
+        lines = ["lock_version=1", "repo=acme-co/audit-install", "tag=norms-0a1bafe103ff-77777777", f"bundle={key}",
+                 f"bundle_sums_sha256={digest}", f"tar_bytes={tar_bytes}", f"total_bytes={parts * part_bytes}", f"part_count={parts}"]
+        lines += [f"part=norms-0a1bafe103ff-77777777.tar.zst.{n:03d} {part_bytes} {'ab' * 32} {1000 + n}" for n in range(parts)]
+        path = self.repo / "infra/norms/bundle-release.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text if text is not None else "\n".join(lines) + "\n")
+        git = ["git", "-C", str(self.repo), "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run([*git, "add", "-f", "infra/norms/bundle-release.lock"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "the lock"], check=True)
+
     def pin_acme_client(self) -> None:
         self._set_acme_pin("4.1.1-r0")
 
@@ -291,6 +305,8 @@ class Rig:
             "FIRST_INSTALL_DEPLOY_ROOT": str(self.deploy_root), "FIRST_INSTALL_OS_RELEASE": str(self.os_release),
             "FIRST_INSTALL_KEYRINGS_DIR": str(self.keyrings), "FIRST_INSTALL_APT_SOURCES_DIR": str(self.apt_sources),
             "FIRST_INSTALL_SAMPLE_SECONDS": "0.1", "FIRST_INSTALL_DOCKER_WAIT_SECONDS": "2",
+            "FIRST_INSTALL_RELEASE_BASE": "http://127.0.0.1:9", "FIRST_INSTALL_RELEASE_API_BASE": "http://127.0.0.1:9",
+            "FIRST_INSTALL_RELEASE_RETRIES": "1", "FIRST_INSTALL_RELEASE_RETRY_DELAY": "0",
             "STUB_STATE": str(self.stub), "STUB_DOCKER_ROOT": str(self.tmp),
         }
         environment.update(extra)
@@ -391,6 +407,7 @@ REPORT_CODES = {
     "deploy_clone_installed", "env_invalid_installed",      # an installation's secrets must not be replaced
     "deploy_refused", "https_not_published", "verify_failed",   # a refusal this installer has no remedy for
     "admin_failed", "norms_busy", "norms_refused", "norms_import_failed", "norms_report_differs", "norms_designate_failed",
+    "norms_lock_invalid", "norms_release_missing", "norms_download_corrupt",   # the published release is not what the lock says
     "executors_not_connected", "semantic_quality_failed",
     "unexpected",
 }
@@ -1147,10 +1164,10 @@ def test_without_a_norms_bundle_the_lookup_waits_and_the_owner_is_told_how_it_tu
     note = [line for line in done.stdout.splitlines() if line.startswith("  note")]
     assert len(note) == 1 and "--norms-bundle" in note[0]
     last = [line for line in done.stdout.splitlines() if line.strip()][-1]
-    assert last.startswith("DONE:") and "Semantic norm lookup: off until the installer is run again with --norms-bundle" in last
+    assert last.startswith("DONE:") and "Semantic norm lookup: off until the installer is run again with the norms bundle" in last
     state = (rig.state_root / "auditmanager" / "first-install.state").read_text()
     assert "s10=ok" not in state and "s8=ok" in state
-    assert "stage_10_semantic=off until the installer is run again with --norms-bundle" in (rig.state_root / "auditmanager" / "first-install.done").read_text()
+    assert "stage_10_semantic=off until the installer is run again with the norms bundle" in (rig.state_root / "auditmanager" / "first-install.done").read_text()
 
 
 def test_both_gates_passing_sets_the_address_restarts_the_worker_and_is_done_once(rig: Rig, stack) -> None:
@@ -1298,7 +1315,7 @@ def test_an_installation_without_a_bundle_is_finished_by_running_it_again_with_o
     again = rig.run(*_args(stack, "--norms-bundle", str(bundle)))
     codes = [code for code, _ in _stops(again)]
     assert "already_installed" not in codes and codes[-1] == "norms_bundle_invalid", again.stdout[-1500:]
-    assert "this server was installed without a norms bundle: adding it" in again.stdout and "[5/11]" in again.stdout
+    assert "this server was installed without the norms: adding them" in again.stdout and "[5/11]" in again.stdout
     assert "done before: skipped" in again.stdout                        # the stages that were finished are not run again
     # and once the norms were designated and the semantic stage done, the bundle is no reason to run again
     _norms_done(rig)
@@ -1514,3 +1531,67 @@ def test_an_installation_made_in_place_stays_where_it_is(rig: Rig, stack, tmp_pa
                           capture_output=True, text=True, cwd=rig.repo, env=rig.env(FIRST_INSTALL_DEPLOY_ROOT=str(tmp_path / "elsewhere")))
     assert done.returncode == 0, done.stdout[-1500:]
     assert "making the deploy clone" not in done.stdout and not (tmp_path / "elsewhere").exists()
+
+
+# ----------------------------------------------------- the bundle comes from the repository's release when it publishes one (FIRST-INSTALL-02)
+
+
+def test_a_repository_that_publishes_no_bundle_skips_the_stage_with_one_owner_note(rig: Rig, stack) -> None:
+    _happy_plan(rig)
+    done = rig.run(*_args(stack))
+    assert done.returncode == 0, done.stdout[-1500:]
+    assert "skipped: no --norms-bundle, and the repository publishes none (no infra/norms/bundle-release.lock)" in done.stdout
+    note = [line for line in done.stdout.splitlines() if line.startswith("  note")]
+    assert len(note) == 1 and "no infra/norms/bundle-release.lock" in note[0] and "--norms-bundle DIRECTORY" in note[0]
+    assert "s5=ok" not in (rig.state_root / "auditmanager" / "first-install.state").read_text()
+
+
+def test_a_lock_that_does_not_hold_together_is_a_report_in_the_preflight_before_anything_is_built(rig: Rig, stack) -> None:
+    rig.write_lock("lock_version=1\nrepo=acme-co/audit-install\ntag=norms-x\nbundle=not-a-bundle-name\n")
+    code, text = _stops(rig.run(*_args(stack)))[-1]
+    assert code == "norms_lock_invalid" and text.startswith("REPORT TO THE OWNER") and "bundle is not a bundle directory name" in text
+    assert rig.calls() == []                                              # not a single deploy
+
+
+def test_the_download_is_part_of_the_disk_the_preflight_asks_for_and_the_first_shortage_says_prune(rig: Rig, stack) -> None:
+    rig.write_lock()
+    low = rig.env(STUB_DF_BYTES=str(20 * 1024**3))
+    first = _stops(rig.run(*_args(stack), env=low))[-1]
+    assert first[0] == "norms_disk_low" and "docker builder prune -af" in first[1] and "ASK" not in first[1]
+    needed = int(re.search(r"about (\d+) GiB are needed", first[1]).group(1))
+    assert needed > 30                      # the images (8), the tar twice, the volumes' growth and the 3.9 GB that is downloaded
+    second = _stops(rig.run(*_args(stack), env=low))[-1]
+    assert second[0] == "norms_disk_too_small" and second[1].startswith("ASK THE OWNER for a larger disk")
+    rig.plan("deploy", "1|stop here")
+    assert _stops(rig.run(*_args(stack)))[-1][0] == "deploy_failed"       # with the room the install goes on
+
+
+def test_zstd_is_one_of_the_tools_the_script_installs(rig: Rig, stack) -> None:
+    done = rig.run(*_args(stack), env=rig.env(FIRST_INSTALL_FAKE_MISSING="zstd"))
+    assert "apt-get -q -y install zstd" in _apt_log(rig)
+    code, text = _stops(done)[-1]
+    assert code == "tool_missing" and "apt-get update && apt-get install -y zstd" in text
+
+
+def test_a_lock_that_arrives_after_the_installation_is_picked_up_by_running_the_installer_again(rig: Rig, stack) -> None:
+    """Installed with nothing published; the owner publishes, the lock reaches the deploy clone, and no option is needed."""
+    _happy_plan(rig)
+    assert rig.run(*_args(stack)).returncode == 0
+    assert _stops(rig.run(*_args(stack)))[-1][0] == "already_installed"
+    rig.write_lock()
+    again = rig.run(*_args(stack))
+    codes = [code for code, _ in _stops(again)]
+    assert "already_installed" not in codes, again.stdout[-1200:]
+    assert "this server was installed without the norms: adding them" in again.stdout and "[5/11]" in again.stdout
+    assert "norms: the release norms-0a1bafe103ff-77777777 of acme-co/audit-install" in again.stdout
+    assert codes[-1] == "norms_download_failed"            # nothing listens where the stand-in release would be: a run again, not a report
+    assert "done before: skipped" in again.stdout
+
+
+def test_dry_run_says_where_the_norms_come_from(rig: Rig, stack) -> None:
+    assert "skipped (no --norms-bundle, and the repository publishes none)" in rig.run(*_args(stack, "--dry-run")).stdout
+    rig.write_lock()
+    plan = rig.run(*_args(stack, "--dry-run")).stdout
+    assert "download the parts of the release infra/norms/bundle-release.lock names" in plan and "delete the parts" in plan
+    assert "run the two gates of NORM-VECTOR-TEMP-01" in plan
+    assert "verify /x" in rig.run(*_args(stack, "--dry-run", "--norms-bundle", str(rig.tmp))).stdout.replace(str(rig.tmp), "/x")

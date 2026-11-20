@@ -223,7 +223,8 @@ it, so the working copy can be edited freely and the deploy clone stays clean fo
 repository, key fingerprint pinned) and its tools on Debian and Ubuntu. The file: every secret generated in every place it is written (the second
 copies inside the database URLs and the S3 names, the application role's password, the X25519 pair), mode 600, an existing
 file never overwritten; then the first deploy, the administrator's password and profile (§3, `[default_credential]`), the
-on-host norms import (§11, §13 with `SSH_ORIGINAL_COMMAND`), the staging and real certificate and `ALPHA_PUBLISH_HTTPS=yes` (§6),
+on-host norms import (§11, §13 with `SSH_ORIGINAL_COMMAND`; the bundle is downloaded from the repository's GitHub release when
+`infra/norms/bundle-release.lock` is in it, `STAND-NORMS-IMPORT-RUNBOOK-01.md` 1a), the staging and real certificate and `ALPHA_PUBLISH_HTTPS=yes` (§6),
 the host's own subscriptions, `verify-deployed.sh` (§4), the values to paste into GitHub (§3, auto-deploy), and, with the norms
 corpus in, the semantic norm lookup: `ALPHA_NORM_EMBED=yes` with its address empty from the start, then the memory gate and the
 quality gate of `NORM-VECTOR-TEMP-01` (rollout steps 3 to 5), and only when both pass the address and a worker restart. It is

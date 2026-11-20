@@ -9,9 +9,13 @@ Run it as root, **from the clone you were started in** (the owner's working copy
 
     sudo infra/deploy/first-install.sh --email <owner's e-mail> [--domain <public DNS name>] [--norms-bundle <bundle directory>]
 
+Add `--norms-bundle` only when the owner gives you a directory. When the repository publishes the norms bundle
+(`infra/norms/bundle-release.lock` is in it), the script downloads it from the GitHub release and imports it by itself, with no
+option: that is several GB and takes a while, and a run that is cut off resumes the download.
+
 The script makes the server's own checkout, `/srv/<instance>` (the instance is `auditmanager` unless the owner named another), from
 this clone's origin, and continues in it by itself. You never work in `/srv/<instance>`, and the clone you started in is never
-changed. If you are told to add the norms bundle later, run the same command again with `--norms-bundle <directory>`.
+changed. If the norms were not imported (the owner block says so), run the same command again when the owner says they are available.
 
 It takes from fifteen minutes to over an hour (image build, norms import). If your tool times out or the command is cut off, run
 the same command again: it continues where it stopped. Everything it prints is also in `/var/log/<instance>-first-install.log`;
@@ -101,6 +105,10 @@ Each row is the action printed after the code (`<...>` stands for the facts of t
 | `norms_bundle_invalid` | ASK THE OWNER for the norms bundle directory: <...> is not usable (<...>). |
 | `norms_disk_low` | Free disk space is too small for the norms import: <...> GiB are free on <...> and about <...> GiB are needed. Run this command: docker builder prune -af   and then run the same command again. |
 | `norms_disk_too_small` | ASK THE OWNER for a larger disk: <...> GiB are free on <...>, about <...> GiB are needed for the norms import, and clearing the build cache did not help. It costs money, so only the owner decides. |
+| `norms_lock_invalid` | REPORT TO THE OWNER: infra/norms/bundle-release.lock is not a lock this installer reads (<...>). The owner publishes the bundle again with infra/norms/publish-bundle-release.sh and commits the lock file it writes. |
+| `norms_release_missing` | REPORT TO THE OWNER: the norms release <...> of the repository <...> has no asset <...>, or the release is gone. The owner publishes the bundle again with infra/norms/publish-bundle-release.sh and commits the lock file it writes. |
+| `norms_download_failed` | The norms download did not finish (<...>). Wait a few minutes, then run the same command again: it resumes where it stopped. |
+| `norms_download_corrupt` | REPORT TO THE OWNER: the downloaded norms part <...> has the sha256 <...> but the lock file says <...>, also after it was downloaded again. The release asset is not what was published; nothing was imported. |
 | `norms_busy` | REPORT TO THE OWNER: another copy or import is open (<...>) and was not touched. |
 | `norms_wait` | Another copy or import step holds a lock (<...>). Wait five minutes, then run the same command again. |
 | `norms_refused` | REPORT TO THE OWNER: the norms transfer or import was refused: <...> |
