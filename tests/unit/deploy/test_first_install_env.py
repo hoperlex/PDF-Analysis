@@ -192,9 +192,11 @@ def test_set_option_is_limited_to_names_the_example_mentions_and_never_a_generat
         _create(env_dir, extra={"POSTGRES_PASSWORD": "weak"})
     with pytest.raises(ValueError):
         _create(env_dir, extra={"ALPHA_NORM_EMBED": "yes please"})
-    assert _create(env_dir, extra={"ALPHA_NORM_EMBED": "yes", "ALPHA_MEM_LIMIT_NORM_EMBED": "1200m"}) == "created"
+    with pytest.raises(ValueError):
+        _create(env_dir, extra={"AUDITMANAGER_NORM_EMBED_URL": "http://norm-embed:8080"})  # only the gates may set it
+    assert _create(env_dir, extra={"ALPHA_NORM_EMBED": "no"}) == "created"
     values = fie.parse_env((env_dir / "alpha.env").read_text())
-    assert values["ALPHA_NORM_EMBED"] == "yes" and values["ALPHA_MEM_LIMIT_NORM_EMBED"] == "1200m"
+    assert values["ALPHA_NORM_EMBED"] == "no"
 
 
 def test_set_value_replaces_the_last_live_line_or_fills_the_template() -> None:
@@ -293,3 +295,40 @@ def test_the_recorded_environment_mode_can_be_asked_for_and_still_checks_clean(e
     values = fie.parse_env((env_dir / "alpha.env").read_text())
     assert values["AUDITMANAGER_PROVIDER_MODE"] == "recorded" and values["AUDITMANAGER_PROVIDER_SOURCE"] == "environment"
     assert fie.check(env_dir / "alpha.env", env_dir / "provider.env", env_dir / "alpha.env.example") == []
+
+
+def test_the_semantic_norm_lookup_is_on_by_default_with_its_address_empty(env_dir: Path) -> None:
+    """NORM-VECTOR-TEMP-01 rollout step 2: ALPHA_NORM_EMBED=yes, the 1200m limit, the address left empty."""
+    _create(env_dir)
+    values = fie.parse_env((env_dir / "alpha.env").read_text())
+    assert values["ALPHA_NORM_EMBED"] == "yes"
+    assert values["ALPHA_MEM_LIMIT_NORM_EMBED"] == "1200m"
+    assert "AUDITMANAGER_NORM_EMBED_URL" in values and values["AUDITMANAGER_NORM_EMBED_URL"] == ""
+    assert fie.check(env_dir / "alpha.env", env_dir / "provider.env", env_dir / "alpha.env.example") == []
+
+
+def test_the_embedder_settings_are_checked(env_dir: Path) -> None:
+    _create(env_dir)
+    alpha = env_dir / "alpha.env"
+    original = alpha.read_text()
+    example = env_dir / "alpha.env.example"
+    alpha.write_text(fie.set_value(original, "ALPHA_MEM_LIMIT_NORM_EMBED", ""))
+    assert any("ALPHA_MEM_LIMIT_NORM_EMBED" in p for p in fie.check(alpha, env_dir / "provider.env", example))
+    alpha.write_text(fie.set_value(fie.set_value(original, "ALPHA_NORM_EMBED", "no"), "AUDITMANAGER_NORM_EMBED_URL",
+                                   "http://norm-embed:8080"))
+    assert any("AUDITMANAGER_NORM_EMBED_URL" in p for p in fie.check(alpha, env_dir / "provider.env", example))
+    alpha.write_text(fie.set_value(original, "ALPHA_NORM_EMBED", "maybe"))
+    assert any("neither yes nor no" in p for p in fie.check(alpha, env_dir / "provider.env", example))
+    alpha.write_text(fie.set_value(fie.set_value(original, "ALPHA_NORM_EMBED", "no"), "ALPHA_MEM_LIMIT_NORM_EMBED", ""))
+    assert fie.check(alpha, env_dir / "provider.env", example) == []
+
+
+def test_the_address_can_be_set_and_emptied_in_place_and_deploy_sh_accepts_the_embedder_settings(env_dir: Path) -> None:
+    _create(env_dir)
+    env = str(env_dir / "alpha.env")
+    run = lambda *args: subprocess.run([sys.executable, str(HELPER), *args], capture_output=True, text=True)  # noqa: E731
+    assert run("set", "--env", env, "AUDITMANAGER_NORM_EMBED_URL=http://norm-embed:8080").returncode == 0
+    assert run("get", "--env", env, "AUDITMANAGER_NORM_EMBED_URL").stdout.strip() == "http://norm-embed:8080"
+    assert run("set", "--env", env, "AUDITMANAGER_NORM_EMBED_URL=").returncode == 0
+    assert run("get", "--env", env, "AUDITMANAGER_NORM_EMBED_URL").stdout.strip() == ""
+    assert stat.S_IMODE((env_dir / "alpha.env").stat().st_mode) == 0o600

@@ -19,7 +19,11 @@ WHAT `create` WRITES, AND WHY EVERY SECRET IS WRITTEN WHERE THE RUNBOOK SAYS (`D
 * the X25519 pair of the executor key ring: the public half as `kid:base64` in `alpha.env`, the private half in `provider.env`
   (`AUDITMANAGER_SECRETS_KEYS`, read by the worker alone);
 * `AUDITMANAGER_PROVIDER_MODE=live` and `AUDITMANAGER_PROVIDER_SOURCE=database`: the connections an administrator manages in
-  «Исполнители», which is also what the card «Этот сервер» of `local-agent.sh` needs to receive runs.
+  «Исполнители», which is also what the card «Этот сервер» of `local-agent.sh` needs to receive runs;
+* the semantic norm lookup is always on (owner 2026-11-20): `ALPHA_NORM_EMBED=yes` and `ALPHA_MEM_LIMIT_NORM_EMBED=1200m`, with
+  `AUDITMANAGER_NORM_EMBED_URL` EMPTY -- the state `docs/program/NORM-VECTOR-TEMP-01.md` rollout step 2 names. The installer sets the
+  address itself, and only after the memory and quality gates have passed on the imported corpus; `--set ALPHA_NORM_EMBED=no` is the
+  owner's way out.
 
 **No secret is printed, logged or returned**: every message of this module names a variable, never a value.
 
@@ -61,6 +65,8 @@ GENERATED_NAMES = frozenset({
     "ALPHA_APP_DB_PASSWORD", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "S3_BUCKET", "DATABASE_URL",
     "MIGRATOR_DATABASE_URL", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "AUDITMANAGER_API_TOKEN",
     "AUDITMANAGER_SECRETS_PUBLIC_KEYS", "AUDITMANAGER_SECRETS_ACTIVE_KID", "AUDITMANAGER_SECRETS_KEYS",
+    # Empty until the installer's two gates pass; a `--set` could open the lookup without them.
+    "AUDITMANAGER_NORM_EMBED_URL",
 })
 #: The four values `deploy.sh`'s `placeholder-secrets` guard refuses by identity with the example's own.
 PLACEHOLDER_NAMES = ("POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD", "MINIO_ROOT_USER", "AUDITMANAGER_API_TOKEN")
@@ -75,7 +81,8 @@ REQUIRED_NAMES = (
 READABLE_NAMES = frozenset({
     "ALPHA_INSTANCE", "ALPHA_HTTP_PORT", "ALPHA_CERT_NAME", "ALPHA_ACME_EMAIL", "ALPHA_ACME_STAGING", "ALPHA_PUBLISH_HTTPS",
     "ALPHA_LOCAL_AGENT", "ALPHA_LOCAL_AGENT_USER", "ALPHA_BIND_ADDRESS", "ALPHA_TRUSTED_PROXY_CIDRS", "POSTGRES_DB",
-    "S3_BUCKET", "AUDITMANAGER_PROVIDER_MODE", "AUDITMANAGER_PROVIDER_SOURCE",
+    "S3_BUCKET", "AUDITMANAGER_PROVIDER_MODE", "AUDITMANAGER_PROVIDER_SOURCE", "ALPHA_NORM_EMBED", "ALPHA_MEM_LIMIT_NORM_EMBED",
+    "AUDITMANAGER_NORM_EMBED_URL",
 })
 
 # --------------------------------------------------------------------------------------------------------- X25519
@@ -223,6 +230,9 @@ def generate_values(instance: str, http_port: int, date: str) -> tuple[dict[str,
         "AUDITMANAGER_API_TOKEN": secrets.token_urlsafe(32),
         "AUDITMANAGER_PROVIDER_MODE": "live",
         "AUDITMANAGER_PROVIDER_SOURCE": "database",
+        "ALPHA_NORM_EMBED": "yes",
+        "ALPHA_MEM_LIMIT_NORM_EMBED": "1200m",
+        "AUDITMANAGER_NORM_EMBED_URL": "",
         "AUDITMANAGER_SECRETS_PUBLIC_KEYS": f"{kid}:{base64.b64encode(public).decode()}",
         "AUDITMANAGER_SECRETS_ACTIVE_KID": kid,
     })
@@ -343,6 +353,13 @@ def check(env: Path, provider: Path | None, example: Path) -> list[str]:
         problems.append("S3_SECRET_ACCESS_KEY does not match MINIO_ROOT_PASSWORD")
     if len(values["MINIO_ROOT_PASSWORD"]) < 8:
         problems.append("MINIO_ROOT_PASSWORD is shorter than MinIO's minimum of 8 characters")
+    embed = values.get("ALPHA_NORM_EMBED", "") or "no"
+    if embed not in ("yes", "no"):
+        problems.append("ALPHA_NORM_EMBED is neither yes nor no")
+    elif embed == "yes" and not values.get("ALPHA_MEM_LIMIT_NORM_EMBED"):
+        problems.append("ALPHA_NORM_EMBED is yes and ALPHA_MEM_LIMIT_NORM_EMBED is empty (deploy.sh refuses that)")
+    if embed != "yes" and values.get("AUDITMANAGER_NORM_EMBED_URL"):
+        problems.append("AUDITMANAGER_NORM_EMBED_URL is set while ALPHA_NORM_EMBED is not yes (the address would point at nothing)")
     source = values.get("AUDITMANAGER_PROVIDER_SOURCE", "") or "environment"
     if source == "database":
         if values["AUDITMANAGER_PROVIDER_MODE"] != "live":
