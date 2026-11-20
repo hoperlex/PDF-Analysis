@@ -283,3 +283,13 @@ def test_deploy_sh_guards_before_docker_accept_the_generated_file(env_dir: Path,
     secrets = fie.parse_env((env_dir / "alpha.env").read_text())
     for name in ("POSTGRES_PASSWORD", "ALPHA_APP_DB_PASSWORD", "AUDITMANAGER_API_TOKEN"):
         assert secrets[name] not in output
+
+
+def test_the_recorded_environment_mode_can_be_asked_for_and_still_checks_clean(env_dir: Path) -> None:
+    """`--set AUDITMANAGER_PROVIDER_MODE=recorded --set AUDITMANAGER_PROVIDER_SOURCE=environment` is the owner's way to a
+    stand that replays fixtures and needs no executor connection; the key ring is generated either way."""
+    extra = {"AUDITMANAGER_PROVIDER_MODE": "recorded", "AUDITMANAGER_PROVIDER_SOURCE": "environment"}
+    assert _create(env_dir, extra=extra) == "created"
+    values = fie.parse_env((env_dir / "alpha.env").read_text())
+    assert values["AUDITMANAGER_PROVIDER_MODE"] == "recorded" and values["AUDITMANAGER_PROVIDER_SOURCE"] == "environment"
+    assert fie.check(env_dir / "alpha.env", env_dir / "provider.env", env_dir / "alpha.env.example") == []
