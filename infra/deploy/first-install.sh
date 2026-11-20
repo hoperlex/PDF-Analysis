@@ -201,7 +201,12 @@ stop() {
     template="$(code_template "$code")" || template="ASK THE OWNER: unknown stop code ${code}."
     # shellcheck disable=SC2059  # the format is the table's own text; the facts are arguments
     text="$(printf -- "$template" "$@")"
-    text="$(printf '%s' "$text" | tr '\r\n\t' '   ' | cut -c1-700)"
+    text="$(printf '%s' "$text" | tr '\r\n\t' '   ')"
+    # A STOP line is read as a command and run as printed, so it is never cut: an action too long to print
+    # whole becomes a report instead of a truncated command that would run with a wrong path.
+    if [ "${#text}" -gt 4000 ]; then
+        text="REPORT TO THE OWNER: the action of this stop is longer than 4000 characters and is not printed, so that no cut command is run. Show the owner the last 30 lines of ${LOG_FILE:-the output above}."
+    fi
     printf 'STOP [%s]: %s\n' "$code" "$text"
     [ "$code" != usage ] || exit 2
     exit "$STOP_EXIT"
