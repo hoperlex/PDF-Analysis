@@ -78,6 +78,7 @@ DOCKER_WAIT_SECONDS="$(seam DOCKER_WAIT_SECONDS 30)"
 DEPLOY_ROOT="$(seam DEPLOY_ROOT /srv)"
 RELEASE_BASE="$(seam RELEASE_BASE https://github.com)"             # where a public release's assets are downloaded from
 RELEASE_API_BASE="$(seam RELEASE_API_BASE https://api.github.com)" # used only with a read token, for a private repository
+SYSTEMD_DIR="$(seam SYSTEMD_DIR /etc/systemd/system)"
 RELEASE_RETRIES="$(seam RELEASE_RETRIES 3)"
 RELEASE_RETRY_DELAY="$(seam RELEASE_RETRY_DELAY 5)"
 PROC_NET="$(seam PROC_NET /proc/net)"
@@ -151,6 +152,8 @@ email_invalid|ASK THE OWNER for a plain e-mail address (letters, digits and . _ 
 env_invalid|The environment file is not usable (%s) and nothing has been deployed from it. Run this command: %s   then run the same command again (it writes new files).
 env_invalid_installed|REPORT TO THE OWNER: the environment file is not usable (%s) and this server already has an installation made from it, so it must not be replaced.
 already_installed|Nothing to do: this server was installed on %s (marker %s). To add the norms bundle later run: sudo infra/deploy/first-install.sh --norms-bundle DIRECTORY
+deploy_local_running|A deploy by deploy-local.sh is running (its output is in %s). Wait ten minutes, then run the same command again.
+deploy_timer_failed|REPORT TO THE OWNER: the deploy timer could not be set up (%s). Pushes to main are not deployed until it is: the installer's last stage ends with this, and everything else is installed.
 already_running|An earlier run of this command is still working: do not start another. Wait five minutes, look at the end of %s with tail -n 30, and run the same command again only when that file has not changed for fifteen minutes.
 deploy_refused|REPORT TO THE OWNER: deploy.sh refused for a reason this installer does not know: %s
 deploy_failed|Run the same command once more (deploy.sh ended with status %s; a network error during the build is the usual cause).
@@ -231,7 +234,7 @@ trap 'on_error $LINENO' ERR
 
 say() { printf 'first-install: %s\n' "$*"; }
 warn() { printf 'first-install: WARNING: %s\n' "$*"; }
-STAGE_COUNT=11
+STAGE_COUNT=12
 stage_header() { printf '\nfirst-install: [%s/%s] %s\n' "$1" "$STAGE_COUNT" "$2"; }
 
 usage() {
@@ -247,9 +250,11 @@ usage: sudo infra/deploy/first-install.sh --email ADDRESS [options]
   --deploy-path PATH     the server's own checkout, made by the installer from this clone's origin (default /srv/<instance>)
   --set NAME=VALUE       one more setting for a NEW alpha.env (repeatable; the example file's names only).
                          --set ALPHA_NORM_EMBED=no (the owner's choice) turns the semantic norm lookup off, also later
-  --no-ci-key            do not generate a deploy key for GitHub auto-deploy
+  --deploy-mode MODE     how pushes to main reach this server: local (default; a timer on this server pulls origin/main every five
+                         minutes with deploy-local.sh, no ssh, no deploy key) or github (GitHub's workflow, a deploy key)
+  --no-ci-key            with --deploy-mode github: do not generate the deploy key
   --skip-executors       do not require this server's own claude/codex subscriptions (the owner decides)
-  --resume-stage N       run again from stage N (1-10), also after the installation is marked done
+  --resume-stage N       run again from stage N (1-11), also after the installation is marked done
   --dry-run              print the stages and what each would do; change nothing
   --print-codes          print the STOP code table (add --markdown for the prompt's form)
   -h, --help             this text
@@ -266,13 +271,13 @@ usage_error() { # usage_error MESSAGE: the message, the help, then the one STOP 
 
 # --------------------------------------------------------------------------------------------------------- arguments
 OPT_EMAIL="" OPT_DOMAIN="" OPT_BUNDLE="" OPT_INSTANCE="" OPT_HTTP_PORT="" OPT_DEPLOY_USER=root OPT_DEPLOY_PATH=""
-OPT_NO_CI_KEY=no OPT_SKIP_EXECUTORS=no OPT_RESUME="" OPT_DRY_RUN=no
+OPT_NO_CI_KEY=no OPT_SKIP_EXECUTORS=no OPT_RESUME="" OPT_DRY_RUN=no OPT_DEPLOY_MODE=""
 OPT_SETS=()
 
 parse_args() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            --email|--domain|--norms-bundle|--instance|--http-port|--deploy-user|--deploy-path|--set|--resume-stage)
+            --email|--domain|--norms-bundle|--instance|--http-port|--deploy-user|--deploy-path|--deploy-mode|--set|--resume-stage)
                 if [ "$#" -lt 2 ] || [ -z "$2" ]; then usage_error "$1 needs a value"; fi
                 case "$1" in
                     --email) OPT_EMAIL="${2,,}" ;;
@@ -282,6 +287,7 @@ parse_args() {
                     --http-port) OPT_HTTP_PORT="$2" ;;
                     --deploy-user) OPT_DEPLOY_USER="$2" ;;
                     --deploy-path) OPT_DEPLOY_PATH="$2" ;;
+                    --deploy-mode) OPT_DEPLOY_MODE="$2" ;;
                     --set) OPT_SETS+=("$2") ;;
                     --resume-stage) OPT_RESUME="$2" ;;
                 esac
@@ -304,9 +310,10 @@ validate_args() {
         fi
     fi
     if [ -n "$OPT_RESUME" ]; then
-        [[ "$OPT_RESUME" =~ ^([1-9]|10)$ ]] || usage_error "--resume-stage is a number from 1 to 10"
+        [[ "$OPT_RESUME" =~ ^([1-9]|1[01])$ ]] || usage_error "--resume-stage is a number from 1 to 11"
     fi
     [[ "$OPT_DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || usage_error "--deploy-user is a lower-case account name"
+    case "$OPT_DEPLOY_MODE" in ''|local|github) ;; *) usage_error "--deploy-mode is local or github" ;; esac
     if [ -n "$OPT_DEPLOY_PATH" ]; then
         # The same rule the auto-deploy workflow applies to DEPLOY_PATH.
         if ! [[ "$OPT_DEPLOY_PATH" =~ ^(/[A-Za-z0-9_.-]+)+$ ]] || [[ "$OPT_DEPLOY_PATH/" == */../* ]] || [[ "$OPT_DEPLOY_PATH/" == */./* ]]; then
@@ -948,9 +955,9 @@ stage_admin() {
 # --------------------------------------------------------------------------------------------------------- 5 norms
 # fd 200 is this script's run lock; the detached importer `receive-bundle.sh import` starts must not keep it after this script ends.
 inbound() { SSH_ORIGINAL_COMMAND="$*" BUNDLE_STAGING="$NORMS_STAGING" STAND_COPY_RECORD="$NORMS_COPY_DIR/record.json" \
-    ALPHA_ENV_FILE="$ENV_FILE" "$DEPLOY_DIR/receive-bundle.sh" 200>&-; }
+    ALPHA_ENV_FILE="$ENV_FILE" "$DEPLOY_DIR/receive-bundle.sh" 200>&- 201>&-; }
 copy() { SSH_ORIGINAL_COMMAND="$*" ALPHA_CHECKOUT="$REPO" ALPHA_ENV_FILE="$ENV_FILE" STAND_COPY_DIR="$NORMS_COPY_DIR" \
-    BUNDLE_STAGING="$NORMS_STAGING" "$DEPLOY_DIR/copy-serve.sh" 200>&-; }
+    BUNDLE_STAGING="$NORMS_STAGING" "$DEPLOY_DIR/copy-serve.sh" 200>&- 201>&-; }
 
 # The tar push-bundle.sh sends, byte for byte (`bundle_tar` there; a test holds the two command lines equal).
 bundle_tar() { # bundle_tar PARENT KEY
@@ -1423,8 +1430,47 @@ stage_verify() {
     say "verify-deployed.sh: the running stack is this tree"
 }
 
-# ------------------------------------------------------------------------------------------------------- 9 github
+# ------------------------------------------------------------------------------------------------------- 9 how deploys happen
 GITHUB_HOST="" CI_KEY_FILE=""
+
+DEPLOY_MODE="" RECORDED_DEPLOY_MODE=""
+# --deploy-mode wins; else what the finished installation recorded (one from before the modes was GitHub's); else local.
+resolve_deploy_mode() {
+    RECORDED_DEPLOY_MODE=""
+    if [ -f "$MARKER" ]; then
+        RECORDED_DEPLOY_MODE="$(sed -n 's/^deploy_mode=//p' "$MARKER" | head -n 1)"
+        [ -n "$RECORDED_DEPLOY_MODE" ] || RECORDED_DEPLOY_MODE=github
+    fi
+    DEPLOY_MODE="${OPT_DEPLOY_MODE:-${RECORDED_DEPLOY_MODE:-local}}"
+}
+deploy_unit() { printf '%s-deploy-local.%s' "$INSTANCE" "$1"; }
+
+stage_deploy_info() {
+    if [ "$DEPLOY_MODE" = local ]; then stage_local_deploy_info; else stage_github; fi
+}
+
+# `--deploy-mode local` (FIRST-INSTALL-03): a timer on this server pulls origin/main. Nothing to paste into GitHub but one variable, so
+# that GitHub's own workflow, which cannot reach this server, does not try and fail on every push.
+stage_local_deploy_info() {
+    local repo_name key
+    repo_name="$(git -C "$REPO" remote get-url origin | sed -E 's#/+$##; s#\.git$##; s#^.*[:/]([^:/]+)/([^:/]+)$#\1/\2#')"
+    printf '\nfirst-install: ---- for the owner: how this server deploys (local mode: pulled by a timer on this server, no ssh, no deploy key) ----\n'
+    printf '  deploys     push to main of %s; the server deploys it within 5 minutes (timer %s). By hand: sudo %s/infra/deploy/deploy-local.sh\n' \
+        "$repo_name" "$(deploy_unit timer)" "$REPO"
+    printf '  DEPLOY_PATH=%s   (the installer made this checkout and works in it; the clone it was started in is not used)\n' "$REPO"
+    printf '  GitHub      set the repository variable DEPLOY_MODE=local (Settings > Secrets and variables > Actions > Variables of %s), so that the GitHub workflow does not try to reach this server and fail on every push\n' "$repo_name"
+    printf '  log         /var/log/%s-deploy-local.log ; look: systemctl list-timers %s ; a commit that failed to deploy is not retried until main moves (or by hand)\n' \
+        "$INSTANCE" "$(deploy_unit timer)"
+    printf '  note        the timer deploys the tip of origin/main. This server was installed at %s: if that is not main, the first look deploys main\n' \
+        "$(git -C "$REPO" rev-parse --short HEAD)"
+    key="$SECRET_DIR/$INSTANCE-deploy-key"
+    if [ -e "$key" ]; then
+        printf '  note        a deploy key from an earlier GitHub-mode run is left in place (%s, and its public half in the deploy user'"'"'s authorized_keys): remove both when GitHub auto-deploy is not used\n' "$key"
+    fi
+    if [ "$(env_get ALPHA_NORM_EMBED)" = yes ] && ! state_has s5.designated; then
+        printf '  note     the norms are not imported and the semantic norm lookup is not on yet: this repository publishes no norms bundle (no infra/norms/bundle-release.lock). It turns on by itself when the installer is run again with --norms-bundle DIRECTORY, or without it once the repository carries the lock file (sudo infra/deploy/first-install.sh)\n'
+    fi
+}
 
 stage_github() {
     local repo_name fingerprint key_line host
@@ -1622,7 +1668,46 @@ semantic_summary() { # one phrase for the DONE line, from the environment as it 
     fi
 }
 
-# ------------------------------------------------------------------------------------------------------- 11 marker
+# ------------------------------------------------------------------------------------------------------- 11 the deploy timer
+render_unit() { # render_unit KIND: the template of infra/deploy/systemd/, with this instance and this checkout filled in
+    sed -e "s#@INSTANCE@#$INSTANCE#g" -e "s#@REPO@#$REPO#g" "$DEPLOY_DIR/systemd/auditmanager-deploy-local.$1"
+}
+write_unit() { # write_unit KIND: 0 when the file was written or changed, 1 when it was as it should be
+    local target text
+    target="$SYSTEMD_DIR/$(deploy_unit "$1")"
+    text="$(render_unit "$1")"
+    if [ -f "$target" ] && [ "$(cat "$target")" = "$text" ]; then return 1; fi
+    printf '%s\n' "$text" > "$target"
+    chmod 644 "$target"
+    return 0
+}
+stage_deploy_timer() {
+    local timer changed=no slug
+    timer="$(deploy_unit timer)"
+    if [ "$DEPLOY_MODE" = local ]; then
+        command -v systemctl >/dev/null 2>&1 || stop deploy_timer_failed "systemctl is not on this server"
+        [ -x "$DEPLOY_DIR/deploy-local.sh" ] || stop deploy_timer_failed "$DEPLOY_DIR/deploy-local.sh is missing or not executable"
+        # The repository this server accepts: what the deploy clone's origin is NOW, recorded once, outside the checkout. A later change
+        # of the origin to another repository is then refused by deploy-local.sh (the binding of `R-158f`, on this side).
+        slug="$(repo_slug "$(git -C "$REPO" remote get-url origin)")"
+        private_dir "$STATE_DIR"
+        [ -f "$STATE_DIR/deploy-local.source" ] || printf '%s\n' "$slug" > "$STATE_DIR/deploy-local.source"
+        mkdir -p "$SYSTEMD_DIR"
+        if write_unit service; then changed=yes; fi
+        if write_unit timer; then changed=yes; fi
+        if [ "$changed" = yes ]; then systemctl daemon-reload || stop deploy_timer_failed "systemctl daemon-reload failed"; fi
+        systemctl enable --now "$timer" >/dev/null 2>&1 || stop deploy_timer_failed "systemctl enable --now $timer failed"
+        systemctl is-active --quiet "$timer" || stop deploy_timer_failed "$timer is not active after enable --now"
+        say "the deploy timer $timer is enabled: every five minutes it looks at origin/main and deploys it when it moved (deploy-local.sh --if-moved)"
+    elif [ -f "$SYSTEMD_DIR/$timer" ]; then
+        systemctl disable --now "$timer" >/dev/null 2>&1 || stop deploy_timer_failed "systemctl disable --now $timer failed"
+        say "the deploy timer $timer is disabled: GitHub's workflow deploys this server now (--deploy-mode github). Its unit files stay in $SYSTEMD_DIR"
+    else
+        say "no deploy timer: GitHub's workflow deploys this server (--deploy-mode github)"
+    fi
+}
+
+# ------------------------------------------------------------------------------------------------------- 12 marker
 stage_marker() {
     local when sha
     when="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1636,8 +1721,9 @@ stage_marker() {
         printf 'stage_5_norms=%s\n' "$(state_has s5.designated && echo ok || echo skipped)"
         printf 'stage_6_https=%s\n' "$([ -n "$OPT_DOMAIN" ] && echo ok || echo skipped)"
         printf 'stage_7_executors=%s\n' "$([ "$OPT_SKIP_EXECUTORS" = yes ] && echo skipped || echo ok)"
-        printf 'stage_8_verify=ok\nstage_9_github=printed\n'
+        printf 'stage_8_verify=ok\nstage_9_deploy_info=printed\n'
         printf 'stage_10_semantic=%s\n' "$(semantic_summary)"
+        printf 'deploy_mode=%s\nstage_11_timer=%s\n' "$DEPLOY_MODE" "$([ "$DEPLOY_MODE" = local ] && echo enabled || echo disabled)"
     } > "$MARKER.tmp"
     mv -f "$MARKER.tmp" "$MARKER"
     say "marker written: $MARKER"
@@ -1657,8 +1743,9 @@ STAGE_TITLES=(
     "https: DNS, test certificate, real certificate, public port 443"
     "executors: connect this server's own claude / codex subscriptions"
     "verify: verify-deployed.sh must exit 0"
-    "github: what to paste into GitHub, and the deploy key"
+    "deploy path: how pushes to main reach this server (the local timer's lines, or the GitHub values and the deploy key)"
     "semantic: the memory and quality gates, then the embedder address for the worker"
+    "timer: enable the local deploy timer (disable it in github mode)"
     "marker: write the done marker; a second run refuses"
 )
 
@@ -1666,15 +1753,15 @@ STAGE_DONE=yes
 run_stage() { # run_stage N FUNCTION
     local n="$1" fn="$2"
     stage_header "$n" "${STAGE_TITLES[$((n - 1))]}"
-    # Stages 1 and 2 are cheap and always run: the server and the environment file may have changed since the last run. Stage 9
-    # (the values for GitHub) and 11 (the marker) are printed or written again each time.
-    if [ "$n" -gt 2 ] && [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && state_has "s$n"; then
+    # Stages 1 and 2 are cheap and always run: the server and the environment file may have changed since the last run. Stages 9 (how
+    # deploys happen), 11 (the timer, which follows the mode) and 12 (the marker) are printed, converged or written again each time.
+    if [ "$n" -gt 2 ] && [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && [ "$n" -ne 12 ] && state_has "s$n"; then
         say "done before: skipped"
         return 0
     fi
     STAGE_DONE=yes
     "$fn"
-    if [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && [ "$STAGE_DONE" = yes ]; then state_mark "s$n"; fi
+    if [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && [ "$n" -ne 12 ] && [ "$STAGE_DONE" = yes ]; then state_mark "s$n"; fi
     return 0
 }
 
@@ -1687,16 +1774,25 @@ run_all() {
     if [ -n "$OPT_DOMAIN" ]; then run_stage 6 stage_https; else stage_header 6 "${STAGE_TITLES[5]}"; say "skipped: no --domain (the stack answers on 127.0.0.1:$HTTP_PORT; reach it with: ssh -L $HTTP_PORT:127.0.0.1:$HTTP_PORT <this server>)"; fi
     if [ "$OPT_SKIP_EXECUTORS" = no ]; then run_stage 7 stage_executors; else stage_header 7 "${STAGE_TITLES[6]}"; say "skipped: --skip-executors"; fi
     run_stage 8 stage_verify
-    run_stage 9 stage_github
+    run_stage 9 stage_deploy_info
     run_stage 10 stage_semantic
-    run_stage 11 stage_marker
+    run_stage 11 stage_deploy_timer
+    run_stage 12 stage_marker
     local login
     login="$(admin_login)"
     printf '\n'
-    printf 'DONE: %s is installed at %s (%s). Administrator login %s; its password is in %s (owner only, do not read it). Semantic norm lookup: %s.%s Full output: %s\n' \
-        "$INSTANCE" "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "${login:-unknown}" "$(password_file)" "$(semantic_summary)" \
+    printf 'DONE: %s is installed at %s (%s). Administrator login %s; its password is in %s (owner only, do not read it). Semantic norm lookup: %s. Deploys: %s.%s Full output: %s\n' \
+        "$INSTANCE" "$REPO" "$(git -C "$REPO" rev-parse --short HEAD)" "${login:-unknown}" "$(password_file)" "$(semantic_summary)" "$(deploys_summary)" \
         "$([ -n "$OPT_DOMAIN" ] && echo " Open https://$OPT_DOMAIN." || echo " Open it through: ssh -L $HTTP_PORT:127.0.0.1:$HTTP_PORT <this server> then http://127.0.0.1:$HTTP_PORT.")" \
         "$LOG_FILE"
+}
+
+deploys_summary() { # one phrase for the DONE line
+    if [ "$DEPLOY_MODE" = local ]; then
+        printf 'push to main of the fork and the server deploys it within 5 minutes (timer %s; by hand: sudo %s/infra/deploy/deploy-local.sh); the owner sets the GitHub variable DEPLOY_MODE=local' "$(deploy_unit timer)" "$REPO"
+    else
+        printf "GitHub's workflow (the DEPLOY_* values and the deploy key are in the block above)"
+    fi
 }
 
 # --------------------------------------------------------------------------------------------------------- dry run
@@ -1707,6 +1803,20 @@ norms_plan_text() {
         echo "download the parts of the release infra/norms/bundle-release.lock names (curl, resumable, sha256 checked), stream them through zstd into receive-bundle.sh, open a test-data waiver, import, report, resume, designate the snapshot, delete the parts"
     else
         echo "skipped (no --norms-bundle, and the repository publishes none)"
+    fi
+}
+deploy_info_plan_text() {
+    if [ "$DEPLOY_MODE" = local ]; then
+        echo "print how deploys happen (push to main of the fork; this server deploys it within 5 minutes; by hand: sudo $DEPLOY_PATH/infra/deploy/deploy-local.sh) and the one GitHub step, the repository variable DEPLOY_MODE=local; no deploy key is made"
+    else
+        echo "print DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH=$DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
+    fi
+}
+deploy_timer_plan_text() {
+    if [ "$DEPLOY_MODE" = local ]; then
+        echo "write $SYSTEMD_DIR/$(deploy_unit service) and .timer (the timer runs deploy-local.sh --if-moved every five minutes, Persistent=true), systemctl daemon-reload, enable --now $(deploy_unit timer)"
+    else
+        echo "no timer is enabled in github mode (an existing $(deploy_unit timer) is disabled; its unit files stay)"
     fi
 }
 print_plan() {
@@ -1721,7 +1831,7 @@ print_plan() {
     printf 'first-install: DRY RUN -- nothing below is done; nothing on this server is changed.\n'
     printf '  instance         %s\n  started in       %s\n  deploy clone     %s\n  environment      %s/infra/deploy/env/alpha.env\n' "$INSTANCE" "$REPO" "$deploy_text" "$DEPLOY_PATH"
     printf '  application port %s (loopback only)\n  domain           %s\n  administrator    %s\n' "$HTTP_PORT" "${OPT_DOMAIN:-none (no HTTPS)}" "${OPT_EMAIL:-<--email is required>}"
-    printf '  norms bundle     %s\n  deploy user      %s\n' "${OPT_BUNDLE:-none}" "$OPT_DEPLOY_USER"
+    printf '  norms bundle     %s\n  deploy user      %s\n  deploy mode      %s\n' "${OPT_BUNDLE:-none}" "$OPT_DEPLOY_USER" "$DEPLOY_MODE"
     printf '  state            %s\n  marker           %s\n  password file    %s\n  transcript       %s\n' "$STATE_FILE" "$MARKER" "$(password_file)" "$LOG_FILE"
     if [ -f "$MARKER" ] && [ -z "$OPT_RESUME" ]; then printf '  NOTE: the marker exists: a real run would stop with STOP [already_installed].\n'; fi
     local would=(
@@ -1733,14 +1843,15 @@ print_plan() {
         "$([ -n "$OPT_DOMAIN" ] && echo "check that DNS $OPT_DOMAIN points here; set the name; deploy with the test certificate, then the real one, then ALPHA_PUBLISH_HTTPS=yes" || echo "skipped (no --domain)")"
         "$([ "$OPT_SKIP_EXECUTORS" = no ] && echo "connect the claude / codex subscriptions of this server through local-agent.sh; stop with a printed instruction when none is signed in" || echo "skipped (--skip-executors)")"
         "run infra/deploy/verify-deployed.sh; it must exit 0 (the proxy is reloaded once and it is asked again if it does not)"
-        "print DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH=$DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
+        "$(deploy_info_plan_text)"
         "$(norms_wanted && echo "run the two gates of NORM-VECTOR-TEMP-01 (memory above $SEMANTIC_MIN_AVAILABLE_MIB MiB with swap not growing; semantic_check on $SEMANTIC_WINDOWS windows); when both pass set AUDITMANAGER_NORM_EMBED_URL=$SEMANTIC_URL and restart the worker; otherwise leave it empty" || echo "not yet: the gates need the norms corpus (run again with --norms-bundle); the address stays empty and word search works")"
-        "write the marker $MARKER and print the DONE line"
+        "$(deploy_timer_plan_text)"
+        "write the marker $MARKER (with the deploy mode) and print the DONE line"
     )
     for n in $(seq 1 "$STAGE_COUNT"); do
         done_text=""
         if [ "$n" -eq 2 ] && [ -f "$DEPLOY_PATH/infra/deploy/env/alpha.env" ]; then done_text=" [already there: kept]"; fi
-        if [ "$n" -gt 2 ] && [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && state_has "s$n"; then done_text=" [done before: would be skipped]"; fi
+        if [ "$n" -gt 2 ] && [ "$n" -ne 9 ] && [ "$n" -ne 11 ] && [ "$n" -ne 12 ] && state_has "s$n"; then done_text=" [done before: would be skipped]"; fi
         printf '\n[%s/%s] %s%s\n      would: %s\n' "$n" "$STAGE_COUNT" "${STAGE_TITLES[$((n - 1))]%%:*}" "$done_text" "${would[$((n - 1))]}"
     done
     printf '\nfirst-install: end of the dry run.\n'
@@ -1752,6 +1863,7 @@ main() {
     validate_args
     resolve_instance
     decide_deploy_path
+    resolve_deploy_mode
     if [ -z "$OPT_DOMAIN" ] && state_has s6 && [ -f "$ENV_FILE" ]; then OPT_DOMAIN="$(env_get ALPHA_CERT_NAME)"; fi
     if [ "$OPT_DRY_RUN" = yes ]; then
         print_plan
@@ -1761,6 +1873,10 @@ main() {
         # An installation made without a norms bundle is finished by running the installer again with one.
         if norms_wanted && ! state_has s5.designated && ! state_has s10; then
             say "this server was installed without the norms: adding them, and then the semantic norm lookup"
+        elif [ -n "$OPT_DEPLOY_MODE" ] && [ "$OPT_DEPLOY_MODE" != "$RECORDED_DEPLOY_MODE" ]; then
+            # The one reason, besides the norms, to run a finished installation again: the deploy mode is asked to change. Only the
+            # stages that follow the mode run (9, 11, 12); every other stage is marked done and is skipped.
+            say "this server was installed with --deploy-mode $RECORDED_DEPLOY_MODE: switching to $OPT_DEPLOY_MODE"
         else
             stop already_installed "$(sed -n 's/^date=//p' "$MARKER" | head -n 1)" "$MARKER"
         fi
@@ -1770,9 +1886,13 @@ main() {
     # One run at a time: an agent whose tool timed out may start the command again while the first still works. A run started in
     # another clone holds the lock across its `exec` into the deploy clone and says so in the environment.
     private_dir "$STATE_DIR"
-    if [ "${FIRST_INSTALL_LOCK_HELD:-}" = 1 ] && [ -e "/proc/$$/fd/200" ]; then
+    # Two locks, in the order deploy-local.sh takes them: its own (a deploy of the timer is not interrupted by an installation), then this
+    # one's (deploy-local.sh does not start while the installer works).
+    if [ "${FIRST_INSTALL_LOCK_HELD:-}" = 1 ] && [ -e "/proc/$$/fd/200" ] && [ -e "/proc/$$/fd/201" ]; then
         :
     else
+        exec 201>"$STATE_DIR/deploy-local.lock"
+        flock -n 201 || stop deploy_local_running "$LOG_DIR/$INSTANCE-deploy-local.log"
         exec 200>"$STATE_DIR/first-install.lock"
         flock -n 200 || stop already_running "$LOG_FILE"
     fi

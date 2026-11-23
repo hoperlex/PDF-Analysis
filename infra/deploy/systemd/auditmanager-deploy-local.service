@@ -1,0 +1,15 @@
+# `FIRST-INSTALL-03`: the local, pull-based deploy of a fork's server. Written to /etc/systemd/system as @INSTANCE@-deploy-local.service by
+# `infra/deploy/first-install.sh` (never into the checkout), which fills in @INSTANCE@ and @REPO@. The timer starts it every five minutes;
+# it deploys origin/main only when it moved and never retries a commit that failed until main moves (`deploy-local.sh --if-moved`).
+[Unit]
+Description=AuditManager @INSTANCE@: deploy origin/main when it moved (deploy-local.sh)
+Documentation=file:@REPO@/docs/program/DEPLOYMENT_RUNBOOK.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@REPO@/infra/deploy/deploy-local.sh --if-moved --deploy-path @REPO@
+# The workflow's own limit for one deployment (a cold image build is the long part).
+TimeoutStartSec=5400
+Nice=10

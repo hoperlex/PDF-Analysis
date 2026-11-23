@@ -110,6 +110,8 @@ exit 0
 """
 SYSTEMCTL_STUB = r"""#!/usr/bin/env bash
 echo "systemctl $*" >> "$STUB_STATE/systemctl.log"
+# STUB_SYSTEMCTL_FAIL=<words>: a call whose arguments contain these words fails.
+if [ -n "${STUB_SYSTEMCTL_FAIL:-}" ]; then case "$*" in *"$STUB_SYSTEMCTL_FAIL"*) exit 1 ;; esac; fi
 if [ -f "$STUB_STATE/systemctl.fixes" ]; then rm -f "$STUB_STATE/docker.down"; fi
 exit 0
 """
@@ -156,6 +158,10 @@ get() { sed -n "s/^$1=//p" "$env_file" | tail -n 1; }
 printf 'deploy cert=%s staging=%s publish=%s email=%s\n' "$(get ALPHA_CERT_NAME)" "$(get ALPHA_ACME_STAGING)" \
     "$(get ALPHA_PUBLISH_HTTPS)" "$(get ALPHA_ACME_EMAIL)" >> "$state/calls.log"
 [ ! -f "$state/deploy.setmem" ] || cp "$state/deploy.setmem" "$FIRST_INSTALL_MEMINFO"
+# STUB_ON_DEPLOY: a command run from inside the install (the installer's locks are inherited), its output and status recorded
+if [ -n "${STUB_ON_DEPLOY:-}" ]; then
+    bash -c "$STUB_ON_DEPLOY" > "$state/on-deploy.out" 2>&1 && echo 0 > "$state/on-deploy.rc" || echo $? > "$state/on-deploy.rc"
+fi
 line="$(head -n 1 "$state/deploy.plan" 2>/dev/null || true)"
 if [ -n "$line" ]; then sed -i 1d "$state/deploy.plan"; else line="0|deploy.sh: stub deploy ok"; fi
 printf '%b\n' "${line#*|}"
@@ -208,6 +214,7 @@ class Rig:
         self.auth_home = tmp_path / "auth-home"
         self.proc_net = tmp_path / "proc-net"
         self.meminfo = tmp_path / "meminfo"
+        self.systemd_dir = tmp_path / "etc-systemd-system"
         self.host_key = tmp_path / "ssh_host_ed25519_key.pub"
         for directory in (self.bin, self.stub, self.state_root, self.log_dir, self.secret_dir, self.auth_home, self.proc_net):
             directory.mkdir(parents=True)
@@ -237,7 +244,8 @@ class Rig:
         for relative in ("infra/deploy/first-install.sh", "infra/deploy/lib/first_install_env.py",
                          "infra/deploy/lib/first_install_api.py", "infra/deploy/lib/proxy-listeners.sh",
                          "infra/deploy/lib/forced-command.sh", "infra/deploy/receive-bundle.sh", "infra/deploy/copy-serve.sh",
-                         "infra/deploy/push-bundle.sh",
+                         "infra/deploy/push-bundle.sh", "infra/deploy/deploy-local.sh",
+                         "infra/deploy/systemd/auditmanager-deploy-local.service", "infra/deploy/systemd/auditmanager-deploy-local.timer",
                          "infra/deploy/env/alpha.env.example", "infra/deploy/env/provider.env.example",
                          "infra/deploy/compose.server.yml", "infra/acme/client.pin", "infra/acme/compose.acme.yml"):
             target = seed / relative
@@ -307,6 +315,7 @@ class Rig:
             "FIRST_INSTALL_SAMPLE_SECONDS": "0.1", "FIRST_INSTALL_DOCKER_WAIT_SECONDS": "2",
             "FIRST_INSTALL_RELEASE_BASE": "http://127.0.0.1:9", "FIRST_INSTALL_RELEASE_API_BASE": "http://127.0.0.1:9",
             "FIRST_INSTALL_RELEASE_RETRIES": "1", "FIRST_INSTALL_RELEASE_RETRY_DELAY": "0",
+            "FIRST_INSTALL_SYSTEMD_DIR": str(self.systemd_dir),
             "STUB_STATE": str(self.stub), "STUB_DOCKER_ROOT": str(self.tmp),
         }
         environment.update(extra)
@@ -363,7 +372,7 @@ def _stops(result: subprocess.CompletedProcess[str]) -> list[tuple[str, str]]:
 
 
 def _args(stack, *extra: str) -> list[str]:
-    return ["--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", *extra]
+    return ["--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", "--deploy-mode", "github", *extra]
 
 
 def _happy_plan(rig: Rig) -> None:
@@ -409,6 +418,7 @@ REPORT_CODES = {
     "admin_failed", "norms_busy", "norms_refused", "norms_import_failed", "norms_report_differs", "norms_designate_failed",
     "norms_lock_invalid", "norms_release_missing", "norms_download_corrupt",   # the published release is not what the lock says
     "executors_not_connected", "semantic_quality_failed",
+    "deploy_timer_failed",                                  # the last stage: the timer that deploys pushes could not be set up
     "unexpected",
 }
 
@@ -468,8 +478,8 @@ def test_dry_run_prints_every_stage_and_changes_nothing(rig: Rig, stack) -> None
     before = sorted(str(p) for p in rig.tmp.rglob("*"))
     done = rig.run(*_args(stack, "--domain", DOMAIN, "--norms-bundle", str(rig.tmp), "--dry-run"))
     assert done.returncode == 0, done.stdout
-    for stage in range(1, 12):
-        assert f"[{stage}/11]" in done.stdout
+    for stage in range(1, 13):
+        assert f"[{stage}/12]" in done.stdout
     assert "DRY RUN" in done.stdout and "STOP" not in done.stdout and "DONE:" not in done.stdout
     assert sorted(str(p) for p in rig.tmp.rglob("*")) == before
     assert not (rig.stub / "calls.log").exists()
@@ -478,7 +488,7 @@ def test_dry_run_prints_every_stage_and_changes_nothing(rig: Rig, stack) -> None
 def test_the_installer_help_lists_every_option_the_prompt_may_use(rig: Rig) -> None:
     done = rig.run("--help")
     assert done.returncode == 0
-    for option in ("--email", "--domain", "--norms-bundle", "--instance", "--dry-run", "--resume-stage", "--skip-executors"):
+    for option in ("--email", "--domain", "--norms-bundle", "--instance", "--dry-run", "--resume-stage", "--skip-executors", "--deploy-mode"):
         assert option in done.stdout
 
 
@@ -511,7 +521,7 @@ def test_the_happy_path_installs_marks_and_prints_done_last(rig: Rig, stack) -> 
 
 def test_no_secret_reaches_the_output_or_the_log(rig: Rig, stack) -> None:
     _happy_plan(rig)
-    done = rig.run("--email", EMAIL, "--http-port", str(stack.port))
+    done = rig.run("--email", EMAIL, "--http-port", str(stack.port), "--deploy-mode", "github")
     assert done.returncode == 0, done.stdout[-2500:]
     log = (rig.log_dir / "auditmanager-first-install.log").read_text()
     private_key = (rig.secret_dir / "auditmanager-deploy-key").read_text()
@@ -808,7 +818,7 @@ def test_an_unpinned_acme_client_is_a_stop_before_the_environment_is_touched(rig
 def test_a_public_port_held_by_another_program_is_a_stop_but_our_own_proxy_is_not(rig: Rig, stack) -> None:
     rig.pin_acme_client()
     (rig.proc_net / "tcp").write_text("  sl  local_address rem_address   st\n   0: 00000000:0050 00000000:0000 0A 0\n")
-    arguments = ["--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", "--domain", DOMAIN]
+    arguments = ["--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", "--deploy-mode", "github", "--domain", DOMAIN]
     held = rig.run(*arguments)
     code, text = _stops(held)[-1]
     assert code == "public_port_busy" and "80" in text
@@ -824,7 +834,7 @@ def test_a_public_port_held_by_another_program_is_a_stop_but_our_own_proxy_is_no
 
 def test_the_github_block_has_the_values_the_workflow_reads_and_no_private_key(rig: Rig, stack) -> None:
     _happy_plan(rig)
-    done = rig.run("--email", EMAIL, "--http-port", str(stack.port))
+    done = rig.run("--email", EMAIL, "--http-port", str(stack.port), "--deploy-mode", "github")
     assert done.returncode == 0, done.stdout[-1500:]
     out = done.stdout
     assert "variable DEPLOY_HOST=" in out and f"variable DEPLOY_PATH={rig.repo}" in out
@@ -840,9 +850,9 @@ def test_the_github_block_has_the_values_the_workflow_reads_and_no_private_key(r
 
 def test_a_rerun_keeps_the_deploy_key_and_does_not_authorize_it_twice(rig: Rig, stack) -> None:
     _happy_plan(rig)
-    assert rig.run("--email", EMAIL, "--http-port", str(stack.port)).returncode == 0
+    assert rig.run("--email", EMAIL, "--http-port", str(stack.port), "--deploy-mode", "github").returncode == 0
     key_before = (rig.secret_dir / "auditmanager-deploy-key").read_bytes()
-    assert rig.run("--email", EMAIL, "--http-port", str(stack.port), "--resume-stage", "9").returncode == 0
+    assert rig.run("--email", EMAIL, "--http-port", str(stack.port), "--deploy-mode", "github", "--resume-stage", "9").returncode == 0
     assert (rig.secret_dir / "auditmanager-deploy-key").read_bytes() == key_before
     authorized = (rig.auth_home / ".ssh" / "authorized_keys").read_text().splitlines()
     assert len(authorized) == 1
@@ -1078,7 +1088,7 @@ def test_a_memory_shortage_says_wait_the_first_time_and_asks_for_a_bigger_server
 def test_a_busy_default_port_is_replaced_by_a_free_one(rig: Rig, stack) -> None:
     (rig.proc_net / "tcp").write_text("  sl  local_address rem_address   st\n   0: 00000000:7B0C 00000000:0000 0A 0\n")   # 31500
     rig.plan("deploy", "1|stop here")
-    done = rig.run("--email", EMAIL, "--no-ci-key")
+    done = rig.run("--email", EMAIL, "--no-ci-key", "--deploy-mode", "github")
     assert "port 31500 is in use: the application will use port 31501 instead" in done.stdout
     assert rig.alpha()["ALPHA_HTTP_PORT"] == "31501"
 
@@ -1315,7 +1325,7 @@ def test_an_installation_without_a_bundle_is_finished_by_running_it_again_with_o
     again = rig.run(*_args(stack, "--norms-bundle", str(bundle)))
     codes = [code for code, _ in _stops(again)]
     assert "already_installed" not in codes and codes[-1] == "norms_bundle_invalid", again.stdout[-1500:]
-    assert "this server was installed without the norms: adding them" in again.stdout and "[5/11]" in again.stdout
+    assert "this server was installed without the norms: adding them" in again.stdout and "[5/12]" in again.stdout
     assert "done before: skipped" in again.stdout                        # the stages that were finished are not run again
     # and once the norms were designated and the semantic stage done, the bundle is no reason to run again
     _norms_done(rig)
@@ -1336,7 +1346,7 @@ def _head(path: Path) -> str:
 
 
 def _dev_args(stack, *extra: str) -> list[str]:
-    return ["--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", *extra]
+    return ["--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", "--deploy-mode", "github", *extra]
 
 
 def test_started_in_a_working_copy_it_makes_the_deploy_clone_and_continues_in_it(devrig: Rig, stack) -> None:
@@ -1353,7 +1363,7 @@ def test_started_in_a_working_copy_it_makes_the_deploy_clone_and_continues_in_it
             == str(devrig.origin))
     # it says so in one line, the stages run once, in the deploy clone, and the installation lives there
     assert done.stdout.count("making the deploy clone") == 1 and f"continuing in {devrig.deploy}" in done.stdout
-    assert done.stdout.count("[1/11]") == 1 and done.stdout.rstrip().splitlines()[-1].startswith(f"DONE: auditmanager is installed at {devrig.deploy} ")
+    assert done.stdout.count("[1/12]") == 1 and done.stdout.rstrip().splitlines()[-1].startswith(f"DONE: auditmanager is installed at {devrig.deploy} ")
     assert (devrig.deploy / "infra/deploy/env/alpha.env").is_file()
     assert f"variable DEPLOY_PATH={devrig.deploy}" in done.stdout
     assert f"repo={devrig.deploy}" in (devrig.state_root / "auditmanager" / "first-install.done").read_text()
@@ -1527,7 +1537,7 @@ def test_an_installation_made_in_place_stays_where_it_is(rig: Rig, stack, tmp_pa
     first = rig.run(*_args(stack))
     assert _stops(first)[-1][0] == "deploy_failed"
     _happy_plan(rig)
-    done = subprocess.run([str(rig.repo / "infra/deploy/first-install.sh"), "--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key"],
+    done = subprocess.run([str(rig.repo / "infra/deploy/first-install.sh"), "--email", EMAIL, "--http-port", str(stack.port), "--no-ci-key", "--deploy-mode", "github"],
                           capture_output=True, text=True, cwd=rig.repo, env=rig.env(FIRST_INSTALL_DEPLOY_ROOT=str(tmp_path / "elsewhere")))
     assert done.returncode == 0, done.stdout[-1500:]
     assert "making the deploy clone" not in done.stdout and not (tmp_path / "elsewhere").exists()
@@ -1582,7 +1592,7 @@ def test_a_lock_that_arrives_after_the_installation_is_picked_up_by_running_the_
     again = rig.run(*_args(stack))
     codes = [code for code, _ in _stops(again)]
     assert "already_installed" not in codes, again.stdout[-1200:]
-    assert "this server was installed without the norms: adding them" in again.stdout and "[5/11]" in again.stdout
+    assert "this server was installed without the norms: adding them" in again.stdout and "[5/12]" in again.stdout
     assert "norms: the release norms-0a1bafe103ff-77777777 of acme-co/audit-install" in again.stdout
     assert codes[-1] == "norms_download_failed"            # nothing listens where the stand-in release would be: a run again, not a report
     assert "done before: skipped" in again.stdout
@@ -1595,3 +1605,193 @@ def test_dry_run_says_where_the_norms_come_from(rig: Rig, stack) -> None:
     assert "download the parts of the release infra/norms/bundle-release.lock names" in plan and "delete the parts" in plan
     assert "run the two gates of NORM-VECTOR-TEMP-01" in plan
     assert "verify /x" in rig.run(*_args(stack, "--dry-run", "--norms-bundle", str(rig.tmp))).stdout.replace(str(rig.tmp), "/x")
+
+
+# ------------------------------------------------------------------------------------- --deploy-mode: how pushes to main arrive
+
+UNIT = "auditmanager-deploy-local"
+
+
+def _local_args(stack, *extra: str) -> list[str]:
+    """The default mode (local): no --deploy-mode, and no --no-ci-key either, which proves no key is made."""
+    return ["--email", EMAIL, "--http-port", str(stack.port), *extra]
+
+
+def _systemctl(rig: Rig) -> list[str]:
+    path = rig.stub / "systemctl.log"
+    return path.read_text().splitlines() if path.exists() else []
+
+
+def _marker(rig: Rig) -> dict[str, str]:
+    text = (rig.state_root / "auditmanager" / "first-install.done").read_text()
+    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+
+
+def test_local_is_the_default_mode_it_writes_the_units_outside_the_checkout_and_enables_the_timer_last(rig: Rig, stack) -> None:
+    _happy_plan(rig)
+    done = rig.run(*_local_args(stack))
+    assert done.returncode == 0, done.stdout[-2500:]
+    out = done.stdout
+    # the units: this instance, this checkout, in the systemd directory, not in the clone
+    service = (rig.systemd_dir / f"{UNIT}.service").read_text()
+    timer = (rig.systemd_dir / f"{UNIT}.timer").read_text()
+    assert f"ExecStart={rig.repo}/infra/deploy/deploy-local.sh --if-moved --deploy-path {rig.repo}" in service
+    assert "Type=oneshot" in service and "@" not in service + timer
+    assert "OnCalendar=*:0/5" in timer and "Persistent=true" in timer and f"Unit={UNIT}.service" in timer
+    assert stat.S_IMODE((rig.systemd_dir / f"{UNIT}.timer").stat().st_mode) == 0o644
+    assert rig.clean() and not list(rig.repo.rglob("*.timer.*"))
+    # systemd was told, in this order, and the timer is enabled and started
+    log = _systemctl(rig)
+    assert [c for c in log if "deploy-local" in c or c == "systemctl daemon-reload"] == [
+        "systemctl daemon-reload", f"systemctl enable --now {UNIT}.timer", f"systemctl is-active --quiet {UNIT}.timer"]
+    # the owner block: how deploys happen, the one GitHub step, and nothing of the CI key
+    assert "how this server deploys" in out and "push to main of acme-co/audit-install" in out and "within 5 minutes" in out
+    assert f"sudo {rig.repo}/infra/deploy/deploy-local.sh" in out and f"DEPLOY_PATH={rig.repo}" in out
+    assert "set the repository variable DEPLOY_MODE=local" in out and "STOP" not in out
+    for absent in ("DEPLOY_KNOWN_HOSTS", "VPS_SSH_KEY", "VPS_USER", "variable DEPLOY_HOST"):
+        assert absent not in out
+    assert not (rig.secret_dir / "auditmanager-deploy-key").exists() and not (rig.auth_home / ".ssh").exists()
+    # the timer is the last thing enabled: after the semantic stage, and before the marker
+    assert out.index("[10/12]") < out.index("[11/12]") < out.index(f"the deploy timer {UNIT}.timer is enabled") < out.index("[12/12]")
+    assert out.index(f"the deploy timer {UNIT}.timer is enabled") < out.index("marker written")
+    last = [line for line in out.splitlines() if line.strip()][-1]
+    assert last.startswith("DONE: auditmanager is installed") and "within 5 minutes" in last and "DEPLOY_MODE=local" in last
+    # what the timer will accept is recorded outside the checkout, and the marker says the mode
+    assert (rig.state_root / "auditmanager" / "deploy-local.source").read_text().strip() == "acme-co/audit-install"
+    marker = _marker(rig)
+    assert marker["deploy_mode"] == "local" and marker["stage_11_timer"] == "enabled"
+
+
+def test_the_rendered_units_are_what_systemd_accepts(rig: Rig, stack) -> None:
+    if shutil.which("systemd-analyze") is None:
+        pytest.skip("systemd-analyze is not installed")
+    _happy_plan(rig)
+    assert rig.run(*_local_args(stack)).returncode == 0
+    calendar = subprocess.run(["systemd-analyze", "calendar", "*:0/5"], capture_output=True, text=True)
+    assert calendar.returncode == 0 and "Normalized form: *-*-* *:00/5:00" in calendar.stdout, calendar.stdout + calendar.stderr
+    # the service file parses and its program exists; the units named in After= belong to the real host, not to this one
+    verify = subprocess.run(["systemd-analyze", "verify", "--man=no", str(rig.systemd_dir / f"{UNIT}.service")],
+                            capture_output=True, text=True)
+    complaints = [line for line in (verify.stdout + verify.stderr).splitlines()
+                  if line.strip() and "docker.service" not in line and "network-online" not in line]
+    assert not complaints, complaints
+
+
+def test_github_mode_is_the_earlier_behaviour_and_no_timer_is_made(rig: Rig, stack) -> None:
+    _happy_plan(rig)
+    done = rig.run(*_args(stack))
+    assert done.returncode == 0, done.stdout[-2500:]
+    assert "variable DEPLOY_HOST=" in done.stdout and "secret   VPS_SSH_KEY=" in done.stdout
+    assert "how this server deploys" not in done.stdout and "DEPLOY_MODE=local" not in done.stdout
+    assert not rig.systemd_dir.exists() or not any(rig.systemd_dir.iterdir())
+    assert not any(UNIT in line for line in _systemctl(rig))
+    assert not (rig.state_root / "auditmanager" / "deploy-local.source").exists()
+    marker = _marker(rig)
+    assert marker["deploy_mode"] == "github" and marker["stage_11_timer"] == "disabled"
+    last = [line for line in done.stdout.splitlines() if line.strip()][-1]
+    assert last.startswith("DONE:") and "GitHub's workflow" in last
+
+
+def test_a_bad_deploy_mode_is_a_usage_error_and_the_dry_run_names_the_mode(rig: Rig, stack) -> None:
+    assert rig.run(*_local_args(stack, "--deploy-mode", "both")).returncode == 2
+    assert rig.run(*_local_args(stack, "--deploy-mode")).returncode == 2
+    before = sorted(str(p) for p in rig.tmp.rglob("*"))
+    local = rig.run(*_local_args(stack, "--dry-run")).stdout
+    assert "deploy mode      local" in local and f"{UNIT}.timer" in local and "DEPLOY_MODE=local" in local
+    github = rig.run(*_args(stack, "--dry-run")).stdout
+    assert "deploy mode      github" in github and "no timer is enabled in github mode" in github and "DEPLOY_KNOWN_HOSTS" in github
+    assert sorted(str(p) for p in rig.tmp.rglob("*")) == before
+
+
+def test_a_rerun_converges_and_the_mode_switches_both_ways(rig: Rig, stack) -> None:
+    _happy_plan(rig)
+    assert rig.run(*_local_args(stack)).returncode == 0
+    units = {n: (rig.systemd_dir / f"{UNIT}.{n}").read_bytes() for n in ("service", "timer")}
+    reloads = [c for c in _systemctl(rig) if c == "systemctl daemon-reload"]
+    deploys = len(rig.calls())
+    # the same mode again: a finished installation refuses, as ever; the stage that follows the mode, run alone, changes nothing
+    assert _stops(rig.run(*_local_args(stack)))[-1][0] == "already_installed"
+    assert rig.run(*_local_args(stack, "--resume-stage", "9")).returncode == 0
+    assert {n: (rig.systemd_dir / f"{UNIT}.{n}").read_bytes() for n in ("service", "timer")} == units
+    assert [c for c in _systemctl(rig) if c == "systemctl daemon-reload"] == reloads, "an unchanged unit must not be reloaded"
+    # a stale unit file is brought back, and only then is systemd told
+    (rig.systemd_dir / f"{UNIT}.timer").write_text("[Timer]\nOnCalendar=daily\n")
+    assert rig.run(*_local_args(stack, "--resume-stage", "9")).returncode == 0
+    assert (rig.systemd_dir / f"{UNIT}.timer").read_bytes() == units["timer"]
+    assert len([c for c in _systemctl(rig) if c == "systemctl daemon-reload"]) == len(reloads) + 1
+    # local -> github: asked for explicitly, the timer is disabled, its files stay, the GitHub values and a key come; nothing is redeployed
+    to_github = rig.run(*_local_args(stack, "--deploy-mode", "github"))
+    assert to_github.returncode == 0, to_github.stdout[-2000:]
+    assert "installed with --deploy-mode local: switching to github" in to_github.stdout
+    assert _systemctl(rig)[-1] == f"systemctl disable --now {UNIT}.timer"
+    assert (rig.systemd_dir / f"{UNIT}.timer").exists() and "variable DEPLOY_HOST=" in to_github.stdout
+    assert (rig.secret_dir / "auditmanager-deploy-key").exists()
+    assert _marker(rig)["deploy_mode"] == "github" and _marker(rig)["stage_11_timer"] == "disabled"
+    assert len(rig.calls()) == deploys, "switching the mode must not run the deploy or the verification again"
+    assert _stops(rig.run(*_local_args(stack, "--deploy-mode", "github")))[-1][0] == "already_installed"
+    assert _stops(rig.run(*_local_args(stack)))[-1][0] == "already_installed"  # no option: the recorded mode (github) stands
+    # github -> local: the timer is enabled again, the key of the earlier mode is left and named
+    to_local = rig.run(*_local_args(stack, "--deploy-mode", "local"))
+    assert to_local.returncode == 0, to_local.stdout[-2000:]
+    assert "installed with --deploy-mode github: switching to local" in to_local.stdout
+    assert _systemctl(rig)[-2:] == [f"systemctl enable --now {UNIT}.timer", f"systemctl is-active --quiet {UNIT}.timer"]
+    assert "a deploy key from an earlier GitHub-mode run is left in place" in to_local.stdout
+    assert (rig.secret_dir / "auditmanager-deploy-key").exists()
+    assert _marker(rig)["deploy_mode"] == "local" and len(rig.calls()) == deploys
+
+
+def test_a_marker_from_before_the_modes_means_github_and_is_switched_only_when_asked(rig: Rig, stack) -> None:
+    _happy_plan(rig)
+    assert rig.run(*_args(stack)).returncode == 0
+    marker = rig.state_root / "auditmanager" / "first-install.done"
+    marker.write_text("".join(line + "\n" for line in marker.read_text().splitlines()
+                              if not line.startswith(("deploy_mode=", "stage_11_timer=", "stage_9_deploy_info="))))
+    assert _stops(rig.run(*_local_args(stack)))[-1][0] == "already_installed"      # nothing asked: the old installation stays as it is
+    assert not (rig.systemd_dir / f"{UNIT}.timer").exists()
+    switched = rig.run(*_local_args(stack, "--deploy-mode", "local"))
+    assert switched.returncode == 0 and "installed with --deploy-mode github: switching to local" in switched.stdout
+    assert (rig.systemd_dir / f"{UNIT}.timer").exists() and _marker(rig)["deploy_mode"] == "local"
+
+
+def test_a_timer_that_cannot_be_enabled_is_the_last_stop_and_the_rerun_finishes(rig: Rig, stack) -> None:
+    _happy_plan(rig)
+    failed = rig.run(*_local_args(stack), env=rig.env(STUB_SYSTEMCTL_FAIL=f"enable --now {UNIT}.timer"))
+    code, text = _stops(failed)[-1]
+    assert failed.returncode == 10 and code == "deploy_timer_failed" and text.startswith("REPORT TO THE OWNER"), failed.stdout[-1500:]
+    assert f"systemctl enable --now {UNIT}.timer failed" in text
+    assert not (rig.state_root / "auditmanager" / "first-install.done").exists() and "DONE:" not in failed.stdout
+    again = rig.run(*_local_args(stack))
+    assert again.returncode == 0 and "DONE:" in again.stdout and _marker(rig)["stage_11_timer"] == "enabled"
+    assert "done before: skipped" in again.stdout and len([c for c in rig.calls() if c.startswith("deploy")]) == 2
+
+
+def test_the_installer_refuses_while_a_timer_deploy_runs_and_a_deploy_started_inside_it_is_refused(rig: Rig, stack) -> None:
+    import fcntl
+
+    state = rig.state_root / "auditmanager"
+    state.mkdir(parents=True)
+    with open(state / "deploy-local.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        busy = rig.run(*_local_args(stack))
+    code, text = _stops(busy)[-1]
+    assert busy.returncode == 10 and code == "deploy_local_running" and "auditmanager-deploy-local.log" in text, busy.stdout[-800:]
+    assert not rig.calls() and not (rig.repo / "infra/deploy/env/alpha.env").exists()
+    # the other way round: deploy-local.sh, started by hand while the installer works (here from inside its deploy stage), waits its turn
+    _happy_plan(rig)
+    hook = (f'DEPLOY_LOCAL_TEST_MODE=1 DEPLOY_LOCAL_STATE_ROOT="{rig.state_root}" DEPLOY_LOCAL_LOG_DIR="{rig.log_dir}" '
+            f'"{rig.repo}/infra/deploy/deploy-local.sh" --deploy-path "{rig.repo}"')
+    done = rig.run(*_local_args(stack), env=rig.env(STUB_ON_DEPLOY=hook))
+    assert done.returncode == 0, done.stdout[-1500:]
+    assert (rig.stub / "on-deploy.rc").read_text().strip() == "75"
+    assert "busy:" in (rig.stub / "on-deploy.out").read_text()
+
+
+def test_started_in_a_working_copy_the_timer_belongs_to_the_deploy_clone_and_the_locks_cross_the_exec(devrig: Rig, stack) -> None:
+    _happy_plan(devrig)
+    done = devrig.run(*_local_args(stack))
+    assert done.returncode == 0, done.stdout[-3000:]
+    service = (devrig.systemd_dir / f"{UNIT}.service").read_text()
+    assert f"ExecStart={devrig.deploy}/infra/deploy/deploy-local.sh --if-moved --deploy-path {devrig.deploy}" in service
+    assert str(devrig.dev) not in service and devrig.clean()
+    assert f"DEPLOY_PATH={devrig.deploy}" in done.stdout and f"sudo {devrig.deploy}/infra/deploy/deploy-local.sh" in done.stdout
+    assert (devrig.state_root / "auditmanager" / "deploy-local.source").read_text().strip() == "acme-co/audit-install"

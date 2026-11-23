@@ -11,7 +11,9 @@ Run it as root, **from the clone you were started in** (the owner's working copy
 
 Add `--norms-bundle` only when the owner gives you a directory. When the repository publishes the norms bundle
 (`infra/norms/bundle-release.lock` is in it), the script downloads it from the GitHub release and imports it by itself, with no
-option: that is several GB and takes a while, and a run that is cut off resumes the download.
+option: that is several GB and takes a while, and a run that is cut off resumes the download. Pushes to `main` of the fork are
+deployed by a timer on this server within five minutes (the default, `--deploy-mode local`; no GitHub secret is needed). Add
+`--deploy-mode github` only when the owner names it: GitHub Actions deploys then, and the script makes a deploy key.
 
 The script makes the server's own checkout, `/srv/<instance>` (the instance is `auditmanager` unless the owner named another), from
 this clone's origin, and continues in it by itself. You never work in `/srv/<instance>`, and the clone you started in is never
@@ -23,8 +25,9 @@ read the end of it with `tail -n 30`. It contains no secret.
 
 ## What the last line means
 
-1. `DONE: ...` is success. Tell the owner that line and the block "for the owner" above it (the GitHub values, and the paths of
-   two private files). Then stop. If this repository is a fork, add that its next work is listed in `docs/program/FORK_ROADMAP.md`.
+1. `DONE: ...` is success. Tell the owner that line and the block "for the owner" above it (how deploys happen, with the one GitHub
+   variable `DEPLOY_MODE=local` for the owner to set, or in github mode the GitHub values; and the paths of the private files).
+   Then stop. If this repository is a fork, add that its next work is listed in `docs/program/FORK_ROADMAP.md`.
 2. `STOP [code]: <action>` is one thing to do. Do exactly the action as printed, then run the same command again, unchanged.
    Almost every action is a command or "wait and run again": do it yourself, do not ask.
 3. A STOP line that begins `ASK THE OWNER` needs a fact only the owner holds: an e-mail address, the domain, a record at the
@@ -47,7 +50,7 @@ read the end of it with `tail -n 30`. It contains no secret.
 - Never kill a process by name or pattern (`pkill`, `killall`), never stop a container, never remove a Docker volume or
   image, never run `docker compose` or `reset.sh` yourself unless a STOP line prints the exact command.
 - Never push to `origin`, never touch `main`, never create a tag or a branch.
-- Never add `--skip-executors`, `--resume-stage`, `--deploy-path` or `--set` on your own, except where a STOP line prints the
+- Never add `--skip-executors`, `--resume-stage`, `--deploy-path`, `--deploy-mode` or `--set` on your own, except where a STOP line prints the
   exact command; they are the owner's decisions.
 - Never paste a password, token, key or the content of any `.env` file into a message.
 
@@ -90,6 +93,8 @@ Each row is the action printed after the code (`<...>` stands for the facts of t
 | `env_invalid` | The environment file is not usable (<...>) and nothing has been deployed from it. Run this command: <...>   then run the same command again (it writes new files). |
 | `env_invalid_installed` | REPORT TO THE OWNER: the environment file is not usable (<...>) and this server already has an installation made from it, so it must not be replaced. |
 | `already_installed` | Nothing to do: this server was installed on <...> (marker <...>). To add the norms bundle later run: sudo infra/deploy/first-install.sh --norms-bundle DIRECTORY |
+| `deploy_local_running` | A deploy by deploy-local.sh is running (its output is in <...>). Wait ten minutes, then run the same command again. |
+| `deploy_timer_failed` | REPORT TO THE OWNER: the deploy timer could not be set up (<...>). Pushes to main are not deployed until it is: the installer's last stage ends with this, and everything else is installed. |
 | `already_running` | An earlier run of this command is still working: do not start another. Wait five minutes, look at the end of <...> with tail -n 30, and run the same command again only when that file has not changed for fifteen minutes. |
 | `deploy_refused` | REPORT TO THE OWNER: deploy.sh refused for a reason this installer does not know: <...> |
 | `deploy_failed` | Run the same command once more (deploy.sh ended with status <...>; a network error during the build is the usual cause). |
