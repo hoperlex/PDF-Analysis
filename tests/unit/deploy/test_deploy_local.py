@@ -204,6 +204,36 @@ def test_the_timer_deploys_when_main_moved(rig: Rig) -> None:
     assert f"DEPLOY OK: {tip}" in moved.stdout and rig.head() == tip and "(timer run)" in rig.log.read_text()
 
 
+def _ahead_of_main(rig: Rig) -> str:
+    """The deploy clone runs a commit main has not reached (a fork installed from its dev): main's tip is its ancestor."""
+    ahead = rig.push("dev work", branch="dev")
+    git("fetch", "-q", "origin", cwd=rig.deploy)
+    git("checkout", "-q", "--detach", ahead, cwd=rig.deploy)
+    return ahead
+
+
+def test_the_timer_never_deploys_backwards_when_main_is_behind_what_runs(rig: Rig) -> None:
+    ahead = _ahead_of_main(rig)
+    skipped = rig.deploy_local("--if-moved")
+    assert skipped.returncode == 0 and "not deploying backwards" in skipped.stdout, skipped.stdout + skipped.stderr
+    assert rig.head() == ahead and rig.calls() == []
+    # the case that differs: main moves past what runs, and the timer deploys it
+    git("checkout", "-q", "main", cwd=rig.work)
+    git("merge", "-q", "--ff-only", "origin/dev", cwd=rig.work)
+    tip = rig.push("after dev")
+    moved = rig.deploy_local("--if-moved")
+    assert moved.returncode == 0 and f"DEPLOY OK: {tip}" in moved.stdout and rig.head() == tip
+
+
+def test_a_person_is_refused_going_backwards_unless_the_commit_is_named(rig: Rig) -> None:
+    ahead = _ahead_of_main(rig)
+    refused = rig.deploy_local()
+    assert refused.returncode == 3 and "would go backwards" in refused.stderr, refused.stdout + refused.stderr
+    assert rig.head() == ahead and rig.calls() == []
+    named = rig.deploy_local("--sha", rig.first)
+    assert named.returncode == 0 and f"DEPLOY OK: {rig.first}" in named.stdout and rig.head() == rig.first
+
+
 def test_a_failed_sha_is_not_tried_again_by_the_timer_until_main_moves_but_a_person_may_retry(rig: Rig) -> None:
     tip = rig.push("two")
     (rig.stub / "deploy.exit").write_text("5")

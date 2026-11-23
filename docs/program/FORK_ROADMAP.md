@@ -5,6 +5,10 @@ This file is the work queue of a **fork** of this repository: the product on its
 
 ## Where the fork starts
 
+- **Fork with all branches.** While the parent's `main` predates the installer (`R-158i`), uncheck «Copy the main branch only» when
+  forking, `git checkout dev` in the clone, and install from there. The local deploy never moves the server backwards: it waits until
+  the fork's `main` is moved past what runs.
+
 - **The server:** 32 GB RAM, 12 CPU cores, no GPU, at least 200 GB SSD. The development clone and the production checkout
   (`/srv/<instance>`) share one disk (`R-156b`…`R-156e`).
 - **The install is one command,** `infra/deploy/first-install.sh` (`infra/deploy/README.md`, `infra/deploy/FIRST-INSTALL-PROMPT.md`).

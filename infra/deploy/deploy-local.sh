@@ -227,6 +227,18 @@ main() {
         sha="$tip"
     fi
     head="$(git -C "$deploy_path" rev-parse HEAD 2>/dev/null || true)"
+    # Never backwards by default. A fork installed from its `dev` runs a commit that main has not reached yet: main's tip is then
+    # an ancestor of what runs, and deploying it would roll the server back to older code (R-158h). Only an explicit --sha may do that.
+    # A tip this checkout has never seen is not in its history, so the check fails and the deploy goes on (the script fetches it).
+    if [ -z "$OPT_SHA" ] && [ -n "$head" ] && [ "$sha" != "$head" ] \
+            && git -C "$deploy_path" merge-base --is-ancestor "$sha" "$head" 2>/dev/null; then
+        if [ "$mode" = timer ]; then
+            say "skipped: origin/main ${sha:0:12} is behind the running ${head:0:12}; not deploying backwards (move main forward, or run deploy-local.sh --sha <commit> by hand)"
+            return 0
+        fi
+        say "REFUSED: origin/main ${sha:0:12} is behind the running ${head:0:12}; deploying it would go backwards. Name the commit with --sha to do that on purpose." >&2
+        return 3
+    fi
     if [ "$mode" = timer ]; then
         # The failure comes first: the script checks the commit out BEFORE it deploys, so after a failed deploy HEAD is that commit
         # and "this checkout already runs it" would be false comfort.
