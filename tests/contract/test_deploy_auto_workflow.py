@@ -18,6 +18,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-auto.yml"
 
+DEPLOY_LOCAL = ROOT / "infra" / "deploy" / "deploy-local.sh"
+#: The job's whole condition: only `main`, and an explicit opt-out for a repository whose server deploys itself (`FIRST-INSTALL-03`).
+#: With `DEPLOY_MODE` unset the job still runs and refuses on a missing `DEPLOY_*` variable, as before.
+JOB_CONDITION = "github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'"
+
 KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV"
 SHA = "a" * 40
 
@@ -74,8 +79,21 @@ def _remote_script(text: str) -> str:
     return textwrap.dedent(script)
 
 
+def _local_remote_script(text: str) -> str:
+    """The script `deploy-local.sh` hands to `bash -s`: the heredoc, as it is in that file (no YAML indentation to remove)."""
+    match = re.search(r"(?ms)<<'REMOTE'\n(?P<script>.*?)\nREMOTE\n", text)
+    if match is None:
+        raise AssertionError("expected the remote script heredoc in deploy-local.sh")
+    return match.group("script")
+
+
 def workflow_shape_findings(text: str) -> set[str]:
     findings: set[str] = set()
+    conditions = re.findall(r"(?m)^    if: (.*)$", text)
+    if conditions != [JOB_CONDITION]:
+        findings.add("DEPLOY_JOB_CONDITION")
+    if not any(re.search(r"github\.ref == 'refs/heads/main'", condition) and " && " in condition for condition in conditions):
+        findings.add("DEPLOY_NOT_MAIN_ONLY")
     triggers = _top_level_block(text, "on")
     if triggers is None or _mapping_keys(triggers, 2) != {"push", "workflow_dispatch"}:
         findings.add("DEPLOY_TRIGGER_SET")
@@ -126,7 +144,9 @@ class DeployAutoWorkflowContract(unittest.TestCase):
     def test_only_main_and_manual_dispatch_trigger_deployment(self) -> None:
         self.assertNotIn("DEPLOY_TRIGGER_SET", workflow_shape_findings(self.text))
         self.assertNotIn("DEPLOY_PUSH_BRANCH", workflow_shape_findings(self.text))
-        self.assertIn("if: github.ref == 'refs/heads/main'", self.text)
+        self.assertNotIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(self.text))
+        self.assertNotIn("DEPLOY_NOT_MAIN_ONLY", workflow_shape_findings(self.text))
+        self.assertIn(f"    if: {JOB_CONDITION}\n", self.text)
 
     def test_workflow_permissions_are_exactly_read_only(self) -> None:
         self.assertNotIn("TOP_LEVEL_PERMISSIONS", workflow_shape_findings(self.text))
@@ -306,7 +326,59 @@ class DeployAutoWorkflowContract(unittest.TestCase):
                         self.assertEqual(completed.returncode, 7)
                         self.assertNotIn("DEPLOY OK:", completed.stdout)
 
+    def test_deploy_local_runs_the_workflows_own_remote_script_byte_for_byte(self) -> None:
+        """`FIRST-INSTALL-03`: the pull-based deploy and the ssh-based one are one script. If either changes alone, this fails."""
+        local = _local_remote_script(DEPLOY_LOCAL.read_text(encoding="utf-8"))
+        self.assertEqual(local, _remote_script(self.text).rstrip("\n"))
+        self.assertGreater(len(local.splitlines()), 40)
+        changed = self.text.replace('echo "DEPLOY OK: $DEPLOY_SHA"', 'echo "DEPLOY OK: $DEPLOY_SHA" # changed here only', 1)
+        self.assertNotEqual(local, _remote_script(changed).rstrip("\n"))
+
+    def test_deploy_local_orders_the_commands_the_way_the_workflow_does(self) -> None:
+        ordered = (
+            "git remote get-url origin",
+            "git fetch --prune origin",
+            'git cat-file -e "${DEPLOY_SHA}^{commit}"',
+            'git merge-base --is-ancestor "$DEPLOY_SHA" origin/main',
+            'git checkout --detach "$DEPLOY_SHA"',
+            "infra/deploy/deploy.sh </dev/null",
+            "infra/deploy/verify-deployed.sh </dev/null",
+            'echo "DEPLOY OK: $DEPLOY_SHA"',
+        )
+        local = DEPLOY_LOCAL.read_text(encoding="utf-8")
+        inside = _local_remote_script(local)
+        positions = [inside.index(fragment) for fragment in ordered]
+        self.assertEqual(positions, sorted(positions))
+        self.assertGreaterEqual(inside.count('test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"'), 2)
+        self.assertGreaterEqual(inside.count("git status --porcelain --untracked-files=all"), 3)
+        # Nothing of the deploy is done outside that script: the wrapper only chooses the commit, locks, logs and records.
+        outside = "\n".join(line for line in local.replace(inside, "").splitlines() if not line.lstrip().startswith("#"))
+        for command in ("git checkout", "git fetch", "git merge-base", "infra/deploy/deploy.sh", "infra/deploy/verify-deployed.sh", "git pull",
+                        "git clean", "git reset"):
+            self.assertNotIn(command, outside, command)
+
+    def test_the_job_condition_is_exactly_main_and_the_explicit_local_opt_out(self) -> None:
+        self.assertEqual(workflow_shape_findings(self.text) & {"DEPLOY_JOB_CONDITION", "DEPLOY_NOT_MAIN_ONLY"}, set())
+        self.assertEqual(re.findall(r"(?m)^    if: (.*)$", self.text), [JOB_CONDITION])
+        # Unset means "not local": the job runs and the missing DEPLOY_* variables stop it, as they always did.
+        self.assertIn("DEPLOY_HOST and DEPLOY_KNOWN_HOSTS are not configured for this repository", self.text)
+
     def test_semantic_mutations_are_rejected(self) -> None:
+        no_main_guard = self.text.replace(f"    if: {JOB_CONDITION}\n", "    if: vars.DEPLOY_MODE != 'local'\n", 1)
+        self.assertIn("DEPLOY_NOT_MAIN_ONLY", workflow_shape_findings(no_main_guard))
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(no_main_guard))
+        no_job_condition = self.text.replace(f"    if: {JOB_CONDITION}\n", "", 1)
+        self.assertIn("DEPLOY_NOT_MAIN_ONLY", workflow_shape_findings(no_job_condition))
+        no_opt_out = self.text.replace(f"    if: {JOB_CONDITION}\n", "    if: github.ref == 'refs/heads/main'\n", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(no_opt_out))
+        silent_skip = self.text.replace("vars.DEPLOY_MODE != 'local'", "vars.DEPLOY_HOST != ''", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(silent_skip))
+        wrong_mode = self.text.replace("vars.DEPLOY_MODE != 'local'", "vars.DEPLOY_MODE == 'github'", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(wrong_mode))
+        or_condition = self.text.replace("&& vars.DEPLOY_MODE", "|| vars.DEPLOY_MODE", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(or_condition))
+
+
         extra_trigger = self.text.replace(
             "  workflow_dispatch:\n", "  workflow_dispatch:\n  pull_request_target:\n", 1
         )

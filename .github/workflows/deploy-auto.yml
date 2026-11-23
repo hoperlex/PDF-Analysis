@@ -16,7 +16,10 @@ permissions:
 jobs:
   deploy:
     name: Deploy exact AuditManager revision
-    if: github.ref == 'refs/heads/main'
+    # An explicit opt-out, never a silent skip: a repository whose server deploys itself (infra/deploy/deploy-local.sh, the
+    # installer's default `--deploy-mode local`) sets the variable DEPLOY_MODE=local. With it unset the job runs and refuses on
+    # a missing DEPLOY_* variable exactly as before (owner ruling R-158f).
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
