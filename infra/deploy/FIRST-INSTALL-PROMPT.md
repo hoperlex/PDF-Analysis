@@ -24,7 +24,7 @@ read the end of it with `tail -n 30`. It contains no secret.
 ## What the last line means
 
 1. `DONE: ...` is success. Tell the owner that line and the block "for the owner" above it (the GitHub values, and the paths of
-   two private files). Then stop.
+   two private files). Then stop. If this repository is a fork, add that its next work is listed in `docs/program/FORK_ROADMAP.md`.
 2. `STOP [code]: <action>` is one thing to do. Do exactly the action as printed, then run the same command again, unchanged.
    Almost every action is a command or "wait and run again": do it yourself, do not ask.
 3. A STOP line that begins `ASK THE OWNER` needs a fact only the owner holds: an e-mail address, the domain, a record at the
