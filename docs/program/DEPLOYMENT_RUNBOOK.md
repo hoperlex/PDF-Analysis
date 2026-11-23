@@ -464,6 +464,36 @@ server; the parent's server would refuse the fork's deployments anyway.
 line(s) and `/srv/auditmanager`. Check on the server that `git -C /srv/auditmanager remote get-url origin` names this repository. Otherwise
 the first deployment after the change refuses: safely, and without touching the host. The old secret `VPS_HOST` is no longer read.
 
+### Local deploy: a timer on the server pulls `main` (`R-158h`)
+
+A fork whose server GitHub cannot reach deploys without GitHub. `infra/deploy/deploy-local.sh` runs **on the server** and does what the
+workflow's remote script does, on the same checkout and in the same order: the workflow's own script is embedded in it byte for byte,
+and `tests/contract/test_deploy_auto_workflow.py` holds the two equal. What it adds is outside that script: the commit (by default the
+tip of `origin/main`, read with `git ls-remote`), a lock, a log and a record of a failed commit. The parent keeps the GitHub workflow.
+
+- **The timer.** `<instance>-deploy-local.timer` runs `<instance>-deploy-local.service` (`deploy-local.sh --if-moved`) every five minutes
+  (`Persistent=true`, so a missed run happens at boot). `first-install.sh --deploy-mode local`, the default, writes both units to
+  `/etc/systemd/system/` (never into the checkout) and enables the timer as its last stage. A push to `main` of the fork is on the
+  server within five minutes.
+- **By hand.** `sudo <deploy path>/infra/deploy/deploy-local.sh` deploys the tip of `main` now; `--sha SHA` deploys one commit (an
+  ancestor of `origin/main`, as in the workflow). Look with `systemctl list-timers <instance>-deploy-local.timer` and
+  `/var/log/<instance>-deploy-local.log`.
+- **What the timer skips.** A run in which `origin/main` is what the checkout already runs does nothing and logs nothing. A commit that
+  failed is not tried again until `main` moves (the record is `/var/lib/<instance>/deploy-local.failed`; a person's run ignores it and
+  retries). An unreachable `origin` is skipped; by hand it exits 3. One deploy at a time (`deploy-local.lock`), and never beside the
+  installer (`first-install.lock`: the timer skips, the installer says `deploy_local_running`).
+- **The same bindings as the workflow.** A dirty tree exits 3. The server accepts only the repository it recorded
+  (`/var/lib/<instance>/deploy-local.source`, written from the checkout's `origin` by the installer); an `origin` moved to another
+  repository exits 4. After a rename, run `git -C <deploy path> remote set-url origin <new URL>` and write the new `owner/name` into that file.
+- **The one GitHub step.** Set the repository variable `DEPLOY_MODE=local` (Settings → Secrets and variables → Actions → Variables). The
+  workflow's job then does not start: its condition is `github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'`, an explicit opt-out
+  and not a silent skip. With the variable unset the workflow still refuses on a missing `DEPLOY_*`, as above.
+- **Switching.** `first-install.sh --deploy-mode github` on a finished installation prints the GitHub values, makes the deploy key and
+  disables the timer (its unit files stay); `--deploy-mode local` enables it again. Nothing is deployed or verified again, and a deploy key
+  of an earlier GitHub run is left in place and named.
+- **The first look.** The timer deploys the tip of `origin/main`. An installation made from another branch is therefore redeployed from
+  `main` within five minutes; install from `main` to avoid that.
+
 ---
 
 ## 4. Prove it is this tree, and keep proving it
