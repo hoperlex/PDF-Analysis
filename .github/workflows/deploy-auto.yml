@@ -16,7 +16,10 @@ permissions:
 jobs:
   deploy:
     name: Deploy exact AuditManager revision
-    if: github.ref == 'refs/heads/main'
+    # An explicit opt-out, never a silent skip: a repository whose server deploys itself (infra/deploy/deploy-local.sh, the
+    # installer's default `--deploy-mode local`) sets the variable DEPLOY_MODE=local. With it unset the job runs and refuses on
+    # a missing DEPLOY_* variable exactly as before (owner ruling R-158f).
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -24,12 +27,48 @@ jobs:
       - name: Prepare SSH
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           umask 077
 
+          # The server is named by this repository's own variables, never by source (owner ruling R-158f).
+          # A fork starts without them and so deploys nowhere until its owner names its own server.
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "::error::DEPLOY_HOST and DEPLOY_KNOWN_HOSTS are not configured for this repository (Settings > Secrets and variables > Actions > Variables)."
+            exit 1
+          fi
           if [ -z "$SSH_KEY" ]; then
             echo "::error::VPS_SSH_KEY is not configured."
+            exit 1
+          fi
+          readonly HOST_NAME='^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'
+          if ! [[ "$DEPLOY_HOST" =~ $HOST_NAME ]]; then
+            echo "::error::DEPLOY_HOST is not a host name or an IPv4 address."
+            exit 1
+          fi
+
+          # Every line is a plain host key (no comment, marker or hashed host), and one of them names
+          # DEPLOY_HOST. The key is verified out of band before it is stored (DEPLOYMENT_RUNBOOK section 3).
+          readonly KEY_LINE='^([^[:space:]#@|][^[:space:]]*)[[:space:]]+(ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|ssh-rsa)[[:space:]]+[A-Za-z0-9+/]+=*$'
+          named=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%$'\r'}"
+            [ -n "$line" ] || continue
+            if ! [[ "$line" =~ $KEY_LINE ]]; then
+              echo "::error::DEPLOY_KNOWN_HOSTS holds a line that is not a plain host key."
+              exit 1
+            fi
+            IFS=',' read -r -a names <<< "${BASH_REMATCH[1]}"
+            for name in "${names[@]}"; do
+              if [ "$name" = "$DEPLOY_HOST" ]; then
+                named=1
+              fi
+            done
+          done <<< "$DEPLOY_KNOWN_HOSTS"
+          if [ "$named" -ne 1 ]; then
+            echo "::error::DEPLOY_KNOWN_HOSTS has no key for DEPLOY_HOST."
             exit 1
           fi
 
@@ -39,31 +78,27 @@ jobs:
           printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/deploy_key"
           chmod 600 "$HOME/.ssh/deploy_key"
 
-          # Public ED25519 host key verified out of band and again against the live VPS on
-          # 2026-10-01. Fingerprint: SHA256:n4RyFDQqWLPJnXyZ3SvyXUf8dpDNWjzShuPRYDdF2LE
-          printf '%s\n' \
-            '135.106.164.147 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' \
-            'audit.135.106.164.147.sslip.io ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' \
-            > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Deploy and verify exact commit
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_HOST: ${{ vars.DEPLOY_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
           DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
 
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
-          case "$VPS_HOST" in
-            135.106.164.147|audit.135.106.164.147.sslip.io) ;;
-            *)
-              echo "::error::VPS_HOST is not the pinned alpha SSH endpoint."
-              exit 1
-              ;;
-          esac
+          [[ "$DEPLOY_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          readonly CHECKOUT_PATH='^(/[A-Za-z0-9_.-]+)+$'
+          if ! [[ "$DEPLOY_PATH" =~ $CHECKOUT_PATH ]] || [[ "$DEPLOY_PATH/" == */../* ]] || [[ "$DEPLOY_PATH/" == */./* ]]; then
+            echo "::error::DEPLOY_PATH is not configured as the absolute path of the server's checkout."
+            exit 1
+          fi
 
           ssh \
             -o BatchMode=yes \
@@ -75,13 +110,27 @@ jobs:
             -o ServerAliveCountMax=4 \
             -i "$HOME/.ssh/deploy_key" \
             "${VPS_USER}@${VPS_HOST}" \
-            bash -s -- "$DEPLOY_SHA" <<'REMOTE'
+            bash -s -- "$DEPLOY_SHA" "$DEPLOY_PATH" "$DEPLOY_REPOSITORY" <<'REMOTE'
           set -euo pipefail
 
           readonly DEPLOY_SHA="$1"
-          readonly REPOSITORY=/srv/auditmanager
+          readonly REPOSITORY="$2"
+          readonly SOURCE_REPOSITORY="$3"
 
           cd "$REPOSITORY"
+
+          echo "=== deployment source ==="
+          # A server deploys only the repository it was cloned from (owner ruling R-158f): a fork that
+          # holds this server's credentials still cannot roll it back to the fork point. The check reads
+          # owner/name from origin in any form (https, git@, ssh://, an ssh alias) and ignores case.
+          origin_url="$(git remote get-url origin)"
+          checkout_of="$(printf '%s\n' "$origin_url" | sed -E 's#/+$##; s#\.git$##; s#^.*[:/]([^:/]+)/([^:/]+)$#\1/\2#')"
+          printf '%s\n' "$SOURCE_REPOSITORY"
+          if [ "${checkout_of,,}" != "${SOURCE_REPOSITORY,,}" ]; then
+            echo "REFUSED: $REPOSITORY is a checkout of '$checkout_of', but this deployment comes from '$SOURCE_REPOSITORY'." >&2
+            echo "A server deploys only the repository it was cloned from; a fork names its own server in its own repository variables." >&2
+            exit 4
+          fi
 
           echo "=== requested revision ==="
           printf '%s\n' "$DEPLOY_SHA"

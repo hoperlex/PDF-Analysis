@@ -5,7 +5,8 @@ This file is mandatory for every coding agent.
 ## 1. Before a task
 
 1. Read the recent entries and task-relevant sections of
-   `docs/program/CURRENT_STATE.md`; do not load its historical ledger wholesale.
+   `docs/program/CURRENT_STATE.md`; do not load its historical ledger wholesale. In a fork of this
+   repository, `docs/program/FORK_ROADMAP.md` is the work queue: read it first.
 2. Read the task description and its completed dependencies, if any.
 3. Check the contracts relevant to the change; for a coordinated wave, check its frozen set.
 4. Stay within the request's scope or the task file's `allowed_paths` when one exists.

@@ -1,0 +1,18 @@
+# The norms bundle this repository publishes as a GitHub release. Written by infra/norms/publish-bundle-release.sh;
+# read as DATA (NAME=VALUE, one `part=` line per part), never sourced, by infra/deploy/first-install.sh.
+lock_version=1
+repo=hoperlex/PDF-Analysis
+tag=norms-0a1bafe103ff-7792e307
+bundle=2026-07-23..2026-08-20+17d+121r.0a1bafe103ff+7792e307e39b2c1c92a852d64033b9840b48b118160768e3f02e925428815245
+bundle_sums_sha256=7792e307e39b2c1c92a852d64033b9840b48b118160768e3f02e925428815245
+tar_bytes=5693358080
+tar_sha256=33cefdaad3bd6b44579055ea1a81666ea0e29061d13b74469e296a30a59a39c5
+zstd_level=10
+part_size_bytes=1992294400
+created=2026-11-23T06:36:55Z
+total_bytes=4166753222
+part_count=3
+# part=<asset name> <size in bytes> <sha256> <asset id>
+part=norms-0a1bafe103ff-7792e307.tar.zst.000 1992294400 ba732c55443a1aac0ce1d15dc1a4fc38423211bf18f201c2a3af2a9cb4f232d7 781819509
+part=norms-0a1bafe103ff-7792e307.tar.zst.001 1992294400 e53f4586eff0e88a97f59bc6f594edb3432a04676646ed41ebfec612cae0d642 781830144
+part=norms-0a1bafe103ff-7792e307.tar.zst.002 182164422 0342bf8f6ef61e2c2fcdd00b67b31dc3f6e859e296b1d27e3c8551cc30772f45 781838821

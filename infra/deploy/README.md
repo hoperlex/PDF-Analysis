@@ -1,5 +1,10 @@
 # The alpha deployment — the runbook
 
+**New server, first installation:** clone the repository anywhere (your working copy), then from that clone
+`sudo infra/deploy/first-install.sh --email <address> [--domain <name>]` (`--dry-run` previews it; the norms bundle is downloaded from the repository's release by itself, `--norms-bundle <directory>` names a local one instead); it makes
+and uses the server's own checkout `/srv/<instance>` itself — or give an AI agent `infra/deploy/FIRST-INSTALL-PROMPT.md`.
+Later pushes to `main` reach the server by a timer on it (`--deploy-mode local`, the default; `deploy-local.sh`, below) or by GitHub's workflow (`--deploy-mode github`).
+
 Everything here was built and **driven** by `W14-PKG` on the development host. Nothing in
 it has run on a server, and it deliberately stops short of doing so: `R-1` is ruled (the
 owner's own VPS) but the host name, who holds root, which ports may be opened and when
@@ -28,6 +33,9 @@ down`. This is the deployed stack.
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
 | `apply-grants.sh` | `PROD-04-DB-ROLES-01` — the one idempotent step that gives the application role (`ALPHA_APP_DB_USER`) exactly the rights `scripts/recovery/grant_classification.py` says, and nothing that changes the schema, plus default privileges for what a later migration creates (`R-156n`; a relation the classification does not name is a warning, exit 0); `--check` verifies, `--config-only` judges the settings. Run by `deploy.sh` between `migrate` and `up`, and by `reset.sh` and `copy-serve.sh restore-db` after a restore (a `--no-privileges` dump carries none). Runbook §16 |
+| `../norms/publish-bundle-release.sh` | `FIRST-INSTALL-02` — publishes a verified norms bundle as the assets of a release of the public repository (`tar` into `zstd -10` cut into parts of 1900 MiB, one part on disk at a time, resumable) and writes `infra/norms/bundle-release.lock`, which the installer reads: it downloads the parts, checks their sha256, streams them into `receive-bundle.sh` and imports. The owner runs it once per new norms snapshot, with a token in `/root/.config/auditmanager/github-upload-token` (`STAND-NORMS-IMPORT-RUNBOOK-01.md` 1a) |
+| `first-install.sh` | `FIRST-INSTALL-01` — the first installation of the whole stack on a server that has never run it, from one command, in idempotent stages (preflight, environment with every secret generated, first deploy, administrator, norms import, HTTPS, executors, verify, how deploys happen, semantic gates, the deploy timer, marker). It installs Docker and its tools itself on Debian and Ubuntu, makes a separate deploy clone (`/srv/<instance>`, detached at the starting clone's commit, as every auto-deploy leaves it) and works in it, and turns the semantic norm lookup of `NORM-VECTOR-TEMP-01` on after its two gates pass on the imported corpus. Every stop is one line `STOP [code]: <what to do>` from one code table (`--print-codes`): a line with no prefix is something the reader does, `ASK THE OWNER` is a fact only the owner holds, `REPORT TO THE OWNER` a failure with nothing safe to try; `--deploy-mode local|github` (default `local`) chooses how pushes to `main` deploy: local enables the timer below and prints the one GitHub step (`DEPLOY_MODE=local`), github prints the `DEPLOY_*` values and makes the deploy key; a finished installation switches mode when it is asked to (the other stages are skipped). Success ends with `DONE:`. `FIRST-INSTALL-PROMPT.md` is the prompt for a simple agent; `lib/first_install_env.py` and `lib/first_install_api.py` are its standard-library helpers; the tests are `tests/unit/deploy/` |
+| `deploy-local.sh`, `systemd/auditmanager-deploy-local.{service,timer}` | `FIRST-INSTALL-03` — the pull-based twin of `.github/workflows/deploy-auto.yml` for a fork whose server GitHub cannot reach. It runs on the server and executes **the workflow's own remote script, byte for byte** (`tests/contract/test_deploy_auto_workflow.py` holds the two equal): the `origin` owner/name binding (exit 4), the clean-tree check (exit 3), fetch, `merge-base --is-ancestor` of the commit with `origin/main`, detached checkout, `deploy.sh`, `verify-deployed.sh`, `DEPLOY OK`. The commit is the tip of `origin/main` unless `--sha` names one. `--if-moved` is the timer's mode: nothing to do when `main` is what the checkout runs, a failed commit is not retried until `main` moves, a busy lock is a skip. One deploy at a time (`deploy-local.lock`) and never beside the installer (`first-install.lock`); log `/var/log/<instance>-deploy-local.log`. The installer writes the two units to `/etc/systemd/system/` (a `oneshot` service and a timer every five minutes, `Persistent=true`), never into the checkout. `DEPLOYMENT_RUNBOOK.md` section 3 |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
@@ -564,6 +572,49 @@ The proxy throttles the two unauthenticated calls per client address, in zones o
 The agent's health report (`POST /api/v1/runner/health`) is counted by the runner-channel zones
 (`runner_channel` per token, `runner_address` per address), which now match `/api/v1/runner/tasks/` and
 `/api/v1/runner/health`. `tests/contract/test_proxy_rate_limits.py` holds all of it.
+
+## Подписки сервера деплоя — `LOCAL-AGENT-01` (owner 2026-11-20)
+
+The deploy server may itself be signed in to Codex and Claude subscriptions — on a development machine that is also the deploy
+server they are usually the VS Code extensions' clients under `root`. `local-agent.sh` connects them to this stand as an ordinary
+host agent, with no screen of its own: the stand shows the card «Этот сервер» in «Диспетчер», **enabled at once**, and its
+«Использовать» switch is the only control (owner's poll, 2026-11-20, `R-158a`..`R-158d`).
+
+```
+sudo infra/deploy/local-agent.sh --env-file infra/deploy/env/alpha.env connect      # what deploy.sh runs with ALPHA_LOCAL_AGENT=auto
+sudo infra/deploy/local-agent.sh --env-file infra/deploy/env/alpha.env status       # changes nothing
+sudo infra/deploy/local-agent.sh --env-file infra/deploy/env/alpha.env disconnect   # removes the agent; archive the card on the stand
+```
+
+What `connect` does, in order (the script's header is the full account):
+
+1. finds `claude` and `codex` of the login account (`ALPHA_LOCAL_AGENT_USER`, default `root`) with `local_agent_clis.py`. A binary
+   inside a VS Code extension gets a wrapper in `/opt/pdf-analysis-cli/bin` that always runs the newest one, so an extension update
+   needs nothing; a file there without the script's marker line is never touched;
+2. asks the agent's own `detect.py --host`, as that account, what is signed in. Only `access=subscription auth=valid` counts; with
+   none, nothing is connected and the deploy goes on;
+3. refuses when an agent of another stand is installed on this machine (one machine, one agent);
+4. asks the stand inside the running `api` container (`python -m auditmanager.bootstrap.local_host`) for its agent package and — only
+   when no agent of this stand is installed yet, or with `--reenroll` — for a one-time grant of the card, issued in the name of
+   `ALPHA_LOCAL_AGENT_ACTOR` or else of the active administrator created first;
+5. downloads the package from the stand, checks its sha256 and runs its `install.sh --login-user <account> --max-images 8`: the
+   service runs under that account (a drop-in gives it the account's home and the wrapper directory), and accepts the up to eight
+   page crops a block task carries;
+6. waits up to 90 s for the first report and prints the models the card lists.
+
+The agent talks to the stand at `http://127.0.0.1:<ALPHA_HTTP_PORT>`, the stack's own proxy on this machine: nothing crosses the
+network and no certificate is involved (the agent accepts plain HTTP for a loopback host only). A second `connect` keeps the token
+and only follows the stand's package. **A card archived on the stand is not resurrected**: the stand then refuses the agent's token,
+and `connect` says that `--reenroll` connects it anew. To stop the deploy from connecting: `ALPHA_LOCAL_AGENT=off`.
+
+`deploy.sh` runs the step last, after every question about the stack has been answered, and as a step rather than a guard: its
+failure is a `WARNING [local_agent_not_connected]` in the summary, never a failed deploy. A deploy user who is not root needs exactly
+
+```
+<deploy user> ALL=(root) NOPASSWD: /srv/auditmanager/infra/deploy/local-agent.sh
+```
+
+(deploy.sh prints the line with the real path when it is missing). Runs reach the card only with `AUDITMANAGER_PROVIDER_SOURCE=database`.
 
 ## The client address — `REAL-IP-EDGE-01`, and what a host nginx in front must send
 

@@ -216,6 +216,22 @@ whose sources changed, and nothing removes the old generation.** So:
 
 ## 2. The one file a human must write
 
+**On a server that has never run this stack, `infra/deploy/first-install.sh` writes this file, and does the rest of this
+runbook's first-installation order** (`FIRST-INSTALL-01`). Started in any clone (the owner's working copy), it makes the server's
+own checkout `/srv/<instance>` from that clone's origin, detached at its commit (what every auto-deploy leaves), and works only in
+it, so the working copy can be edited freely and the deploy clone stays clean for deploy-auto. It installs Docker (Docker's apt
+repository, key fingerprint pinned) and its tools on Debian and Ubuntu. The file: every secret generated in every place it is written (the second
+copies inside the database URLs and the S3 names, the application role's password, the X25519 pair), mode 600, an existing
+file never overwritten; then the first deploy, the administrator's password and profile (§3, `[default_credential]`), the
+on-host norms import (§11, §13 with `SSH_ORIGINAL_COMMAND`; the bundle is downloaded from the repository's GitHub release when
+`infra/norms/bundle-release.lock` is in it, `STAND-NORMS-IMPORT-RUNBOOK-01.md` 1a), the staging and real certificate and `ALPHA_PUBLISH_HTTPS=yes` (§6),
+the host's own subscriptions, `verify-deployed.sh` (§4), the values to paste into GitHub (§3, auto-deploy), and, with the norms
+corpus in, the semantic norm lookup: `ALPHA_NORM_EMBED=yes` with its address empty from the start, then the memory gate and the
+quality gate of `NORM-VECTOR-TEMP-01` (rollout steps 3 to 5), and only when both pass the address and a worker restart. It is
+`sudo infra/deploy/first-install.sh --email <address> [--domain <name>] [--norms-bundle <directory>]`; `--dry-run` prints its
+stages. **It has run against stubs only** (`tests/unit/deploy/`): its first real run is a server's. What follows is what it does,
+for a person who writes or repairs the file by hand.
+
 ```
 git clone <this repository> auditmanager && cd auditmanager
 cp infra/deploy/env/alpha.env.example infra/deploy/env/alpha.env
@@ -418,6 +434,66 @@ operator needs while deciding which command to type, and until 2026-09-29 this d
 carried neither (`Y1`): `grep -c -i session docs/program/DEPLOYMENT_RUNBOOK.md` answered
 **0**.
 
+### Auto-deploy: the repository names its server, the server names its repository (`R-158f`)
+
+`.github/workflows/deploy-auto.yml` carries no address, host key or path. It reads them from this repository's Actions **variables**
+(Settings → Secrets and variables → Actions → Variables), and refuses before it connects when one is missing:
+
+| Name | Kind | What it holds |
+|---|---|---|
+| `DEPLOY_HOST` | variable | the server's SSH address, a host name or an IPv4 address |
+| `DEPLOY_KNOWN_HOSTS` | variable | one or more `known_hosts` lines, one of which names `DEPLOY_HOST` exactly; plain lines only (no comments, markers or hashed hosts) |
+| `DEPLOY_PATH` | variable | the absolute path of the server's checkout, for example `/srv/auditmanager` |
+| `VPS_USER` | secret | the account the workflow logs in as |
+| `VPS_SSH_KEY` | secret | that account's private key |
+
+**The host key** is taken from the server itself and checked out of band before it is stored. On the server, print it with
+`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` (the fingerprint) and `cat /etc/ssh/ssh_host_ed25519_key.pub` (the key). The variable's
+line is `<DEPLOY_HOST> ssh-ed25519 <key>`. Compare the fingerprint with `ssh-keyscan -t ed25519 <DEPLOY_HOST> | ssh-keygen -lf -` run
+from elsewhere. The workflow never scans the host itself and keeps `StrictHostKeyChecking=yes`.
+
+**The server accepts only its own repository.** Before it writes or fetches anything, the remote script compares `owner/name` of the
+checkout's `origin` (any form: https, `git@`, `ssh://`, an ssh alias; case ignored) with the repository the workflow runs in. A mismatch exits
+**4** with `REFUSED: … this deployment comes from …`. After a repository rename or transfer, run
+`git -C <DEPLOY_PATH> remote set-url origin <new URL>` on the server once.
+
+**A fork** starts with none of these variables, so its pushes to `main` deploy nowhere. Its owner sets the variables to the fork's own
+server; the parent's server would refuse the fork's deployments anyway.
+
+**Before this workflow first reaches `main`**, set the three variables to the values the old workflow pinned: the address, its host key
+line(s) and `/srv/auditmanager`. Check on the server that `git -C /srv/auditmanager remote get-url origin` names this repository. Otherwise
+the first deployment after the change refuses: safely, and without touching the host. The old secret `VPS_HOST` is no longer read.
+
+### Local deploy: a timer on the server pulls `main` (`R-158h`)
+
+A fork whose server GitHub cannot reach deploys without GitHub. `infra/deploy/deploy-local.sh` runs **on the server** and does what the
+workflow's remote script does, on the same checkout and in the same order: the workflow's own script is embedded in it byte for byte,
+and `tests/contract/test_deploy_auto_workflow.py` holds the two equal. What it adds is outside that script: the commit (by default the
+tip of `origin/main`, read with `git ls-remote`), a lock, a log and a record of a failed commit. The parent keeps the GitHub workflow.
+
+- **The timer.** `<instance>-deploy-local.timer` runs `<instance>-deploy-local.service` (`deploy-local.sh --if-moved`) every five minutes
+  (`Persistent=true`, so a missed run happens at boot). `first-install.sh --deploy-mode local`, the default, writes both units to
+  `/etc/systemd/system/` (never into the checkout) and enables the timer as its last stage. A push to `main` of the fork is on the
+  server within five minutes.
+- **By hand.** `sudo <deploy path>/infra/deploy/deploy-local.sh` deploys the tip of `main` now; `--sha SHA` deploys one commit (an
+  ancestor of `origin/main`, as in the workflow). Look with `systemctl list-timers <instance>-deploy-local.timer` and
+  `/var/log/<instance>-deploy-local.log`.
+- **What the timer skips.** A run in which `origin/main` is what the checkout already runs does nothing and logs nothing. A commit that
+  failed is not tried again until `main` moves (the record is `/var/lib/<instance>/deploy-local.failed`; a person's run ignores it and
+  retries). An unreachable `origin` is skipped; by hand it exits 3. One deploy at a time (`deploy-local.lock`), and never beside the
+  installer (`first-install.lock`: the timer skips, the installer says `deploy_local_running`).
+- **The same bindings as the workflow.** A dirty tree exits 3. The server accepts only the repository it recorded
+  (`/var/lib/<instance>/deploy-local.source`, written from the checkout's `origin` by the installer); an `origin` moved to another
+  repository exits 4. After a rename, run `git -C <deploy path> remote set-url origin <new URL>` and write the new `owner/name` into that file.
+- **The one GitHub step.** Set the repository variable `DEPLOY_MODE=local` (Settings → Secrets and variables → Actions → Variables). The
+  workflow's job then does not start: its condition is `github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'`, an explicit opt-out
+  and not a silent skip. With the variable unset the workflow still refuses on a missing `DEPLOY_*`, as above.
+- **Switching.** `first-install.sh --deploy-mode github` on a finished installation prints the GitHub values, makes the deploy key and
+  disables the timer (its unit files stay); `--deploy-mode local` enables it again. Nothing is deployed or verified again, and a deploy key
+  of an earlier GitHub run is left in place and named.
+- **The first look.** The timer deploys the tip of `origin/main`. An installation made from another branch is therefore redeployed from
+  `main` within five minutes; install from `main` to avoid that.
+
 ---
 
 ## 4. Prove it is this tree, and keep proving it
@@ -579,8 +655,9 @@ echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | ope
 Expect (shape): `notAfter=Dec 30 ... 2026 GMT`.
 
 **1. Resolve the client pin once, from any machine with docker and network.** The image installs `certbot`
-by exact package version from `infra/acme/client.pin`, which ships saying `UNRESOLVED`; `deploy.sh` refuses to
-deploy a host with a name set until it is resolved (guard `acme-client-pinned`), and so does the image build.
+by exact package version from `infra/acme/client.pin`. A pin that says `UNRESOLVED` (as it shipped) makes
+`deploy.sh` refuse a host with a name set (guard `acme-client-pinned`), and so does the image build. **Done on
+2026-11-20:** `4.0.0-r0` for the pinned Alpine 3.22.1 digest; repeat this step only when that digest moves.
 
 ```
 docker run --rm alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 \
@@ -775,8 +852,8 @@ terminate TLS. The volumes `<instance>-acme-state` (the account key and the line
 ### What this section does not do
 
 * it has **not been run**: no certificate authority was contacted, no image was built, no host was touched;
-* it does not resolve `infra/acme/client.pin` (step 1) or choose between a name under `sslip.io` and one of the
-  owner's own (step 9) — both are the owner's;
+* it does not re-resolve `infra/acme/client.pin` when the base digest moves (step 1; resolved once on 2026-11-20) or
+  choose between a name under `sslip.io` and one of the owner's own (step 9) — both are the owner's;
 * it does not run the restore paths for you: `reset.sh --restore` and `copy-serve.sh restore-db` close 443 after a
   restore that brings the seeded pair back (above), and what they print is §7's and §13's;
 * it does not restart anything on a renewal: the proxy reloads on its own timer, so a renewal needs no right to

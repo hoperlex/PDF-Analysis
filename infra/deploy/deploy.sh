@@ -1909,10 +1909,45 @@ fi
 echo
 # <<< guard: schema-conforms
 
+# --- 4. the deploy server's own subscriptions (`LOCAL-AGENT-01`, owner 2026-11-20) ------------------------------------
+# With `ALPHA_LOCAL_AGENT=auto` the deploy ends by connecting the codex and claude clients this machine is signed in to
+# (`local-agent.sh connect`: it finds them, installs the host agent under the account that holds the logins, and the
+# stand shows the card «Этот сервер», enabled at once). Unset or `off`: nothing happens here, as before.
+#
+# IT IS NOT A GUARD AND IT CANNOT FAIL THE DEPLOY. Everything above has been asked and answered: the stack is up and is
+# this tree. The agent is an optional executor beside it, so a failure here ends as a WARNING in the summary, with the
+# script's own reason above it -- loud, never silent, and never a reason to call a good deploy failed. The step needs root
+# (a systemd service): this script runs it directly when it is root, through `sudo -n` when the deploy user may run
+# exactly this script without a password, and otherwise says which sudoers line is missing.
+LOCAL_AGENT="$(configured ALPHA_LOCAL_AGENT)"
+LOCAL_AGENT_WARNING=""
+case "${LOCAL_AGENT:-off}" in
+    off) ;;
+    auto)
+        echo "-- the deploy server's own subscriptions (ALPHA_LOCAL_AGENT=auto) --"
+        LOCAL_AGENT_STATUS=0
+        if [ "$(id -u)" -eq 0 ]; then
+            "$HERE/local-agent.sh" --env-file "$ENV_FILE" connect </dev/null 2>&1 | sed 's/^/  /' || LOCAL_AGENT_STATUS=$?
+        elif sudo -n -l "$HERE/local-agent.sh" >/dev/null 2>&1; then
+            sudo -n "$HERE/local-agent.sh" --env-file "$ENV_FILE" connect </dev/null 2>&1 | sed 's/^/  /' || LOCAL_AGENT_STATUS=$?
+        else
+            LOCAL_AGENT_STATUS=77
+            echo "  not connected: the step installs a systemd service and needs root. Let this deploy user run exactly it:"
+            echo "    $(id -un) ALL=(root) NOPASSWD: $HERE/local-agent.sh"
+        fi
+        [ "$LOCAL_AGENT_STATUS" -eq 0 ] || LOCAL_AGENT_WARNING="[local_agent_not_connected] local-agent.sh ended with $LOCAL_AGENT_STATUS (its reason is above)"
+        echo ;;
+    *)
+        LOCAL_AGENT_WARNING="[local_agent_setting] ALPHA_LOCAL_AGENT is '$LOCAL_AGENT', which is neither off nor auto: nothing was connected" ;;
+esac
+
 echo "deploy.sh: $INSTANCE is up at http://127.0.0.1:$HTTP_PORT"
 echo "deploy.sh: every service healthy, the database at head, the served schema conforming."
 if [ "$GRANTS_UNCLASSIFIED" = yes ]; then
     echo "deploy.sh: WARNING [grants_unclassified] stands: a relation has no grant classification and holds the default rights (see the step's output above)."
+fi
+if [ -n "$LOCAL_AGENT_WARNING" ]; then
+    echo "deploy.sh: WARNING $LOCAL_AGENT_WARNING."
 fi
 if [ "$PRESERVE_IDENTITY" = yes ]; then
     echo "deploy.sh: running it again against this tree changes nothing -- no layer"

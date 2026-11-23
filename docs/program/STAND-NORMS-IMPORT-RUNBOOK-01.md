@@ -81,6 +81,32 @@ API=https://audit.135.106.164.147.sslip.io/api/v1   # the alpha address in MAIN_
 5. Without the key path (UNVERIFIED): stream the same tar (`bundle_tar` in `push-bundle.sh`) into the local `inbound receive $KEY <N>`.
    Do not write the tar to disk here: this host had 4.8 GB free on 2026-10-21.
 
+### 1a. The bundle as a release of the repository (`FIRST-INSTALL-02`, owner 2026-11-20: no bundle is copied by hand)
+
+The bundle travels with the repository as the **assets of a GitHub release of the public repository**. Two halves:
+
+* **Publishing, once per new norms snapshot** (the owner, on the host that holds the bundle). The token is a fine-grained GitHub token,
+  *Contents: read and write*, for this one repository, in the root-only file `/root/.config/auditmanager/github-upload-token`
+  (mode 600; the owner creates it; the tool refuses a file others can read, and takes no `--token` option). Then
+  `infra/norms/publish-bundle-release.sh --bundle <the bundle directory> --dry-run` (verifies the bundle with `push-bundle.sh`'s rule and
+  prints the plan) and without `--dry-run`. It streams `tar` (the very tar `push-bundle.sh` sends) into `zstd -10 -T2`, cuts the stream
+  into parts of 1900 MiB (an asset must be under 2 GiB), keeps **one part on disk at a time** (about 2 GiB of work space,
+  `--work-dir`), uploads each as `<tag>.tar.zst.NNN` with its sha256 as the label, creates the release `norms-<12 hex of the content
+  key>-<8 hex of the digest>` if it is absent, and writes `infra/norms/bundle-release.lock` (repo, tag, bundle directory name, the
+  digest of its `SHA256SUMS`, the tar's bytes and sha256, every part's name, size, sha256 and asset id). **Commit the lock file**: it
+  is what makes the installer fetch. A rerun after a cut-off resumes: a part already there with the same size and sha256 is skipped.
+  A bundle of about 5.4 GB is about 4 GB compressed, three parts.
+* **Installing** (`first-install.sh`, stage 5, with no `--norms-bundle`): the lock names the release; the parts are downloaded from
+  their public URLs with `curl -C -` into `<staging>/download/<tag>/` (outside the checkout; a read token in a file named by
+  `FIRST_INSTALL_NORMS_READ_TOKEN_FILE` makes it use the API's asset endpoint for a private repository), each part's sha256 is
+  checked against the lock (a bad one is downloaded once more, then `STOP [norms_download_corrupt]`), and `cat parts | zstd -dc` is
+  given to `receive-bundle.sh receive <KEY> <tar bytes>` as its standard input, the stream the directory path sends. `receive` writes
+  the tar, checks the members, extracts and re-hashes every file; the installer then checks that the received `SHA256SUMS` has the
+  digest the lock and the directory name give. From there it is the flow of sections 2 to 5, unchanged. The parts are deleted
+  after the import succeeded. Disk: the preflight asks for the images, the tar twice, the volumes' growth **and the download**
+  (about 38 GiB for the bundle above). `--norms-bundle DIR` still works and wins over the lock; with no lock and no option the stage
+  is skipped and the owner block says so.
+
 ## 2. Quiesce and import (downtime starts)
 
 1. Announce the stand-down; `copy capacity` once more.

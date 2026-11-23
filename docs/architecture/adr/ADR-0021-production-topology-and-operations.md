@@ -27,6 +27,19 @@ The production host is the single VPS pinned in `.github/workflows/deploy-auto.y
 (`R-146a`); no recovery time or point is promised (`R-146b`). The restoration time is measured once, in
 the release rehearsal (`PROD-17`), as a measurement, not a commitment.
 
+Amendment 2026-11-20 (`R-158f`): the workflow no longer pins the host.
+- **The repository names its server.** The address, its SSH host key and the checkout path are this repository's Actions variables (`DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_PATH`). A repository without them deploys nowhere.
+- **The server names its repository.** The host refuses, before it writes or fetches anything, a deployment whose repository is not the one its checkout was cloned from.
+- **So a fork** deploys only to the server its owner names, and cannot roll this host back to the fork point even with this host's credentials.
+- The host key is still verified out of band before it is stored (`DEPLOYMENT_RUNBOOK.md` section 3).
+
+Amendment 2026-11-23 (`R-158h`): a fork whose server GitHub cannot reach deploys locally.
+- **Pull, not push.** `infra/deploy/deploy-local.sh` runs the same remote script as `deploy-auto.yml`, on the server, without SSH or GitHub secrets. A systemd timer fires it every 5 minutes and deploys the tip of `origin/main` when it moved.
+- **The default for a fork.** The first install sets this mode up unless told `--deploy-mode github`.
+- **An explicit opt-out.** Such a fork sets the repository variable `DEPLOY_MODE=local`, so the GitHub workflow does not run. Without it, the workflow behaves as `R-158f` says.
+- **A limit of the repository check, stated plainly.** The check that a host deploys only its own repository runs in the script a deployer sends. It protects against a fork using this workflow with copied secrets. It does not protect against a sender with an older or altered workflow; only a forced command on the host's deploy key would. GitHub never copies secrets into a fork.
+- The parent keeps GitHub auto-deploy.
+
 ### 2. The TLS terminator and certificate renewal live in `infra/` (`R-146a`, `R-146p`)
 
 The terminator is the repository's own `proxy` service; the host nginx leaves the design. HSTS
@@ -289,3 +302,5 @@ the new failure domains.
 - 2026-11-18 — decision 6 and checklist item 1 follow `MAIN_AUTODEPLOY_POLICY.md` (effective 2026-11-02) and `AGENTS.md` section 6: a delegated release integrator replaces «the owner's direct instruction naming it» of the `AD-05` checklist as `R-146w` confirmed it at `83600aed`; a change by the owner's process rule, not a status update.
 - 2026-11-18 — decision 3: `ALTER DEFAULT PRIVILEGES` restored and an unclassified relation warns instead of refusing (owner, R-156n).
 - 2026-11-18 — section 11 amended: embedder budget 4 GB, p95 latency in the `AD-04` measurement (`R-156o`).
+- 2026-11-20 — decision 1 amended: the deploy target is the repository's variables, and the host accepts only its own repository (`R-158f`).
+- 2026-11-23 — decision 1 amended: a fork deploys locally by a pull timer, opting out of GitHub by `DEPLOY_MODE=local`; the repository check's limit is stated (`R-158h`).

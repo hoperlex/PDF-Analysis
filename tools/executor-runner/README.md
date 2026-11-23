@@ -287,6 +287,14 @@ Claude Code older than 2.1.268, a timeout or an unexpected answer is reported `u
 names are never reported. `PDF_ANALYSIS_CLI_DIRS` (absolute directories, colon-separated) replaces the directories
 searched when a CLI lives under a non-standard prefix; set `PATH` to match for the answer command.
 
+**`--login-user NAME` (`LOCAL-AGENT-01`).** A host agent under an EXISTING account — `root` included — instead of the dedicated service
+user, so it serves the CLIs that account is already signed in to; nobody signs in again and no login is copied. The installer creates
+no account and writes the drop-in `pdf-analysis-agent.service.d/20-login-user.conf`: `HOME` of that account, `ProtectHome=false`,
+`ReadWritePaths=<home>` (the CLIs refresh their logins there) and `PDF_ANALYSIS_CLI_DIRS` starting with `/opt/pdf-analysis-cli/bin`.
+A later run without `--login-user` removes the drop-in and goes back to the service user. `--max-images N` (1..8) writes
+`accept_images = true` and `max_images = N` into a host `agent.toml` the run writes (a block task carries up to eight page crops).
+`infra/deploy/local-agent.sh` passes both for the deploy server's own subscriptions (`infra/deploy/README.md`, «Подписки сервера деплоя»).
+
 ### B2. By hand
 
 ```bash

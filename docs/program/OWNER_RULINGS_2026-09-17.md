@@ -2138,3 +2138,54 @@ because nothing is encoded during a run. On a second poll the owner told the ses
 | Ruling | Owner's answer | Consequence |
 | --- | --- | --- |
 | R-157k | Poll: «Критик во флоу форка получает похожие решения экспертов (вердикт, обоснование, 2 последних комментария; до 3 случаев на замечание) только для дословных повторов: вектор замечания во время прогона не считается. На форке есть постоянный эмбеддер. Что записать в план и в поправку к ADR-0029?» Options offered: for all findings; exact repeats only; decide after the L0 measurement. Answer: «Для всех замечаний (Рекомендую)». | On the fork the resident embedder encodes the flow's observations once, in one batch, before the critic stage and outside the locked section. The vectors are kept as the run's probes, which the precedent pass reuses. The critic's examples then cover every observation. The block's rules and the `critic_context` switch (off by default) are unchanged. An embedder failure gives `query_vector_unavailable` and the critic runs without examples. Recorded as a dated amendment to `ADR-0029` decision 8. The code is written in the fork (`R-156k`); the current production VPS is unchanged. |
+
+## 3.61 — R-157l, the veto of the plan v2 AI critic (owner's poll answer, 2026-11-19, session `pdf-analysis-ba`)
+
+The occasion: on the owner's word «Да продолжай добавь критика» the fork-storage session amended `ADR-0029` decision 14 to the code
+(`d077c75e9`). Plan v2 runs an AI critic pass, but the precedent pass reads its records as deterministic, so they never veto «снять».
+The session put this to the owner in one poll. The poll's option text named `R-153ar` for «вето ИИ»; the ruling on the AI veto is
+`R-153ae`.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-157l | Poll: «В плане v2 есть ИИ-критик, но проход прецедентов считает его ответы детерминированными: если он считает замечание верным (accept) или требующим человека, «Рекомендовано снять» всё равно возможно. В v3 такой ответ — вето. Сейчас на деле не срабатывает: метки «снять» по разделам выключены. Дать ИИ-критику v2 право вето?» The chosen option: «Да, как в v3 (Рекомендую)», described as «accept и needs_human ИИ-критика v2 — вето на «снять». Детерминированный критик остаётся без вето. Записываю решение; правка critic_input.py — отдельной задачей до включения меток отказа». | **The AI pass of plan v2 vetoes «снять».** A record with `mode: substantive` and `model_called: true` vetoes when its `llm_decision` is `accept` or `needs_human`; an unreadable decision counts as `needs_human`. This applies `R-153ae` to it as in v3.<br>**The deterministic critic of plan v2 never vetoes.** It still counts as «reviewed» (`R-153ar`). This closes the question `R-156m` deferred, in favour of the code.<br>**Recorded in** `ADR-0029` decision 14 as a dated amendment.<br>**The code** (`src/auditmanager/precedents/run_pass/critic_input.py`) is task `docs/program/tasks/CRIT-V2-AI-VETO-01.md`, due before any section's refusal marks are switched on. |
+
+## 3.62 — R-158a..e, the deploy server's own subscriptions (owner's poll answers, 2026-11-20, session `pdf-analysis-27`)
+
+The occasion: before the fork hand-off the owner asked for «систему подключения к локально размещенному серверу (серверу деплоя) к
+подписочным сессиям codex и антропик … без функционала в ui, просто с галочкой можно на них переподключиться, если они найдены на машине
+размещения». The session put the plan `LOCAL-AGENT-01` and its three forks to him in one poll; then he left the window to the session.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-158a | Poll «Какой должна быть галочка»: «Карточка сразу включена». | The deploy server is an ordinary host card («Этот сервер» by default), enabled when it is created, as every connected host; the existing «Использовать» switch is the checkbox. No stand-side code for it. |
+| R-158b | Poll «Когда подключать»: «Автоматически при deploy.sh». | `deploy.sh` ends with `local-agent.sh connect` when `ALPHA_LOCAL_AGENT=auto` (the shipped example's value; an environment without the line is `off`). A step, not a guard: a failure is a deploy WARNING. |
+| R-158c | Poll «Под каким пользователем ОС»: «Владелец логинов, обычно root». | `install.sh --login-user` runs the host agent under the existing account that holds the logins, root included, through a drop-in; the dedicated `pdf-agent` stays the default of every other install. |
+| R-158d | Poll «Утверждаете план»: «Утверждаю, публикуй в dev». | Published to `origin/dev` with release note 0.33.0; `main` is not touched by this work. |
+| R-158e | Free text: «Работай до релиза, я для опроса недоступен, развилки в долг, в конце отчёт и долги». | The session decided the remaining forks itself and lists them as debts in its report (`.local/reports/local-agent-01-2026-11-20/`). |
+
+## 3.63 — R-158f, the auto-deploy target (owner's poll answer, 2026-11-20, session `pdf-analysis-16`)
+
+The occasion: the fork hand-over. `deploy-auto.yml` pinned the parent's production address, host key and checkout path. The host did not
+check which repository a deployment came from. So a fork holding the parent's deployment secrets could roll the parent's production back
+to the fork point: the fork point is an ancestor of the parent's `main`.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-158f | Poll «Как исправляем (в родителе, форк унаследует)?»; options: GitHub environment and own repository, pin in source and own repository, GitHub environment only. Answer: «GitHub-окружение + свой репо (Рекомендую)». | **The repository names its server.** The address, the host key and the checkout path are the repository's Actions variables (`DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_PATH`). The workflow refuses without them and pins nothing in source.<br>**The server names its repository.** It refuses, before writing or fetching, a deployment from any repository other than its checkout's `origin`.<br>**Where the variables live.** The session used repository-level variables, not a GitHub environment named `production`. Environments in private repositories depend on the GitHub plan, which could not be checked, and the branch restriction is already in the workflow. Adding `environment: production` later is one line.<br>**Before the change reaches `main`,** the owner sets the three variables to the formerly pinned values (`DEPLOYMENT_RUNBOOK.md` section 3).<br>**Recorded in** `ADR-0021` decision 1 (dated amendment). |
+
+## 3.64 — R-158g, the norms bundle published as a public release (owner's poll answers, 2026-11-20, session `pdf-analysis-b3`)
+
+The occasion: the one-command first install. The owner rejected copying the norms bundle folder (5.4 GB) to a new server by hand («херня включить в форк сжатым архивом и автоматизировать развертывание»). Git rejects files over 100 MB, so the bundle travels as zstd-compressed parts (about 4 GB, under 2 GiB each) attached to a GitHub release. A tracked lock file names the parts, and the installer downloads and imports them by itself (`FIRST-INSTALL-02`, `infra/norms/publish-bundle-release.sh`).
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-158g | Poll 1: «Архив норм (PDF ГОСТ/СП, ~4 ГБ) ложится вложением к релизу GitHub. Репозиторий родителя hoperlex/PDF-Analysis сейчас ПУБЛИЧНЫЙ: вложение там сможет скачать любой. Можно ли выкладывать корпус норм публично?» — «Можно публично». Same poll, the upload right: «Токен в файле». Poll 2, after the session found that 657 of the 674 documents carry `source_attribution: consultant_plus`: «…PDF взяты из КонсультантПлюс. Публичный релиз сделает их доступными всем, и отозвать это нельзя (скачивания и индексация). Публикуем публично или приватно?» — «Публично всё равно» (the option said: «Ответственность за лицензию КонсультантПлюс — ваша»). | **Where:** the bundle is published as release assets of the public repository `hoperlex/PDF-Analysis`. The installer downloads them without a token.<br>**Uploads:** a fine-grained token, Contents read and write on that repository only, kept in the root-only file `/root/.config/auditmanager/github-upload-token` on the development host. It is never printed and is revoked after the upload.<br>**Status of the documents, in the owner's own words afterwards:** «Они взяты из консультант но сами нормы являются публичными документами. Упоминание лицензий не равно копирайту». The norms are public documents. `source_attribution: consultant_plus` records where the files were taken from; it is not a copyright claim. This replaces the licence wording of the session's poll option. |
+
+## 3.65 — R-158h, the source of the fork's code and its local deploy (owner's poll answers, 2026-11-23, session `pdf-analysis-b3`)
+
+The occasion: a fork's server is both its development host and its production host. The owner does not know whether it will be reachable from the internet over SSH, which GitHub-hosted auto-deploy needs. Separately, GitHub's Fork button copies only `main` by default, and `main` (`fc4808804`) predates the installer, the norms lock and the fork roadmap.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-158h | Poll «Всё новое для форка лежит в dev родителя (d8700e5bd), а кнопка Fork на GitHub по умолчанию копирует только main (fc4808804, без установщика). Как дать форку новый код?» — «Сначала dev в main родителя». Poll «Сервер форка (разработка и прод вместе) будет доступен из интернета по SSH? …» — «Нет или не знаю (Рекомендую локальную выкладку)». | **Fork source:** the parent's `dev` is published to `main` through the ordinary release process (`MAIN_AUTODEPLOY_POLICY.md`, the owner's word for the exact SHA, the `DEPLOY_*` variables of `R-158f` set first). After that, a default fork carries the fork work.<br>**Fork deploy:** by default the first install sets up a pull-based local deploy. `infra/deploy/deploy-local.sh` runs the workflow's own remote script on the server, and a systemd timer fires it every 5 minutes; when `origin/main` moved, it deploys the new tip. A failed SHA is not retried until `main` moves again.<br>**Opting out of GitHub:** in a fork the GitHub workflow is turned off explicitly by the repository variable `DEPLOY_MODE=local`, which the owner sets once. Unset, the workflow behaves as `R-158f` says.<br>**The parent** keeps GitHub auto-deploy.<br>**Recorded in** `ADR-0021` decision 1 (dated amendment) and `DEPLOYMENT_RUNBOOK.md` section 3. |
