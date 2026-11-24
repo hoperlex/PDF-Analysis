@@ -19,9 +19,9 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "deploy-auto.yml"
 
 DEPLOY_LOCAL = ROOT / "infra" / "deploy" / "deploy-local.sh"
-#: The job's whole condition: only `main`, and an explicit opt-out for a repository whose server deploys itself (`FIRST-INSTALL-03`).
-#: With `DEPLOY_MODE` unset the job still runs and refuses on a missing `DEPLOY_*` variable, as before.
-JOB_CONDITION = "github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'"
+#: The job's whole condition (`DEPLOY-OPT-IN-01`): only `main`, and only in a repository whose owner opted in with `DEPLOY_MODE=github`.
+#: With `DEPLOY_MODE` unset the job does not start and nothing turns red; opted in without the `DEPLOY_*` values it still refuses.
+JOB_CONDITION = "github.ref == 'refs/heads/main' && vars.DEPLOY_MODE == 'github'"
 
 KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV"
 SHA = "a" * 40
@@ -357,27 +357,28 @@ class DeployAutoWorkflowContract(unittest.TestCase):
                         "git clean", "git reset"):
             self.assertNotIn(command, outside, command)
 
-    def test_the_job_condition_is_exactly_main_and_the_explicit_local_opt_out(self) -> None:
+    def test_the_job_condition_is_exactly_main_and_the_explicit_github_opt_in(self) -> None:
         self.assertEqual(workflow_shape_findings(self.text) & {"DEPLOY_JOB_CONDITION", "DEPLOY_NOT_MAIN_ONLY"}, set())
         self.assertEqual(re.findall(r"(?m)^    if: (.*)$", self.text), [JOB_CONDITION])
-        # Unset means "not local": the job runs and the missing DEPLOY_* variables stop it, as they always did.
+        # Opt-in: unset skips the job. Opted in, the missing DEPLOY_* variables still stop it, as they always did.
         self.assertIn("DEPLOY_HOST and DEPLOY_KNOWN_HOSTS are not configured for this repository", self.text)
 
     def test_semantic_mutations_are_rejected(self) -> None:
-        no_main_guard = self.text.replace(f"    if: {JOB_CONDITION}\n", "    if: vars.DEPLOY_MODE != 'local'\n", 1)
+        no_main_guard = self.text.replace(f"    if: {JOB_CONDITION}\n", "    if: vars.DEPLOY_MODE == 'github'\n", 1)
         self.assertIn("DEPLOY_NOT_MAIN_ONLY", workflow_shape_findings(no_main_guard))
         self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(no_main_guard))
         no_job_condition = self.text.replace(f"    if: {JOB_CONDITION}\n", "", 1)
         self.assertIn("DEPLOY_NOT_MAIN_ONLY", workflow_shape_findings(no_job_condition))
-        no_opt_out = self.text.replace(f"    if: {JOB_CONDITION}\n", "    if: github.ref == 'refs/heads/main'\n", 1)
-        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(no_opt_out))
-        silent_skip = self.text.replace("vars.DEPLOY_MODE != 'local'", "vars.DEPLOY_HOST != ''", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(no_job_condition))
+        no_opt_in = self.text.replace(f"    if: {JOB_CONDITION}\n", "    if: github.ref == 'refs/heads/main'\n", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(no_opt_in))
+        old_opt_out = self.text.replace("vars.DEPLOY_MODE == 'github'", "vars.DEPLOY_MODE != 'local'", 1)
+        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(old_opt_out))
+        silent_skip = self.text.replace("vars.DEPLOY_MODE == 'github'", "vars.DEPLOY_HOST != ''", 1)
         self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(silent_skip))
-        wrong_mode = self.text.replace("vars.DEPLOY_MODE != 'local'", "vars.DEPLOY_MODE == 'github'", 1)
-        self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(wrong_mode))
         or_condition = self.text.replace("&& vars.DEPLOY_MODE", "|| vars.DEPLOY_MODE", 1)
         self.assertIn("DEPLOY_JOB_CONDITION", workflow_shape_findings(or_condition))
-
+        self.assertIn("DEPLOY_NOT_MAIN_ONLY", workflow_shape_findings(or_condition))
 
         extra_trigger = self.text.replace(
             "  workflow_dispatch:\n", "  workflow_dispatch:\n  pull_request_target:\n", 1

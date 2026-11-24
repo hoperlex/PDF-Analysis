@@ -837,7 +837,7 @@ def test_the_github_block_has_the_values_the_workflow_reads_and_no_private_key(r
     done = rig.run("--email", EMAIL, "--http-port", str(stack.port), "--deploy-mode", "github")
     assert done.returncode == 0, done.stdout[-1500:]
     out = done.stdout
-    assert "variable DEPLOY_HOST=" in out and f"variable DEPLOY_PATH={rig.repo}" in out
+    assert "variable DEPLOY_MODE=github" in out and "variable DEPLOY_HOST=" in out and f"variable DEPLOY_PATH={rig.repo}" in out
     assert re.search(r"variable DEPLOY_KNOWN_HOSTS=\S+ ssh-ed25519 [A-Za-z0-9+/=]+", out)
     assert "SHA256:" in out and "acme-co/audit-install" in out
     assert "secret   VPS_USER=root" in out and "sudoers" not in out
@@ -1644,18 +1644,18 @@ def test_local_is_the_default_mode_it_writes_the_units_outside_the_checkout_and_
     log = _systemctl(rig)
     assert [c for c in log if "deploy-local" in c or c == "systemctl daemon-reload"] == [
         "systemctl daemon-reload", f"systemctl enable --now {UNIT}.timer", f"systemctl is-active --quiet {UNIT}.timer"]
-    # the owner block: how deploys happen, the one GitHub step, and nothing of the CI key
+    # the owner block: how deploys happen, no GitHub step at all (its SSH deploy is opt-in), and nothing of the CI key
     assert "how this server deploys" in out and "push to main of acme-co/audit-install" in out and "within 5 minutes" in out
     assert f"sudo {rig.repo}/infra/deploy/deploy-local.sh" in out and f"DEPLOY_PATH={rig.repo}" in out
-    assert "set the repository variable DEPLOY_MODE=local" in out and "STOP" not in out
-    for absent in ("DEPLOY_KNOWN_HOSTS", "VPS_SSH_KEY", "VPS_USER", "variable DEPLOY_HOST"):
+    assert "GitHub      nothing: this server needs no variable, secret or key in GitHub" in out and "STOP" not in out
+    for absent in ("DEPLOY_KNOWN_HOSTS", "VPS_SSH_KEY", "VPS_USER", "variable DEPLOY_HOST", "DEPLOY_MODE", "set the repository variable"):
         assert absent not in out
     assert not (rig.secret_dir / "auditmanager-deploy-key").exists() and not (rig.auth_home / ".ssh").exists()
     # the timer is the last thing enabled: after the semantic stage, and before the marker
     assert out.index("[10/12]") < out.index("[11/12]") < out.index(f"the deploy timer {UNIT}.timer is enabled") < out.index("[12/12]")
     assert out.index(f"the deploy timer {UNIT}.timer is enabled") < out.index("marker written")
     last = [line for line in out.splitlines() if line.strip()][-1]
-    assert last.startswith("DONE: auditmanager is installed") and "within 5 minutes" in last and "DEPLOY_MODE=local" in last
+    assert last.startswith("DONE: auditmanager is installed") and "within 5 minutes" in last and "nothing is needed in GitHub" in last and "DEPLOY_MODE" not in last
     # what the timer will accept is recorded outside the checkout, and the marker says the mode
     assert (rig.state_root / "auditmanager" / "deploy-local.source").read_text().strip() == "acme-co/audit-install"
     marker = _marker(rig)
@@ -1682,6 +1682,9 @@ def test_github_mode_is_the_earlier_behaviour_and_no_timer_is_made(rig: Rig, sta
     done = rig.run(*_args(stack))
     assert done.returncode == 0, done.stdout[-2500:]
     assert "variable DEPLOY_HOST=" in done.stdout and "secret   VPS_SSH_KEY=" in done.stdout
+    # the opt-in comes first, with the values and the secrets it goes with
+    assert done.stdout.index("variable DEPLOY_MODE=github") < done.stdout.index("variable DEPLOY_HOST=")
+    assert "DEPLOY_* variables below and the VPS_* secrets" in done.stdout
     assert "how this server deploys" not in done.stdout and "DEPLOY_MODE=local" not in done.stdout
     assert not rig.systemd_dir.exists() or not any(rig.systemd_dir.iterdir())
     assert not any(UNIT in line for line in _systemctl(rig))
@@ -1689,7 +1692,7 @@ def test_github_mode_is_the_earlier_behaviour_and_no_timer_is_made(rig: Rig, sta
     marker = _marker(rig)
     assert marker["deploy_mode"] == "github" and marker["stage_11_timer"] == "disabled"
     last = [line for line in done.stdout.splitlines() if line.strip()][-1]
-    assert last.startswith("DONE:") and "GitHub's workflow" in last
+    assert last.startswith("DONE:") and "GitHub's workflow" in last and "DEPLOY_MODE=github" in last and "VPS_* secrets" in last
 
 
 def test_a_bad_deploy_mode_is_a_usage_error_and_the_dry_run_names_the_mode(rig: Rig, stack) -> None:
@@ -1697,9 +1700,10 @@ def test_a_bad_deploy_mode_is_a_usage_error_and_the_dry_run_names_the_mode(rig: 
     assert rig.run(*_local_args(stack, "--deploy-mode")).returncode == 2
     before = sorted(str(p) for p in rig.tmp.rglob("*"))
     local = rig.run(*_local_args(stack, "--dry-run")).stdout
-    assert "deploy mode      local" in local and f"{UNIT}.timer" in local and "DEPLOY_MODE=local" in local
+    assert "deploy mode      local" in local and f"{UNIT}.timer" in local and "nothing is needed in GitHub" in local and "DEPLOY_MODE" not in local
     github = rig.run(*_args(stack, "--dry-run")).stdout
     assert "deploy mode      github" in github and "no timer is enabled in github mode" in github and "DEPLOY_KNOWN_HOSTS" in github
+    assert "DEPLOY_MODE=github (the opt-in)" in github
     assert sorted(str(p) for p in rig.tmp.rglob("*")) == before
 
 
@@ -1725,6 +1729,7 @@ def test_a_rerun_converges_and_the_mode_switches_both_ways(rig: Rig, stack) -> N
     assert "installed with --deploy-mode local: switching to github" in to_github.stdout
     assert _systemctl(rig)[-1] == f"systemctl disable --now {UNIT}.timer"
     assert (rig.systemd_dir / f"{UNIT}.timer").exists() and "variable DEPLOY_HOST=" in to_github.stdout
+    assert "variable DEPLOY_MODE=github" in to_github.stdout
     assert (rig.secret_dir / "auditmanager-deploy-key").exists()
     assert _marker(rig)["deploy_mode"] == "github" and _marker(rig)["stage_11_timer"] == "disabled"
     assert len(rig.calls()) == deploys, "switching the mode must not run the deploy or the verification again"

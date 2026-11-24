@@ -16,10 +16,11 @@ permissions:
 jobs:
   deploy:
     name: Deploy exact AuditManager revision
-    # An explicit opt-out, never a silent skip: a repository whose server deploys itself (infra/deploy/deploy-local.sh, the
-    # installer's default `--deploy-mode local`) sets the variable DEPLOY_MODE=local. With it unset the job runs and refuses on
-    # a missing DEPLOY_* variable exactly as before (owner ruling R-158f).
-    if: github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'
+    # Strictly opt-in, never a silent skip of a configured deploy: GitHub deploys over SSH only in a repository whose owner sets the
+    # variable DEPLOY_MODE=github, together with the DEPLOY_* variables and the VPS_* secrets. With it unset the job does not
+    # start and nothing turns red (a fork's server deploys itself: infra/deploy/deploy-local.sh, the installer's default
+    # `--deploy-mode local`, and needs nothing in GitHub). Opted in without the values, it refuses below (owner rulings R-158f, R-158h).
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_MODE == 'github'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 

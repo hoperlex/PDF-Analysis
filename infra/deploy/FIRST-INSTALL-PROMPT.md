@@ -12,7 +12,7 @@ Run it as root, **from the clone you were started in** (the owner's working copy
 Add `--norms-bundle` only when the owner gives you a directory. When the repository publishes the norms bundle
 (`infra/norms/bundle-release.lock` is in it), the script downloads it from the GitHub release and imports it by itself, with no
 option: that is several GB and takes a while, and a run that is cut off resumes the download. Pushes to `main` of the fork are
-deployed by a timer on this server within five minutes (the default, `--deploy-mode local`; no GitHub secret is needed). Add
+deployed by a timer on this server within five minutes (the default, `--deploy-mode local`; nothing is needed in GitHub). Add
 `--deploy-mode github` only when the owner names it: GitHub Actions deploys then, and the script makes a deploy key.
 
 The script makes the server's own checkout, `/srv/<instance>` (the instance is `auditmanager` unless the owner named another), from
@@ -25,8 +25,8 @@ read the end of it with `tail -n 30`. It contains no secret.
 
 ## What the last line means
 
-1. `DONE: ...` is success. Tell the owner that line and the block "for the owner" above it (how deploys happen, with the one GitHub
-   variable `DEPLOY_MODE=local` for the owner to set, or in github mode the GitHub values; and the paths of the private files).
+1. `DONE: ...` is success. Tell the owner that line and the block "for the owner" above it (how deploys happen; in github mode
+   also the GitHub values to set; and the paths of the private files).
    Then stop. If this repository is a fork, add that its next work is listed in `docs/program/FORK_ROADMAP.md`.
 2. `STOP [code]: <action>` is one thing to do. Do exactly the action as printed, then run the same command again, unchanged.
    Almost every action is a command or "wait and run again": do it yourself, do not ask.

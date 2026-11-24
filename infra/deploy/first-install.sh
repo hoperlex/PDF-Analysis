@@ -1449,8 +1449,8 @@ stage_deploy_info() {
     if [ "$DEPLOY_MODE" = local ]; then stage_local_deploy_info; else stage_github; fi
 }
 
-# `--deploy-mode local` (FIRST-INSTALL-03): a timer on this server pulls origin/main. Nothing to paste into GitHub but one variable, so
-# that GitHub's own workflow, which cannot reach this server, does not try and fail on every push.
+# `--deploy-mode local` (FIRST-INSTALL-03): a timer on this server pulls origin/main. Nothing is needed in GitHub: its SSH deploy is
+# opt-in (DEPLOY_MODE=github, DEPLOY-OPT-IN-01), so with the variable unset its workflow does not start and nothing turns red.
 stage_local_deploy_info() {
     local repo_name key
     repo_name="$(git -C "$REPO" remote get-url origin | sed -E 's#/+$##; s#\.git$##; s#^.*[:/]([^:/]+)/([^:/]+)$#\1/\2#')"
@@ -1458,7 +1458,7 @@ stage_local_deploy_info() {
     printf '  deploys     push to main of %s; the server deploys it within 5 minutes (timer %s). By hand: sudo %s/infra/deploy/deploy-local.sh\n' \
         "$repo_name" "$(deploy_unit timer)" "$REPO"
     printf '  DEPLOY_PATH=%s   (the installer made this checkout and works in it; the clone it was started in is not used)\n' "$REPO"
-    printf '  GitHub      set the repository variable DEPLOY_MODE=local (Settings > Secrets and variables > Actions > Variables of %s), so that the GitHub workflow does not try to reach this server and fail on every push\n' "$repo_name"
+    printf '  GitHub      nothing: this server needs no variable, secret or key in GitHub, and GitHub'"'"'s SSH deploy stays off\n'
     printf '  log         /var/log/%s-deploy-local.log ; look: systemctl list-timers %s ; a commit that failed to deploy is not retried until main moves (or by hand)\n' \
         "$INSTANCE" "$(deploy_unit timer)"
     printf '  note        the timer deploys the tip of origin/main. This server was installed at %s: if that is not main, the first look deploys main\n' \
@@ -1478,6 +1478,7 @@ stage_github() {
     host="${OPT_DOMAIN:-$(public_ipv4)}"
     GITHUB_HOST="${host:-<the public IPv4 address of this server>}"
     printf '\nfirst-install: ---- for the owner: connect GitHub auto-deploy (Settings > Secrets and variables > Actions of %s) ----\n' "$repo_name"
+    printf '  variable DEPLOY_MODE=github   (the opt-in: set it together with the DEPLOY_* variables below and the VPS_* secrets; with it unset GitHub'"'"'s workflow does not start)\n'
     printf '  variable DEPLOY_HOST=%s\n' "$GITHUB_HOST"
     printf '  variable DEPLOY_PATH=%s   (the installer made this checkout and works in it; the clone it was started in is not used)\n' "$REPO"
     if [ -r "$HOST_KEY_PUB" ]; then
@@ -1789,9 +1790,9 @@ run_all() {
 
 deploys_summary() { # one phrase for the DONE line
     if [ "$DEPLOY_MODE" = local ]; then
-        printf 'push to main of the fork and the server deploys it within 5 minutes (timer %s; by hand: sudo %s/infra/deploy/deploy-local.sh); the owner sets the GitHub variable DEPLOY_MODE=local' "$(deploy_unit timer)" "$REPO"
+        printf 'push to main of the fork and the server deploys it within 5 minutes (timer %s; by hand: sudo %s/infra/deploy/deploy-local.sh); nothing is needed in GitHub' "$(deploy_unit timer)" "$REPO"
     else
-        printf "GitHub's workflow (the DEPLOY_* values and the deploy key are in the block above)"
+        printf "GitHub's workflow, once the owner sets DEPLOY_MODE=github with the DEPLOY_* variables and the VPS_* secrets (the values and the deploy key are in the block above)"
     fi
 }
 
@@ -1807,9 +1808,9 @@ norms_plan_text() {
 }
 deploy_info_plan_text() {
     if [ "$DEPLOY_MODE" = local ]; then
-        echo "print how deploys happen (push to main of the fork; this server deploys it within 5 minutes; by hand: sudo $DEPLOY_PATH/infra/deploy/deploy-local.sh) and the one GitHub step, the repository variable DEPLOY_MODE=local; no deploy key is made"
+        echo "print how deploys happen (push to main of the fork; this server deploys it within 5 minutes; by hand: sudo $DEPLOY_PATH/infra/deploy/deploy-local.sh); nothing is needed in GitHub and no deploy key is made"
     else
-        echo "print DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH=$DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
+        echo "print DEPLOY_MODE=github (the opt-in), DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (with the host key fingerprint) and DEPLOY_PATH=$DEPLOY_PATH$([ "$OPT_NO_CI_KEY" = no ] && echo ", generate $SECRET_DIR/$INSTANCE-deploy-key and authorize it for $OPT_DEPLOY_USER (the private key is never printed)")"
     fi
 }
 deploy_timer_plan_text() {
