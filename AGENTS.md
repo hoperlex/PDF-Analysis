@@ -68,7 +68,12 @@ Do not create a checkpoint/tag on your own unless the task is a `W*-INT-*` task.
 
 ## 6. `origin/main` triggers deployment
 
-Once GitHub auto-deploy is connected, any push or merge to `origin/main` is an external
+**Since 2026-11-24 this parent repository has no production host** (`R-158j`). A push to its `origin/main` deploys
+nothing: `main` is the release line that forks take. In a fork, `main` is deployed by the fork server's own timer
+(`infra/deploy/deploy-local.sh`), so the rules below apply to a fork's `main`. GitHub's SSH workflow runs only in a
+repository that opts in with the Actions variable `DEPLOY_MODE=github`.
+
+Once a deployment is connected (the server's timer or an opted-in workflow), any push or merge to `origin/main` is an external
 deployment action, not merely a publication of Git history. Before it, you must read and
 follow `docs/program/MAIN_AUTODEPLOY_POLICY.md`.
 
@@ -80,8 +85,9 @@ follow `docs/program/MAIN_AUTODEPLOY_POLICY.md`.
   fast-forward of the verified SHA. A full `make gate` is reserved for a capable runner
   when the release plan identifies a risk it uniquely covers.
 - Forbidden: force-push, an unverified “small fix” after the gate, and parallel publications.
-- After the push the task is not complete until the workflow has finished successfully and the
-  deployment host has passed `infra/deploy/verify-deployed.sh` for the same tree.
+- After the push the task is not complete until the deployment has finished successfully (the server's
+  `deploy-local` log shows `DEPLOY OK` for the SHA, or the opted-in workflow succeeded) and the deployment host
+  has passed `infra/deploy/verify-deployed.sh` for the same tree.
 
 By default the working candidate is published to `origin/dev` after focused checks. A
 release integrator can promote it to `origin/main` under the delegated release assignment;

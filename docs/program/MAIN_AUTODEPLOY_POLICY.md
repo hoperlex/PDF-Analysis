@@ -1,5 +1,11 @@
 # `origin/main` auto-deploy policy
 
+> **2026-11-24 (`R-158j`):** the parent repository has no production host any more, so a push to its `main`
+> deploys nothing. This policy applies to a fork's `main`. There the server's timer (`infra/deploy/deploy-local.sh`)
+> deploys it within five minutes, or GitHub's workflow does where the fork opted in with `DEPLOY_MODE=github`. Where
+> it says «the workflow», read «the deployment run»: the `deploy-local` log line `DEPLOY OK: <sha>`, or the opted-in
+> workflow.
+
 **Effective 2026-11-02 for future release decisions.** A push or merge to `origin/main`
 starts an external deployment. The workflow deploys the triggering SHA and verifies the
 host, but it does not run a pre-deployment test suite. A release integrator therefore
