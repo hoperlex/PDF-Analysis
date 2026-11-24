@@ -9,7 +9,8 @@ This repository is a **starter kit for developing a new application from scratch
 To install the whole stack on a new server: `sudo infra/deploy/first-install.sh --email <address> [--domain <name>]` from a fresh clone
 (or give an AI agent `infra/deploy/FIRST-INSTALL-PROMPT.md`); see `infra/deploy/README.md`. In a fork, the work after the install is
 `docs/program/FORK_ROADMAP.md`. Until the parent's `main` carries the installer, make the fork with all branches (uncheck
-«Copy the main branch only») and install from its `dev`.
+«Copy the main branch only») and install from its `dev`. A fork's later pushes to `main` are deployed by a timer on its server; nothing
+is needed in GitHub (`docs/program/DEPLOYMENT_RUNBOOK.md` section 3).
 
 The legacy `PDF-proverka-main` is used only as:
 

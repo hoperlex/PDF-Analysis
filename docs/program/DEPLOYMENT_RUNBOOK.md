@@ -436,11 +436,17 @@ carried neither (`Y1`): `grep -c -i session docs/program/DEPLOYMENT_RUNBOOK.md` 
 
 ### Auto-deploy: the repository names its server, the server names its repository (`R-158f`)
 
-`.github/workflows/deploy-auto.yml` carries no address, host key or path. It reads them from this repository's Actions **variables**
+`.github/workflows/deploy-auto.yml` is **opt-in**. Its job starts only for a push to `main` in a repository whose owner has set the
+Actions variable `DEPLOY_MODE=github`: its condition is exactly `github.ref == 'refs/heads/main' && vars.DEPLOY_MODE == 'github'`
+(`DEPLOY-OPT-IN-01`). With the variable unset the job is skipped and nothing turns red. A repository that does not deploy over SSH sets
+nothing, and a fork whose server deploys itself (below) needs nothing in GitHub.
+
+Opted in, the workflow carries no address, host key or path. It reads them from this repository's Actions **variables**
 (Settings → Secrets and variables → Actions → Variables), and refuses before it connects when one is missing:
 
 | Name | Kind | What it holds |
 |---|---|---|
+| `DEPLOY_MODE` | variable | `github`: the opt-in; any other value, or none, skips the job |
 | `DEPLOY_HOST` | variable | the server's SSH address, a host name or an IPv4 address |
 | `DEPLOY_KNOWN_HOSTS` | variable | one or more `known_hosts` lines, one of which names `DEPLOY_HOST` exactly; plain lines only (no comments, markers or hashed hosts) |
 | `DEPLOY_PATH` | variable | the absolute path of the server's checkout, for example `/srv/auditmanager` |
@@ -457,19 +463,26 @@ checkout's `origin` (any form: https, `git@`, `ssh://`, an ssh alias; case ignor
 **4** with `REFUSED: … this deployment comes from …`. After a repository rename or transfer, run
 `git -C <DEPLOY_PATH> remote set-url origin <new URL>` on the server once.
 
-**A fork** starts with none of these variables, so its pushes to `main` deploy nowhere. Its owner sets the variables to the fork's own
-server; the parent's server would refuse the fork's deployments anyway.
+**A fork** starts with none of these variables, so GitHub deploys nothing for it and its job does not start. A fork whose server GitHub can
+reach opts in by setting `DEPLOY_MODE=github` together with the `DEPLOY_*` variables and the `VPS_*` secrets of its own server (the
+installer's `--deploy-mode github` prints them); the parent's server would refuse the fork's deployments anyway. A fork whose server
+GitHub cannot reach deploys locally (next subsection) and sets nothing.
 
-**Before this workflow first reaches `main`**, set the three variables to the values the old workflow pinned: the address, its host key
-line(s) and `/srv/auditmanager`. Check on the server that `git -C /srv/auditmanager remote get-url origin` names this repository. Otherwise
-the first deployment after the change refuses: safely, and without touching the host. The old secret `VPS_HOST` is no longer read.
+**Opted in without the values**, the job runs and refuses at the first step, before it connects. Setting `DEPLOY_MODE=github` before
+`DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_PATH`, `VPS_USER` and `VPS_SSH_KEY` therefore turns every push to `main` red until the values are
+there: set the mode last.
+
+**The parent has no production server of its own** (`DEPLOY-OPT-IN-01`: the owner decommissioned it on 2026-11-24 and kept no data), so it
+does not set `DEPLOY_MODE`, and its pushes to `main` deploy nowhere. The earlier note about setting the three variables before the
+workflow first reaches `main` is void for the parent; the old secret `VPS_HOST` is no longer read.
 
 ### Local deploy: a timer on the server pulls `main` (`R-158h`)
 
 A fork whose server GitHub cannot reach deploys without GitHub. `infra/deploy/deploy-local.sh` runs **on the server** and does what the
 workflow's remote script does, on the same checkout and in the same order: the workflow's own script is embedded in it byte for byte,
 and `tests/contract/test_deploy_auto_workflow.py` holds the two equal. What it adds is outside that script: the commit (by default the
-tip of `origin/main`, read with `git ls-remote`), a lock, a log and a record of a failed commit. The parent keeps the GitHub workflow.
+tip of `origin/main`, read with `git ls-remote`), a lock, a log and a record of a failed commit. The GitHub workflow stays in the
+repository for an owner who opts in to it; local mode neither needs nor touches it.
 
 - **The timer.** `<instance>-deploy-local.timer` runs `<instance>-deploy-local.service` (`deploy-local.sh --if-moved`) every five minutes
   (`Persistent=true`, so a missed run happens at boot). `first-install.sh --deploy-mode local`, the default, writes both units to
@@ -485,11 +498,10 @@ tip of `origin/main`, read with `git ls-remote`), a lock, a log and a record of 
 - **The same bindings as the workflow.** A dirty tree exits 3. The server accepts only the repository it recorded
   (`/var/lib/<instance>/deploy-local.source`, written from the checkout's `origin` by the installer); an `origin` moved to another
   repository exits 4. After a rename, run `git -C <deploy path> remote set-url origin <new URL>` and write the new `owner/name` into that file.
-- **The one GitHub step.** Set the repository variable `DEPLOY_MODE=local` (Settings → Secrets and variables → Actions → Variables). The
-  workflow's job then does not start: its condition is `github.ref == 'refs/heads/main' && vars.DEPLOY_MODE != 'local'`, an explicit opt-out
-  and not a silent skip. With the variable unset the workflow still refuses on a missing `DEPLOY_*`, as above.
-- **Switching.** `first-install.sh --deploy-mode github` on a finished installation prints the GitHub values, makes the deploy key and
-  disables the timer (its unit files stay); `--deploy-mode local` enables it again. Nothing is deployed or verified again, and a deploy key
+- **Nothing in GitHub.** No variable, secret or key is set. The workflow's job does not start while `DEPLOY_MODE` is not `github` (the
+  opt-in above), so a push to `main` of a local-mode fork turns nothing red and tries to reach no server.
+- **Switching.** `first-install.sh --deploy-mode github` on a finished installation prints `DEPLOY_MODE=github` and the other GitHub values,
+  makes the deploy key and disables the timer (its unit files stay); `--deploy-mode local` enables it again. Nothing is deployed or verified again, and a deploy key
   of an earlier GitHub run is left in place and named.
 - **The first look.** The timer deploys the tip of `origin/main`. An installation made from another branch is therefore redeployed from
   `main` within five minutes; install from `main` to avoid that.

@@ -16,8 +16,8 @@ This file is the work queue of a **fork** of this repository: the product on its
   - It imports the norms bundle from the public release named in `infra/norms/bundle-release.lock` (`R-158g`).
   - It turns the semantic norm lookup on after its gates and connects «Этот сервер».
   - It sets up how the fork deploys: a timer on the server pulls `main` within five minutes (`--deploy-mode local`, the default,
-    `R-158h`; the owner sets the repository variable `DEPLOY_MODE=local`); `--deploy-mode github` prints the GitHub values instead
-    (`R-158f`; `DEPLOYMENT_RUNBOOK.md` section 3).
+    `R-158h`), and nothing is needed in GitHub. GitHub's SSH deploy is opt-in: `--deploy-mode github` prints the values to set,
+    among them `DEPLOY_MODE=github` (`R-158f`; `DEPLOYMENT_RUNBOOK.md` section 3).
 - **Decisions in force:**
   - `docs/program/OWNER_RULINGS_2026-09-17.md` sections 3.57–3.64: `R-156b`…`R-156o`, `R-157i`…`R-157l`, `R-158f`, `R-158g`;
   - the fork bullets of `ADR-0020` decision 7, `ADR-0021` section 11 and decision 1, `ADR-0022`, `ADR-0006`, and `ADR-0029`
