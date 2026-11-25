@@ -41,7 +41,7 @@ Amendment 2026-11-23 (`R-158h`): a fork whose server GitHub cannot reach deploys
 - The parent keeps GitHub auto-deploy.
 
 Amendment 2026-11-24 (`R-158j`): the parent's production host is decommissioned, and GitHub's SSH deploy is opt-in.
-- **No parent production.** The VPS named above is taken out of service at once; its data are deleted without a copy (the owner's choice). A push to the parent's `main` deploys nothing; `main` is the release line forks take. This decision's topology now describes a fork's server.
+- **No parent production.** AuditManager's production on the VPS named above is removed at once, and its data are deleted without a copy (the owner's choice). The VPS itself stays: it runs other projects, so only AuditManager's containers, volumes (database, bucket), images, units, nginx site, directories and `authorized_keys` lines go (`R-158k`, 2026-11-25). A push to the parent's `main` deploys nothing; `main` is the release line forks take. This decision's topology now describes a fork's server.
 - **Opt-in, not opt-out.** `deploy-auto.yml` runs only where the Actions variable `DEPLOY_MODE` is `github`. A local-mode fork sets nothing in GitHub. This supersedes the `DEPLOY_MODE=local` opt-out of the 2026-11-23 amendment.
 - **No keys bound.** The `VPS_*` secrets are removed, so GitHub holds no key to any server unless a repository opts in again.
 
@@ -310,3 +310,4 @@ the new failure domains.
 - 2026-11-20 — decision 1 amended: the deploy target is the repository's variables, and the host accepts only its own repository (`R-158f`).
 - 2026-11-23 — decision 1 amended: a fork deploys locally by a pull timer, opting out of GitHub by `DEPLOY_MODE=local`; the repository check's limit is stated (`R-158h`).
 - 2026-11-24 — decision 1 amended: the parent's production host is decommissioned (data not kept); GitHub's SSH deploy becomes opt-in through `DEPLOY_MODE=github` (`R-158j`).
+- 2026-11-25 — the 2026-11-24 amendment corrected: the VPS is shared and stays; only AuditManager's resources are freed (`R-158k`).
